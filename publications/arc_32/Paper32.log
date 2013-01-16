@@ -1,0 +1,609 @@
+This is pdfTeX, Version 3.1415926-1.40.10 (TeX Live 2009/Debian) (format=pdflatex 2012.2.10)  15 JAN 2013 14:28
+entering extended mode
+ %&-line parsing enabled.
+**Paper32.tex
+(./Paper32.tex
+LaTeX2e <2009/09/24>
+Babel <v3.8l> and hyphenation patterns for english, usenglishmax, dumylang, noh
+yphenation, ngerman, german, german-x-2009-06-19, ngerman-x-2009-06-19, ukengli
+sh, loaded.
+(./llncs.cls
+Document Class: llncs 2010/07/12 v2.17 
+ LaTeX document class for Lecture Notes in Computer Science
+(/usr/share/texmf-texlive/tex/latex/base/article.cls
+Document Class: article 2007/10/19 v1.4h Standard LaTeX document class
+(/usr/share/texmf-texlive/tex/latex/base/size10.clo
+File: size10.clo 2007/10/19 v1.4h Standard LaTeX file (size option)
+)
+\c@part=\count79
+\c@section=\count80
+\c@subsection=\count81
+\c@subsubsection=\count82
+\c@paragraph=\count83
+\c@subparagraph=\count84
+\c@figure=\count85
+\c@table=\count86
+\abovecaptionskip=\skip41
+\belowcaptionskip=\skip42
+\bibindent=\dimen102
+)
+(/usr/share/texmf-texlive/tex/latex/tools/multicol.sty
+Package: multicol 2008/12/05 v1.6h multicolumn formatting (FMi)
+\c@tracingmulticols=\count87
+\mult@box=\box26
+\multicol@leftmargin=\dimen103
+\c@unbalance=\count88
+\c@collectmore=\count89
+\doublecol@number=\count90
+\multicoltolerance=\count91
+\multicolpretolerance=\count92
+\full@width=\dimen104
+\page@free=\dimen105
+\premulticols=\dimen106
+\postmulticols=\dimen107
+\multicolsep=\skip43
+\multicolbaselineskip=\skip44
+\partial@page=\box27
+\last@line=\box28
+\mult@rightbox=\box29
+\mult@grightbox=\box30
+\mult@gfirstbox=\box31
+\mult@firstbox=\box32
+\@tempa=\box33
+\@tempa=\box34
+\@tempa=\box35
+\@tempa=\box36
+\@tempa=\box37
+\@tempa=\box38
+\@tempa=\box39
+\@tempa=\box40
+\@tempa=\box41
+\@tempa=\box42
+\@tempa=\box43
+\@tempa=\box44
+\@tempa=\box45
+\@tempa=\box46
+\@tempa=\box47
+\@tempa=\box48
+\@tempa=\box49
+\c@columnbadness=\count93
+\c@finalcolumnbadness=\count94
+\last@try=\dimen108
+\multicolovershoot=\dimen109
+\multicolundershoot=\dimen110
+\mult@nat@firstbox=\box50
+\colbreak@box=\box51
+)
+(/usr/share/texmf-texlive/tex/latex/oberdiek/aliascnt.sty
+Package: aliascnt 2009/09/08 v1.3 Alias counter (HO)
+
+(/usr/share/texmf-texlive/tex/latex/carlisle/remreset.sty))
+\c@chapter=\count95
+LaTeX Font Info:    Redeclaring math symbol \Gamma on input line 362.
+LaTeX Font Info:    Redeclaring math symbol \Delta on input line 363.
+LaTeX Font Info:    Redeclaring math symbol \Theta on input line 364.
+LaTeX Font Info:    Redeclaring math symbol \Lambda on input line 365.
+LaTeX Font Info:    Redeclaring math symbol \Xi on input line 366.
+LaTeX Font Info:    Redeclaring math symbol \Pi on input line 367.
+LaTeX Font Info:    Redeclaring math symbol \Sigma on input line 368.
+LaTeX Font Info:    Redeclaring math symbol \Upsilon on input line 369.
+LaTeX Font Info:    Redeclaring math symbol \Phi on input line 370.
+LaTeX Font Info:    Redeclaring math symbol \Psi on input line 371.
+LaTeX Font Info:    Redeclaring math symbol \Omega on input line 372.
+\tocchpnum=\dimen111
+\tocsecnum=\dimen112
+\tocsectotal=\dimen113
+\tocsubsecnum=\dimen114
+\tocsubsectotal=\dimen115
+\tocsubsubsecnum=\dimen116
+\tocsubsubsectotal=\dimen117
+\tocparanum=\dimen118
+\tocparatotal=\dimen119
+\tocsubparanum=\dimen120
+\@tempcntc=\count96
+\fnindent=\dimen121
+\c@@inst=\count97
+\c@@auth=\count98
+\c@auco=\count99
+\instindent=\dimen122
+\authrun=\box52
+\authorrunning=\toks14
+\tocauthor=\toks15
+\titrun=\box53
+\titlerunning=\toks16
+\toctitle=\toks17
+\c@theorem=\count100
+\c@case=\count101
+\c@conjecture=\count102
+\c@corollary=\count103
+\c@definition=\count104
+\c@example=\count105
+\c@exercise=\count106
+\c@lemma=\count107
+\c@note=\count108
+\c@problem=\count109
+\c@property=\count110
+\c@proposition=\count111
+\c@question=\count112
+\c@solution=\count113
+\c@remark=\count114
+\headlineindent=\dimen123
+)
+(/usr/share/texmf-texlive/tex/latex/amsmath/amsmath.sty
+Package: amsmath 2000/07/18 v2.13 AMS math features
+\@mathmargin=\skip45
+
+For additional information on amsmath, use the `?' option.
+(/usr/share/texmf-texlive/tex/latex/amsmath/amstext.sty
+Package: amstext 2000/06/29 v2.01
+
+(/usr/share/texmf-texlive/tex/latex/amsmath/amsgen.sty
+File: amsgen.sty 1999/11/30 v2.0
+\@emptytoks=\toks18
+\ex@=\dimen124
+))
+(/usr/share/texmf-texlive/tex/latex/amsmath/amsbsy.sty
+Package: amsbsy 1999/11/29 v1.2d
+\pmbraise@=\dimen125
+)
+(/usr/share/texmf-texlive/tex/latex/amsmath/amsopn.sty
+Package: amsopn 1999/12/14 v2.01 operator names
+)
+\inf@bad=\count115
+LaTeX Info: Redefining \frac on input line 211.
+\uproot@=\count116
+\leftroot@=\count117
+LaTeX Info: Redefining \overline on input line 307.
+\classnum@=\count118
+\DOTSCASE@=\count119
+LaTeX Info: Redefining \ldots on input line 379.
+LaTeX Info: Redefining \dots on input line 382.
+LaTeX Info: Redefining \cdots on input line 467.
+\Mathstrutbox@=\box54
+\strutbox@=\box55
+\big@size=\dimen126
+LaTeX Font Info:    Redeclaring font encoding OML on input line 567.
+LaTeX Font Info:    Redeclaring font encoding OMS on input line 568.
+
+
+Package amsmath Warning: Unable to redefine math accent \vec.
+
+\macc@depth=\count120
+\c@MaxMatrixCols=\count121
+\dotsspace@=\muskip10
+\c@parentequation=\count122
+\dspbrk@lvl=\count123
+\tag@help=\toks19
+\row@=\count124
+\column@=\count125
+\maxfields@=\count126
+\andhelp@=\toks20
+\eqnshift@=\dimen127
+\alignsep@=\dimen128
+\tagshift@=\dimen129
+\tagwidth@=\dimen130
+\totwidth@=\dimen131
+\lineht@=\dimen132
+\@envbody=\toks21
+\multlinegap=\skip46
+\multlinetaggap=\skip47
+\mathdisplay@stack=\toks22
+LaTeX Info: Redefining \[ on input line 2666.
+LaTeX Info: Redefining \] on input line 2667.
+) (/usr/share/texmf-texlive/tex/latex/graphics/epsfig.sty
+Package: epsfig 1999/02/16 v1.7a (e)psfig emulation (SPQR)
+
+(/usr/share/texmf-texlive/tex/latex/graphics/graphicx.sty
+Package: graphicx 1999/02/16 v1.0f Enhanced LaTeX Graphics (DPC,SPQR)
+
+(/usr/share/texmf-texlive/tex/latex/graphics/keyval.sty
+Package: keyval 1999/03/16 v1.13 key=value parser (DPC)
+\KV@toks@=\toks23
+)
+(/usr/share/texmf-texlive/tex/latex/graphics/graphics.sty
+Package: graphics 2009/02/05 v1.0o Standard LaTeX Graphics (DPC,SPQR)
+
+(/usr/share/texmf-texlive/tex/latex/graphics/trig.sty
+Package: trig 1999/03/16 v1.09 sin cos tan (DPC)
+)
+(/etc/texmf/tex/latex/config/graphics.cfg
+File: graphics.cfg 2009/08/28 v1.8 graphics configuration of TeX Live
+)
+Package graphics Info: Driver file: pdftex.def on input line 91.
+
+(/usr/share/texmf-texlive/tex/latex/pdftex-def/pdftex.def
+File: pdftex.def 2010/03/12 v0.04p Graphics/color for pdfTeX
+\Gread@gobject=\count127
+))
+\Gin@req@height=\dimen133
+\Gin@req@width=\dimen134
+)
+\epsfxsize=\dimen135
+\epsfysize=\dimen136
+) (./acronym.sty
+Package: acronym 2009/01/25 v1.34 Support for acronyms (Tobias Oetiker)
+
+(/usr/share/texmf-texlive/tex/latex/bigfoot/suffix.sty
+Package: suffix 2006/07/15 1.5 Variant command support
+)
+\AC@clearlist=\toks24
+)
+(/usr/share/texmf-texlive/tex/latex/tools/array.sty
+Package: array 2008/09/09 v2.4c Tabular extension package (FMi)
+\col@sep=\dimen137
+\extrarowheight=\dimen138
+\NC@list=\toks25
+\extratabsurround=\skip48
+\backup@length=\skip49
+)
+(/usr/share/texmf-texlive/tex/latex/listings/listings.sty
+\lst@mode=\count128
+\lst@gtempboxa=\box56
+\lst@token=\toks26
+\lst@length=\count129
+\lst@currlwidth=\dimen139
+\lst@column=\count130
+\lst@pos=\count131
+\lst@lostspace=\dimen140
+\lst@width=\dimen141
+\lst@newlines=\count132
+\lst@lineno=\count133
+\lst@maxwidth=\dimen142
+
+(/usr/share/texmf-texlive/tex/latex/listings/lstmisc.sty
+File: lstmisc.sty 2007/02/22 1.4 (Carsten Heinz)
+\c@lstnumber=\count134
+\lst@skipnumbers=\count135
+\lst@framebox=\box57
+)
+(/usr/share/texmf-texlive/tex/latex/listings/listings.cfg
+File: listings.cfg 2007/02/22 1.4 listings configuration
+))
+Package: listings 2007/02/22 1.4 (Carsten Heinz)
+
+(/usr/share/texmf-texlive/tex/latex/base/inputenc.sty
+Package: inputenc 2008/03/30 v1.1d Input encoding file
+\inpenc@prehook=\toks27
+\inpenc@posthook=\toks28
+
+(/usr/share/texmf-texlive/tex/latex/base/latin1.def
+File: latin1.def 2008/03/30 v1.1d Input encoding file
+))
+(/usr/share/texmf-texlive/tex/latex/amsfonts/amsfonts.sty
+Package: amsfonts 2009/06/22 v3.00 Basic AMSFonts support
+\symAMSa=\mathgroup4
+\symAMSb=\mathgroup5
+LaTeX Font Info:    Overwriting math alphabet `\mathfrak' in version `bold'
+(Font)                  U/euf/m/n --> U/euf/b/n on input line 96.
+) (./amssymb.sty
+Package: amssymb 2009/06/22 v3.00
+)
+(/usr/share/texmf-texlive/tex/latex/fancyhdr/fancyhdr.sty
+\fancy@headwidth=\skip50
+\f@ncyO@elh=\skip51
+\f@ncyO@erh=\skip52
+\f@ncyO@olh=\skip53
+\f@ncyO@orh=\skip54
+\f@ncyO@elf=\skip55
+\f@ncyO@erf=\skip56
+\f@ncyO@olf=\skip57
+\f@ncyO@orf=\skip58
+)
+(/usr/share/texmf-texlive/tex/latex/ltxmisc/url.sty
+\Urlmuskip=\muskip11
+Package: url 2006/04/12  ver 3.3  Verb mode for urls, etc.
+)
+(/usr/share/texmf-texlive/tex/latex/float/float.sty
+Package: float 2001/11/08 v1.3d Float enhancements (AL)
+\c@float@type=\count136
+\float@exts=\toks29
+\float@box=\box58
+\@float@everytoks=\toks30
+\@floatcapt=\box59
+) (./caption.sty
+Package: caption 2009/10/09 v3.1k Customizing captions (AR)
+
+(./caption3.sty
+Package: caption3 2009/10/09 v3.1k caption3 kernel (AR)
+\captionmargin=\dimen143
+\captionmargin@=\dimen144
+\captionwidth=\dimen145
+\caption@indent=\dimen146
+\caption@parindent=\dimen147
+\caption@hangindent=\dimen148
+Package caption Info: Unknown document class (or package),
+(caption)             standard defaults will be used on input line 1068.
+)
+
+Package caption Warning: Unsupported document class (or package) detected,
+(caption)                usage of the caption package is not recommended.
+See the caption package documentation for explanation.
+
+Package caption Info: \@makecaption = \long macro:#1#2->\small \vskip \abovecap
+tionskip \sbox \@tempboxa {{\bfseries #1.} #2}\ifdim \wd \@tempboxa >\hsize {\b
+fseries #1.} #2\par \else \global \@minipagefalse \hb@xt@ \hsize {\hfil \box \@
+tempboxa \hfil }\fi \vskip \belowcaptionskip .
+\c@ContinuedFloat=\count137
+Package caption Info: float package is loaded.
+Package caption Info: listings package is loaded.
+) (./subcaption.sty
+Package: subcaption 2008/08/31 v1.0b Adding subcaptions (AR)
+\c@subfigure=\count138
+\c@subtable=\count139
+) (./setspace.sty
+Package: setspace 2000/12/01 6.7 Contributed and Supported LaTeX2e package
+
+Package: `setspace' 6.7 <2000/12/01>
+) (./underlin.sty
+Package: underlin 1997/02/16 v1.01 underlined running head (RmS)
+) (./algpseudocode.sty
+Package: algpseudocode 
+
+(/usr/share/texmf-texlive/tex/latex/base/ifthen.sty
+Package: ifthen 2001/05/26 v1.1c Standard LaTeX ifthen package (DPC)
+)
+(/usr/share/texmf-texlive/tex/latex/algorithmicx/algorithmicx.sty
+Package: algorithmicx 2005/04/27 v1.2 Algorithmicx
+
+Document Style algorithmicx 1.2 - a greatly improved `algorithmic' style
+\c@ALG@line=\count140
+\c@ALG@rem=\count141
+\c@ALG@nested=\count142
+\ALG@tlm=\skip59
+\ALG@thistlm=\skip60
+\c@ALG@Lnr=\count143
+\c@ALG@blocknr=\count144
+\c@ALG@storecount=\count145
+\c@ALG@tmpcounter=\count146
+\ALG@tmplength=\skip61
+)
+Document Style - pseudocode environments for use with the `algorithmicx' style
+) (./algorithm.sty
+Package: algorithm 2009/08/24 v0.1 Document Style `algorithm' - floating enviro
+nment
+\@float@every@algorithm=\toks31
+\c@algorithm=\count147
+) (./booktabs.sty
+Package: booktabs 2005/04/14 v1.61803 publication quality tables
+\heavyrulewidth=\dimen149
+\lightrulewidth=\dimen150
+\cmidrulewidth=\dimen151
+\belowrulesep=\dimen152
+\belowbottomsep=\dimen153
+\aboverulesep=\dimen154
+\abovetopsep=\dimen155
+\cmidrulesep=\dimen156
+\cmidrulekern=\dimen157
+\defaultaddspace=\dimen158
+\@cmidla=\count148
+\@cmidlb=\count149
+\@aboverulesep=\dimen159
+\@belowrulesep=\dimen160
+\@thisruleclass=\count150
+\@lastruleclass=\count151
+\@thisrulewidth=\dimen161
+) (./makeidx.sty
+Package: makeidx 2000/03/29 v1.0m Standard LaTeX package
+) (./microtype.sty
+Package: microtype 2009/03/27 v2.3d Micro-typography with pdfTeX (RS)
+\MT@toks=\toks32
+\MT@count=\count152
+LaTeX Info: Redefining \lsstyle on input line 1608.
+LaTeX Info: Redefining \lslig on input line 1608.
+\MT@outer@space=\skip62
+LaTeX Info: Redefining \textls on input line 1616.
+\MT@outer@kern=\dimen162
+LaTeX Info: Redefining \textmicrotypecontext on input line 2167.
+Package microtype Info: Loading configuration file microtype.cfg.
+
+(./microtype.cfg
+File: microtype.cfg 2009/03/27 v2.3d microtype main configuration file (RS)
+)) (./Paper32.aux)
+\openout1 = `Paper32.aux'.
+
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 136.
+LaTeX Font Info:    ... okay on input line 136.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 136.
+LaTeX Font Info:    ... okay on input line 136.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 136.
+LaTeX Font Info:    ... okay on input line 136.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 136.
+LaTeX Font Info:    ... okay on input line 136.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 136.
+LaTeX Font Info:    ... okay on input line 136.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 136.
+LaTeX Font Info:    ... okay on input line 136.
+
+(/usr/share/texmf-texlive/tex/context/base/supp-pdf.mkii
+[Loading MPS to PDF converter (version 2006.09.02).]
+\scratchcounter=\count153
+\scratchdimen=\dimen163
+\scratchbox=\box60
+\nofMPsegments=\count154
+\nofMParguments=\count155
+\everyMPshowfont=\toks33
+\MPscratchCnt=\count156
+\MPscratchDim=\dimen164
+\MPnumerator=\count157
+\everyMPtoPDFconversion=\toks34
+)
+\c@lstlisting=\count158
+Package caption Info: Begin \AtBeginDocument code.
+Package caption Info: Incompatible package detected (regarding \@caption).
+(caption)             \@caption = \long macro:#1[#2]#3->\par \addcontentsline {
+\csname ext@#1\endcsname }{#1}{\protect \numberline {\csname the#1\endcsname }{
+\ignorespaces #2}}\begingroup \@parboxrestore \@makecaption {\csname fnum@#1\en
+dcsname }{\ignorespaces #3}\par \endgroup .
+
+
+Package caption Warning: \caption will not be redefined since it's already
+(caption)                redefined by a document class or package which is
+(caption)                unknown to the caption package.
+See the caption package documentation for explanation.
+
+Package caption Info: End \AtBeginDocument code.
+LaTeX Info: Redefining \microtypecontext on input line 136.
+Package microtype Info: Generating PDF output.
+Package microtype Info: Character protrusion enabled (level 2).
+Package microtype Info: Using default protrusion set `alltext'.
+Package microtype Info: Automatic font expansion enabled (level 2),
+(microtype)             stretch: 20, shrink: 20, step: 1, non-selected.
+Package microtype Info: Using default expansion set `basictext'.
+Package microtype Info: No tracking.
+Package microtype Info: No adjustment of interword spacing.
+Package microtype Info: No adjustment of character kerning.
+(/usr/share/texmf-texlive/tex/latex/microtype/mt-cmr.cfg
+File: mt-cmr.cfg 2008/02/29 v1.9a microtype config. file: Computer Modern Roman
+ (RS)
+)
+LaTeX Font Info:    Try loading font information for U+msa on input line 162.
+
+(/usr/share/texmf-texlive/tex/latex/amsfonts/umsa.fd
+File: umsa.fd 2009/06/22 v3.00 AMS symbols A
+)
+(/usr/share/texmf-texlive/tex/latex/microtype/mt-msa.cfg
+File: mt-msa.cfg 2006/02/04 v1.1 microtype config. file: AMS symbols (a) (RS)
+)
+LaTeX Font Info:    Try loading font information for U+msb on input line 162.
+
+(/usr/share/texmf-texlive/tex/latex/amsfonts/umsb.fd
+File: umsb.fd 2009/06/22 v3.00 AMS symbols B
+)
+(/usr/share/texmf-texlive/tex/latex/microtype/mt-msb.cfg
+File: mt-msb.cfg 2005/06/01 v1.0 microtype config. file: AMS symbols (b) (RS)
+)
+Package acronym Info: Label `acro:alo' newly defined as it shall be overridden
+although it is yet undefined on input line 168.
+
+Overfull \hbox (2.7323pt too wide) in paragraph at lines 168--169
+[]\OT1/cmr/m/n/9 (-20) This pa-per presents a novel tech-nique that uses meta-h
+euristics
+ []
+
+Package acronym Info: Label `acro:fpga' newly defined as it shall be overridden
+
+although it is yet undefined on input line 177.
+[1
+
+
+{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}]
+Package acronym Info: Label `acro:gp' newly defined as it shall be overridden
+although it is yet undefined on input line 199.
+Package acronym Info: Label `acro:hll' newly defined as it shall be overridden
+although it is yet undefined on input line 199.
+ [2]
+Package acronym Info: Label `acro:svm' newly defined as it shall be overridden
+although it is yet undefined on input line 230.
+Package acronym Info: Label `acro:pso' newly defined as it shall be overridden
+although it is yet undefined on input line 241.
+ [3]
+<./figs/surrogate_tobias.pdf, id=22, 711.65875pt x 170.6375pt>
+File: ./figs/surrogate_tobias.pdf Graphic file (type pdf)
+
+<use ./figs/surrogate_tobias.pdf> [4 <./figs/surrogate_tobias.pdf>] [5]
+[6]
+Package acronym Info: Label `acro:rbf' newly defined as it shall be overridden
+although it is yet undefined on input line 483.
+ [7] <./figs/fitness1.png, id=58, 414.8298pt x 361.35pt>
+File: ./figs/fitness1.png Graphic file (type png)
+
+<use ./figs/fitness1.png>
+<./figs/surmodel009_11.png, id=59, 412.9026pt x 355.0866pt>
+File: ./figs/surmodel009_11.png Graphic file (type png)
+
+<use ./figs/surmodel009_11.png>
+<./figs/svm009_11.png, id=60, 490.4724pt x 438.6789pt>
+File: ./figs/svm009_11.png Graphic file (type png)
+
+<use ./figs/svm009_11.png>
+<./figs/fitness_radio.png, id=61, 411.939pt x 345.9324pt>
+File: ./figs/fitness_radio.png Graphic file (type png)
+
+<use ./figs/fitness_radio.png>
+<./figs/surmodel025_44.png, id=62, 420.1296pt x 351.714pt>
+File: ./figs/surmodel025_44.png Graphic file (type png)
+
+<use ./figs/surmodel025_44.png>
+<./figs/svm025_44.png, id=63, 504.6855pt x 439.1607pt>
+File: ./figs/svm025_44.png Graphic file (type png)
+
+<use ./figs/svm025_44.png>
+<./figs/surmodel000_13.png, id=64, 469.755pt x 368.577pt>
+File: ./figs/surmodel000_13.png Graphic file (type png)
+
+<use ./figs/surmodel000_13.png>
+<./figs/surmodel009_14.png, id=66, 469.755pt x 368.577pt>
+File: ./figs/surmodel009_14.png Graphic file (type png)
+
+<use ./figs/surmodel009_14.png>
+<./figs/surmodel011_22.png, id=67, 469.755pt x 368.577pt>
+File: ./figs/surmodel011_22.png Graphic file (type png)
+
+<use ./figs/surmodel011_22.png>
+<./figs/svm000_13.png, id=68, 504.6855pt x 439.1607pt>
+File: ./figs/svm000_13.png Graphic file (type png)
+
+<use ./figs/svm000_13.png>
+<./figs/svm009_14.png, id=69, 504.6855pt x 439.1607pt>
+File: ./figs/svm009_14.png Graphic file (type png)
+
+<use ./figs/svm009_14.png>
+<./figs/svm011_22.png, id=70, 504.6855pt x 439.1607pt>
+File: ./figs/svm011_22.png Graphic file (type png)
+
+<use ./figs/svm011_22.png> [8 <./figs/fitness1.png (PNG copy)> <./figs/surmodel
+009_11.png (PNG copy)> <./figs/svm009_11.png (PNG copy)> <./figs/fitness_radio.
+png (PNG copy)> <./figs/surmodel025_44.png (PNG copy)> <./figs/svm025_44.png (P
+NG copy)>]
+Underfull \vbox (badness 1210) has occurred while \output is active []
+
+ [9 <./figs/surmodel000_13.png> <./figs/surmodel009_14.png> <./figs/surmodel011
+_22.png> <./figs/svm000_13.png> <./figs/svm009_14.png> <./figs/svm011_22.png>]
+<./figs/fitness_anson.png, id=83, 429.2838pt x 368.577pt>
+File: ./figs/fitness_anson.png Graphic file (type png)
+
+<use ./figs/fitness_anson.png>
+<./figs/surmodel020_65_anson.png, id=84, 431.211pt x 367.8543pt>
+File: ./figs/surmodel020_65_anson.png Graphic file (type png)
+
+<use ./figs/surmodel020_65_anson.png>
+<./figs/svm020_65_anson.png, id=85, 475.7775pt x 435.0654pt>
+File: ./figs/svm020_65_anson.png Graphic file (type png)
+
+<use ./figs/svm020_65_anson.png> [10 <./figs/fitness_anson.png (PNG copy)> <./f
+igs/surmodel020_65_anson.png (PNG copy)> <./figs/svm020_65_anson.png (PNG copy)
+>]
+Underfull \vbox (badness 5260) has occurred while \output is active []
+
+ [11]
+(./Paper32.bbl) [12] (./Paper32.aux) ) 
+Here is how much of TeX's memory you used:
+ 7423 strings out of 495000
+ 106633 string characters out of 1180493
+ 209911 words of memory out of 3000000
+ 10389 multiletter control sequences out of 15000+50000
+ 15448 words of font info for 102 fonts, out of 3000000 for 9000
+ 36 hyphenation exceptions out of 8191
+ 36i,14n,43p,1410b,376s stack positions out of 5000i,500n,10000p,200000b,50000s
+</usr/share/texmf-texlive/fonts/type1/pub
+lic/amsfonts/cm/cmbx10.pfb></usr/share/texmf-texlive/fonts/type1/public/amsfont
+s/cm/cmbx12.pfb></usr/share/texmf-texlive/fonts/type1/public/amsfonts/cm/cmbx9.
+pfb></usr/share/texmf-texlive/fonts/type1/public/amsfonts/cm/cmex10.pfb></usr/s
+hare/texmf-texlive/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/share/texmf-
+texlive/fonts/type1/public/amsfonts/cm/cmmi6.pfb></usr/share/texmf-texlive/font
+s/type1/public/amsfonts/cm/cmmi7.pfb></usr/share/texmf-texlive/fonts/type1/publ
+ic/amsfonts/cm/cmmi9.pfb></usr/share/texmf-texlive/fonts/type1/public/amsfonts/
+cm/cmr10.pfb></usr/share/texmf-texlive/fonts/type1/public/amsfonts/cm/cmr7.pfb>
+</usr/share/texmf-texlive/fonts/type1/public/amsfonts/cm/cmr9.pfb></usr/share/t
+exmf-texlive/fonts/type1/public/amsfonts/cm/cmss10.pfb></usr/share/texmf-texliv
+e/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texmf-texlive/fonts/typ
+e1/public/amsfonts/cm/cmsy6.pfb></usr/share/texmf-texlive/fonts/type1/public/am
+sfonts/cm/cmsy7.pfb></usr/share/texmf-texlive/fonts/type1/public/amsfonts/cm/cm
+sy9.pfb></usr/share/texmf-texlive/fonts/type1/public/amsfonts/cm/cmti9.pfb></us
+r/share/texmf-texlive/fonts/type1/public/amsfonts/symbols/msbm10.pfb>
+Output written on Paper32.pdf (12 pages, 6170499 bytes).
+PDF statistics:
+ 152 PDF objects out of 1000 (max. 8388607)
+ 0 named destinations out of 1000 (max. 500000)
+ 16977 words of extra memory for PDF output out of 17280 (max. 10000000)
+
