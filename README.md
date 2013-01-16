@@ -43,6 +43,14 @@ For each paper published and related to MLO please create a seperate folder cont
 convention for the folder is as follows: conferencename_submissionnumber
 
 -----------------------------------------------------------------------------------------------------------------------
+###examples
+-----------------------------------------------------------------------------------------------------------------------
+
+Contains reconfigurable computing fitness function examples. The fitness functions in this directory should be based on
+well documentated papers, and used for research purpose. Preferably csv files containing the fitness functions and scripts
+used to obtain this are provided. 
+
+-----------------------------------------------------------------------------------------------------------------------
 ###scripts within the directory
 -----------------------------------------------------------------------------------------------------------------------
 For detailed architecture of the application please refer to doc/groupproj-rep13.pdf
@@ -50,15 +58,13 @@ For detailed architecture of the application please refer to doc/groupproj-rep13
 
 ************************************************************************************************************************
 
-##Current version is v1.x.x.
-
-The version vA.B.C. follow the convention:
+##Version convention vA.B.C.
 
 -----------------------------------------------------------------------------------------------------------------------
 ###A
 -----------------------------------------------------------------------------------------------------------------------
 
-Within all of the revisions starting with number A the fitness and configuration scripts should be compatible. 
+Within a revision starting with number A the fitness and configuration scripts should be compatible. 
 
 -----------------------------------------------------------------------------------------------------------------------
 ###B
