@@ -243,7 +243,7 @@ class RunWindow(wx.Frame):
             try:
                 if child.trial == trial_ref:
                     child.update_trial(event.counter_plot)
-            except wx.PyDeadObjectError:
+            except (wx.PyDeadObjectError, AttributeError):
                 pass
 
 
@@ -408,7 +408,7 @@ class OptionsWindow(wx.Frame):
         graph_attributes_dictionary = {}
         for graph_name in self.graph_names:
             graph_attributes_dictionary[graph_name] = \
-                self.GetParent().get_graph_attributes(self.trial, graph_name)
+                self.trial.controller.get_graph_attributes(self.trial, graph_name)
 
         for attribute in attributes:
             generate = False

@@ -23,23 +23,22 @@ worst_value = maxVal
 # Example fitness function for surrogate model testing
 def fitnessFunc(part):
     code = 0 if is_valid(part) else 1
-    return benchmarks.schaffer(part), code, array([0.0])
+    return benchmarks.sphere(part), code, 0
 
 
 # Example function to define if a design is valid or invalid
 def is_valid(part):
-    return part[0] ** int(part[1]) / part[1] < e
+    return True#part[0] ** int(part[1]) / part[1] < e
 
 
 # Example Termination condition
 def termCond(best):
-    print '[termCond]: ' + str(best < 0.00001) + ' ' + str(best)
     return best < 0.001
 
 
 # Name of the benchmark
 def name():
-    return 'schaffer'
+    return 'sphere'
 
 # Example definition of the design space
 designSpace = []

@@ -1,6 +1,6 @@
 from trial import PSOTrial
 
-results_folder_path = 'data/log'
+results_folder_path = '/data/log'
 enable_traceback = True
 eval_correct = False
 
@@ -8,10 +8,10 @@ eval_correct = False
 ### Basic setup
 
 trials_count = 1
-population_size = 10
+population_size = 20
 
-max_fitness = 250.0
-max_iter = 1
+max_fitness = 50.0
+max_iter = 5000
 max_speed = 0.025
 max_stdv = 0.05
 
@@ -42,7 +42,7 @@ KK = 0.73
 
 ### Visualisation
 
-vis_every_X_steps = 1  # How often to visualize
+vis_every_X_steps = 250 # How often to visualize
 counter = 'g'  # The counter that visualization uses as a 'step'
 max_counter = max_iter  # Maximum value of counter
 

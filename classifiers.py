@@ -8,13 +8,14 @@ from sklearn import preprocessing, svm
 from sklearn.grid_search import GridSearchCV
 from sklearn.cross_validation import StratifiedKFold
 
+from helper_functions import numpy_array_index
 
 #TODO - should this be an abstract class instead?
 class Classifier(object):
 
     def __init__(self):
-        self.training_set = []
-        self.training_labels = []
+        self.training_set = None
+        self.training_labels = None
         self.clf = None
 
     def train(self, z):
@@ -27,14 +28,34 @@ class Classifier(object):
         output = array(output)
         return output
 
+    ## TODO - check if element is in the array... just for the sake of it
     def add_training_instance(self, part, label):
-        if self.training_set == []:
+        if self.training_set is None:
             self.training_set = array([part])
             self.training_labels = array([label])
         else:
-            self.training_set = append(self.training_set, [part], axis=0)
-            self.training_labels = append(self.training_labels, [label],
-                                          axis=0)
+            contains = self.contains_training_instance(self.training_set)
+            if contains:
+                logging.info('A particle duplicate is being added.. check your code!!')
+            else:
+                self.training_set = append(self.training_set, [part], axis=0)
+                self.training_labels = append(self.training_labels, [label],
+                                              axis=0)
+                                          
+    def contains_training_instance(self, part):
+        contains, index = numpy_array_index(self.training_set, part)
+        return contains
+            
+    def get_training_instance(self, part):
+        contains, index = numpy_array_index(self.training_set, part)
+        if self.training_set is None:
+            logging.error('cannot call get_training_instance if training_set is empty')
+            return False
+        elif contains:
+            return self.training_labels[index]
+        else :
+            logging.error('cannot call get_training_instance if training_set does not contain the particle')
+            return False
 
 
 class SupportVectorMachineClassifier(Classifier):
@@ -45,9 +66,10 @@ class SupportVectorMachineClassifier(Classifier):
             scaledSvcTrainingSet = inputScaler.transform(self.training_set)
 
             if len(unique(asarray(self.training_labels))) < 2:
-                self.clf = svm.OneClassSVM()
-                self.clf.fit(scaledSvcTrainingSet)
-                return False
+                logging.info('Only one class encountered, we do not need to use a classifier')
+                #self.clf = svm.OneClassSVM()
+                #self.clf.fit(scaledSvcTrainingSet)
+                
             else:
                 param_grid = {
                     'gamma': 10.0 ** arange(-5, 4),
@@ -62,19 +84,23 @@ class SupportVectorMachineClassifier(Classifier):
                              self.training_labels.reshape(-1))
                 self.clf = self.clf.best_estimator_
                 logging.info('Classifier training successful')
-                return True
+            return True
         except Exception, e:
-            logging.error('Training failed.. {}'.format(e))
+            logging.error('Classifier training failed.. {}'.format(e))
             return False
 
     def predict(self, z):
         try:
-            # Scale inputs and particles
-            inputScaler = preprocessing.Scaler().fit(self.training_set)
+            if len(unique(asarray(self.training_labels))) < 2:
+                ## TODO - rewrite it not to use a stupid loop...
+                return array([self.training_labels[0]] * len(z))
+            else:
+                # Scale inputs and particles
+                inputScaler = preprocessing.Scaler().fit(self.training_set)
 
-            scaledz = inputScaler.transform(z)
-            zClass = self.clf.predict(scaledz)
-            return zClass
+                scaledz = inputScaler.transform(z)
+                zClass = self.clf.predict(scaledz)
+                return zClass
         except Exception, e:
             logging.error('Prediction failed.. {}'.format(e))
             return None

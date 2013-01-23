@@ -5,7 +5,8 @@ import os
 
 from multiprocessing import Process
 import matplotlib as mpl
-### Don't use the Xwindow backend
+
+# Force matplotlib to not use any Xwindows backend.
 mpl.use('Agg')
 
 from matplotlib import pyplot
