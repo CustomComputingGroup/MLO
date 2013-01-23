@@ -9,6 +9,7 @@ from sklearn import preprocessing
 from sklearn.gaussian_process import GaussianProcess
 from sklearn.grid_search import GridSearchCV
 
+from helper_functions import numpy_array_index
 
 #TODO - abstract class
 class Regressor(object):
@@ -33,10 +34,29 @@ class Regressor(object):
             self.training_set = array([part])
             self.training_fitness = array([fitness])
         elif part not in self.training_set:
-            self.training_set = append(self.training_set, [part], axis=0)
-            self.training_fitness = append(self.training_fitness, [fitness],
-                                           axis=0)
+            contains = self.contains_training_instance(self.training_set)
+            if contains:
+                logging.info('A particle duplicate is being added.. check your code!!')
+            else:
+                self.training_set = append(self.training_set, [part], axis=0)
+                self.training_fitness = append(self.training_fitness, [fitness],
+                                               axis=0)
 
+    def contains_training_instance(self, part):
+        contains, index = numpy_array_index(self.training_set, part)
+        return contains
+            
+    def get_training_instance(self, part):
+        contains, index = numpy_array_index(self.training_set, part)
+        if self.training_set is None:
+            logging.error('cannot call get_training_instance if training_set is empty')
+            return False
+        elif contains:
+            return self.training_fitness[index]
+        else :
+            logging.error('cannot call get_training_instance if training_set does not contain the particle')
+            return False
+                                           
     def __getstate__(self):
         # Don't pickle controller
         d = dict(self.__dict__)

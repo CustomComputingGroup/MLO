@@ -21,7 +21,7 @@ class Trial(Thread):
     def __init__(self, trial_no, run_name, fitness, configuration, controller,
                  run_results_folder_path):
         Thread.__init__(self)
-
+        
         self.name = '{} Trial {}'.format(run_name, trial_no)
         self.run_name = run_name
         self.trial_no = trial_no
@@ -30,7 +30,8 @@ class Trial(Thread):
         self.controller = controller
         self.run_results_folder_path = run_results_folder_path
         self.status = 'Running'  # TODO - BAD
-
+        self.retrain_model = False
+        self.terminating_condition_reached = False
         # True if the user has selected to pause the trial
         self.wait = False
 
@@ -67,7 +68,7 @@ class Trial(Thread):
         # Contains all the counter variables that may be used for visualization
         self.counter_dictionary = {}
         self.counter_dictionary['g'] = 1
-        self.counter_dictionary['fit'] = 1
+        self.counter_dictionary['fit'] = 0
 
         # The last counter value to be visualized, 0 means none
         self.latest_counter_plot = 0
@@ -113,26 +114,30 @@ class Trial(Thread):
         logging.info('{} started'.format(self.get_name()))
 
         logging.info('Run prepared... executing')
-
+        # Initialise termination check
+        
+        self.check = False
+        
+        self.initialize_population()
         while self.counter_dictionary['g'] < self.GEN + 1:
             logging.info('[{}] Generation {}'.format(
                 self.get_name(), self.counter_dictionary['g']))
-
+            logging.info('[{}] Fitness {}'.format(
+                self.get_name(), self.counter_dictionary['fit']))
             # Roll population
             first_pop = self.population.pop(0)
             self.population.append(first_pop)
-
-            # Initialise termination check
-            self.check = False
 
             if self.counter_dictionary['fit'] > self.max_fitness:
                 logging.info('Fitness counter exceeded the limit... exiting')
                 break
 
             # Train surrogate model
-            while not self.surrogate_model.train(self.population):
-                logging.info('Re-initializing population')
-                self.initialize_population()
+            if self.training_set_updated():
+                self.surrogate_model.train(self.population)
+            #while not :
+            #    logging.info('initializing population')
+            #    self.initialize_population()
 
             code, mean, variance = \
                 self.surrogate_model.model_particles(self.population)
@@ -143,23 +148,20 @@ class Trial(Thread):
             # Iteration of meta-heuristic
             self.meta_iterate()
             self.filter_population()
-
-            # TODO: termination condition
-
+            
             #TODO: This will be done after the presentation
-            '''
             if self.counter_dictionary['g'] % self.configuration.M == 0:
-                if self.M_best == self.best:
-                    #Return best?
-                    logging.info('New best was found after M')
-                    self.M_best = self.fitness.worst_value;
-                    pass
-                else:
-                    logging.info('Perturbing things')
-                    #Return perturbation?
-                    pass
-            '''
-
+                # if self.M_best == self.best:
+                    # self.fitness_function()
+                    # logging.info('New best was found after M')
+                    # self.M_best = self.fitness.worst_value;
+                    # break
+                # else:
+                    # logging.info('Perturbing things')
+                    # #Return perturbation?
+                    # break
+                #print " "
+                pass
             # Wait until the user unpauses the trial.
             while self.wait:
                 time.sleep(0)
@@ -167,6 +169,11 @@ class Trial(Thread):
             self.increment_counter('g')
             self.view_update()
 
+            # termination condition
+            if self.terminating_condition_reached:
+                logging.info('Terminating condition reached...')
+                break
+                
         self.status = 'Finished'
         self.view_update()
         logging.info('{} finished'.format(self.get_name()))
@@ -190,13 +197,26 @@ class Trial(Thread):
                           exc_info=sys.exc_info())
             return None
 
-    # Do not know what addReturn is???
+    ### check first if part is already within the training set
     def fitness_function(self, part):
-        fitness, code, addReturn = self.fitness.fitnessFunc(part)
-        self.surrogate_model.add_training_instance(part, code, fitness)
+    
+        ##this bit traverses the particle set and checks if it has already been evaluated. 
+        if self.surrogate_model.contains_training_instance(part):
+            return self.surrogate_model.get_training_instance(part)
         self.increment_counter('fit')
+        fitness, code, addReturn = self.fitness.fitnessFunc(part)
+        self.surrogate_model.add_training_instance(part, code, fitness, addReturn)
+        self.retrain_model = True
+        
+        self.terminating_condition_reached = self.fitness.termCond(fitness)
         return fitness, code
-
+    
+    ###check if between two calls to this functions any fitness functions have been evaluted, so that the models have to be retrained
+    def training_set_updated(self):
+        retrain_model_temp = self.retrain_model
+        self.retrain_model = False
+        return retrain_model_temp
+    
     # TODO - this could be removed
     def get_name(self):
         return self.name
@@ -225,6 +245,8 @@ class Trial(Thread):
     def load(self, generation=None):
         return self.backup.load_trial(self, generation)
 
+        
+    ### 
     def post_model_filter(self, population, code, mean, variance):
         for i, (p, c, m, v) in enumerate(zip(population, code,
                                              mean, variance)):
@@ -251,6 +273,10 @@ class Trial(Thread):
                                   'this should not be called.')
 
     def meta_iterate(self):
+        raise NotImplementedError('Trial is an abstract class, '
+                                  'this should not be called.')
+    
+    def terminating_condition(self):
         raise NotImplementedError('Trial is an abstract class, '
                                   'this should not be called.')
 
@@ -347,3 +373,4 @@ class PSOTrial(Trial):
     def set_counter_plot(self, counter_plot):
         self.latest_counter_plot = max(counter_plot, self.latest_counter_plot)
         self.controller.view_graph_update(self, counter_plot)
+       

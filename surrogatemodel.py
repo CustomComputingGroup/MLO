@@ -3,6 +3,7 @@ import logging
 from classifiers import Classifier, SupportVectorMachineClassifier
 from regressors import Regressor, GaussianProcessRegressor
 
+from helper_functions import numpy_array_index
 
 class SurrogateModel(object):
 
@@ -10,8 +11,8 @@ class SurrogateModel(object):
         self.fitness = fitness
         self.configuration = configuration
         self.classifier = Classifier()
-        self.regressor = Regressor(controller)
-
+        self.regressor = Regressor(controller)        
+        
     def train(self, pop):
         raise NotImplementedError('SurrogateModel is an abstract class, this '
                                   'should not be called.')
@@ -22,6 +23,12 @@ class SurrogateModel(object):
 
     def add_training_instance(self, part, code, fitness):
         pass
+        
+    def contains_training_instance(self, part):
+        pass    
+        
+    def get_training_instance(self, part):
+        pass
 
     def __getstate__(self):
         # Don't pickle fitness and configuration
@@ -30,6 +37,11 @@ class SurrogateModel(object):
         del d['configuration']
         return d
 
+    def contains_particle(self, part):
+        pass
+        
+    def particle_value(self, part):
+        pass
 
 class DummySurrogateModel(SurrogateModel):
 
@@ -38,6 +50,9 @@ class DummySurrogateModel(SurrogateModel):
 
     def model_particle(self, particle):
         return 0, 0, 0
+        
+    def contains_training_instance(self, part):
+        return False
 
 
 class ProperSurrogateModel(SurrogateModel):
@@ -63,6 +78,20 @@ class ProperSurrogateModel(SurrogateModel):
         return self.classifier.train(pop) and self.regressor.train(
             pop, self.configuration, dimensions)
 
-    def add_training_instance(self, part, code, fitness):
+    def add_training_instance(self, part, code, fitness, addReturn):
         self.classifier.add_training_instance(part, code)
-        self.regressor.add_training_instance(part, fitness)
+        if addReturn == 0: ## only update regressor if the fitness function produced a result
+            self.regressor.add_training_instance(part, fitness)
+        
+    def contains_training_instance(self, part):
+        self.classifier.contains_training_instance(part) 
+        self.regressor.contains_training_instance(part)
+        return False 
+
+    def get_training_instance(self, part):
+        code = self.classifier.get_training_instance(part) 
+        fitness = self.fitness.worst_value
+        if self.regressor.contains_training_instance(part):
+            fitness = self.regressor.get_training_instance(part)            
+        return code, fitness
+
