@@ -5,6 +5,9 @@ import os
 
 from multiprocessing import Process
 import matplotlib as mpl
+### Don't use the Xwindow backend
+mpl.use('Agg')
+
 from matplotlib import pyplot
 from matplotlib.ticker import LinearLocator, FormatStrFormatter, MaxNLocator
 from mpl_toolkits.mplot3d import axes3d, Axes3D
