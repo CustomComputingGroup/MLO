@@ -85,8 +85,8 @@ class Plot_View(object):
             Plot_View.plot_fitness_function(figure, dictionary)
         if dictionary['all_graph_dicts']['Progression']['generate']:
             Plot_View.plot_fitness_progression(figure, dictionary)
-        if dictionary['all_graph_dicts']['SVM']['generate']:
-            Plot_View.plot_SVM(figure, dictionary)
+        if dictionary['all_graph_dicts']['DesignSpace']['generate']:
+            Plot_View.plot_design_space(figure, dictionary)
 
         ### Save and exit
         filename = '{}/plot{:03d}.png'.format(dictionary['results_folder'],
@@ -102,6 +102,7 @@ class Plot_View(object):
                 'Plot_View could not render a plot for {}'.format(name),
                 exc_info=sys.exc_info())
         mpl.pyplot.close(figure)
+        sys.exit(0)
 
     @staticmethod
     def save_fig(figure, filename, DPI):
@@ -213,8 +214,8 @@ class Plot_View(object):
                   c='red', marker='x')
 
     @staticmethod
-    def plot_SVM(figure, d):
-        graph_dict = d['all_graph_dicts']['SVM']
+    def plot_design_space(figure, d):
+        graph_dict = d['all_graph_dicts']['DesignSpace']
         plot = figure.add_subplot(int(graph_dict['position']))
 
         ### User settings
@@ -248,24 +249,28 @@ class Plot_View(object):
                                 rotation='vertical',
                                 fontsize=Plot_View.TITLE_FONT_SIZE)
 
-        validx, validy, invalidx, invalidy = ([] for i in range(4))
+        #
+        plot_trainingset_x = [] 
+        plot_trainingset_y = []
         training_set = d['classifier'].training_set
         training_labels = d['classifier'].training_labels
+        
         for i in range(0, len(training_set)):
             p = training_set[i]
-            code = training_labels[i]
-            if code == 0:
-                validx.append(p[0])
-                validy.append(p[1])
-            else:
-                invalidx.append(p[0])
-                invalidy.append(p[1])
+            plot_trainingset_x.append(p[0])
+            plot_trainingset_y.append(p[1])
 
-        if len(validx) > 0:
-            plot.scatter(x=validx, y=validy, c=ocolour, marker='o')
-        if len(invalidx) > 0:
-            plot.scatter(x=invalidx, y=invalidy, c=xcolour, marker='x')
-
+        if len(plot_trainingset_x) > 0:
+            plot.scatter(x=plot_trainingset_x, y=plot_trainingset_y, c=ocolour, marker='x')
+        
+        ## plot meta-heuristic specific markers 
+        ## TODO - come up with a way of adding extra colours
+        #print d['all_graph_dicts']
+        for key in d['meta_plot'].keys():
+            data = d['meta_plot'][key]["data"]
+            plot.scatter(array([item[0] for item in data]),array([item[1] for item in data]), c="white",marker=d['meta_plot'][key]["marker"])
+        
+        
     @staticmethod
     def get_attributes(name):
         attribute_dictionary = {

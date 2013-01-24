@@ -1,9 +1,9 @@
 import logging
 
 from classifiers import Classifier, SupportVectorMachineClassifier
-from regressors import Regressor, GaussianProcessRegressor
+from regressors import Regressor, GaussianProcessRegressor, GaussianProcessRegressor2
 
-from helper_functions import numpy_array_index
+from utils import numpy_array_index
 
 class SurrogateModel(object):
 
@@ -42,6 +42,8 @@ class SurrogateModel(object):
         
     def particle_value(self, part):
         pass
+    
+ 
 
 class DummySurrogateModel(SurrogateModel):
 
@@ -69,6 +71,8 @@ class ProperSurrogateModel(SurrogateModel):
 
         if configuration.regressor == 'GaussianProcess':
             self.regressor = GaussianProcessRegressor(controller)
+        elif configuration.regressor == 'GaussianProcess2':
+            self.regressor = GaussianProcessRegressor2(controller)
         else:
             logging.error('Regressor type {} not found'.format(
                 configuration.regressor))

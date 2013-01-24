@@ -8,7 +8,7 @@ from sklearn import preprocessing, svm
 from sklearn.grid_search import GridSearchCV
 from sklearn.cross_validation import StratifiedKFold
 
-from helper_functions import numpy_array_index
+from utils import numpy_array_index
 
 #TODO - should this be an abstract class instead?
 class Classifier(object):

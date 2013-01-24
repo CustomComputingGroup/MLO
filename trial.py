@@ -6,14 +6,19 @@ import time
 from time import strftime
 from datetime import datetime
 
+##TODO - clean it up... only should be loaded when needed... 
+
 from surrogatemodel import DummySurrogateModel, ProperSurrogateModel
 from particles import *
 from trialbackup import PSOTrialBackup
 from views.plot import Plot_View
 
 from deap import base, creator, tools
-from numpy.random import uniform
+from numpy.random import uniform, rand
 import wx
+
+from copy import deepcopy 
+from numpy import multiply
 
 
 class Trial(Thread):
@@ -22,6 +27,7 @@ class Trial(Thread):
                  run_results_folder_path):
         Thread.__init__(self)
         
+        self.all_particles_in_invalid_area = False
         self.name = '{} Trial {}'.format(run_name, trial_no)
         self.run_name = run_name
         self.trial_no = trial_no
@@ -39,7 +45,7 @@ class Trial(Thread):
             'rerendering': False,
             'graph_title': configuration.graph_title,
             'graph_names': configuration.graph_names,
-            'all_graph_dicts': configuration.all_graph_dicts
+            'all_graph_dicts': configuration.all_graph_dicts,
         }
         for name in configuration.graph_names:
             self.graph_dictionary['all_graph_dicts'][name]['generate'] = True
@@ -145,28 +151,21 @@ class Trial(Thread):
             self.post_model_filter(self.population, code, mean, variance)
             #logging.info(self.population[0].fitness.values)
 
+                                    
             # Iteration of meta-heuristic
             self.meta_iterate()
             self.filter_population()
             
-            #TODO: This will be done after the presentation
+            #Check if perturbation is neccesary 
             if self.counter_dictionary['g'] % self.configuration.M == 0:
-                # if self.M_best == self.best:
-                    # self.fitness_function()
-                    # logging.info('New best was found after M')
-                    # self.M_best = self.fitness.worst_value;
-                    # break
-                # else:
-                    # logging.info('Perturbing things')
-                    # #Return perturbation?
-                    # break
-                #print " "
-                pass
+                self.evaluate_best()
+                
             # Wait until the user unpauses the trial.
             while self.wait:
                 time.sleep(0)
 
             self.increment_counter('g')
+            self.meta_plot()
             self.view_update()
 
             # termination condition
@@ -177,6 +176,7 @@ class Trial(Thread):
         self.status = 'Finished'
         self.view_update()
         logging.info('{} finished'.format(self.get_name()))
+        sys.exit(0)
 
     def _create_results_folder(self):
         """
@@ -208,7 +208,7 @@ class Trial(Thread):
         self.surrogate_model.add_training_instance(part, code, fitness, addReturn)
         self.retrain_model = True
         
-        self.terminating_condition_reached = self.fitness.termCond(fitness)
+        self.terminating_condition_reached = self.terminating_condition(fitness) 
         return fitness, code
     
     ###check if between two calls to this functions any fitness functions have been evaluted, so that the models have to be retrained
@@ -245,7 +245,6 @@ class Trial(Thread):
     def load(self, generation=None):
         return self.backup.load_trial(self, generation)
 
-        
     ### 
     def post_model_filter(self, population, code, mean, variance):
         for i, (p, c, m, v) in enumerate(zip(population, code,
@@ -258,6 +257,13 @@ class Trial(Thread):
                 else:
                     p.fitness.values = [self.fitness.worst_value]
 
+    # Abstract methods that can be overriden by concrete implementations (optional)
+    
+    ## is used by the plot.py to add specific meta-heuristic markers onto the design space... currently very primitive. 
+    ## check PSOTrial for examples. 
+    def meta_plot(self):
+        pass
+                    
     # Abstract methods that should be overriden by concrete implementations
 
     def run_initialize(self):
@@ -271,14 +277,13 @@ class Trial(Thread):
     def filter_population(self):
         raise NotImplementedError('Trial is an abstract class, '
                                   'this should not be called.')
-
+        
     def meta_iterate(self):
         raise NotImplementedError('Trial is an abstract class, '
                                   'this should not be called.')
     
-    def terminating_condition(self):
-        raise NotImplementedError('Trial is an abstract class, '
-                                  'this should not be called.')
+    def terminating_condition(self, fitness):
+        return self.fitness.termCond(fitness[0])
 
     def create_backup_manager(self):
         """
@@ -287,25 +292,28 @@ class Trial(Thread):
         """
         raise NotImplementedError('Trial is an abstract class, '
                                   'this should not be called.')
-
-
+        
+    def evaluate_best():
+        raise NotImplementedError('Trial is an abstract class, '
+                                  'this should not be called.')
+                                  
 class PSOTrial(Trial):
 
     def run_initialize(self):
         design_space = self.fitness.designSpace
 
-        smin = [-1.0 * self.configuration.max_speed *
+        self.smin = [-1.0 * self.configuration.max_speed *
                 (dimSetting['max'] - dimSetting['min'])
                 for dimSetting in design_space]
-        smax = [self.configuration.max_speed *
+        self.smax = [self.configuration.max_speed *
                 (dimSetting['max'] - dimSetting['min'])
                 for dimSetting in design_space]
 
         creator.create('FitnessMax', base.Fitness, weights=(1.0,))
         creator.create('Particle', list, fitness=creator.FitnessMax,
-                       smin=smin, smax=smax,
-                       speed=[uniform(smi, sma) for sma, smi in zip(smax,
-                                                                    smin)],
+                       smin=self.smin, smax=self.smax,
+                       speed=[uniform(smi, sma) for sma, smi in zip(self.smax,
+                                                                    self.smin)],
                        pmin=[dimSetting['max'] for dimSetting in design_space],
                        pmax=[dimSetting['min'] for dimSetting in design_space],
                        model=False, best=None, code=None)
@@ -314,6 +322,8 @@ class PSOTrial(Trial):
         self.toolbox.register('particle', generate, designSpace=design_space)
         self.toolbox.register('filter_particles', filterParticles,
                               designSpace=design_space)
+        self.toolbox.register('filter_particle', filterParticle,
+                              designSpace=design_space)
         self.toolbox.register('population', tools.initRepeat,
                               list, self.toolbox.particle)
         self.toolbox.register('update', updateParticle, trial=self,
@@ -321,33 +331,28 @@ class PSOTrial(Trial):
                               designSpace=design_space)
         self.toolbox.register('evaluate', self.fitness_function)
 
-        ### TODO - do something about the commented out code
-        #                 fitness=fitness)
-        #self.toolbox.register('train_model', trainModel,
-        #                 maxstdv=self.configuration.max_stdv,
-        #                 conf=self.configuration)
-
-        ### TODO: not sure if these are necessary
-        ###       (just print out stats - will visualise do this?)
-        #self.stats = tools.Statistics(lambda ind: ind.fitness.values)
-        #self.stats.register('Avg', tools.mean)
-        #self.stats.register('Std', tools.std)
-        #self.stats.register('Min', min)
-        #self.stats.register('Max', max)
-
     def initialize_population(self):
-        self.population = self.toolbox.population(
-            n=self.configuration.population_size)
-        self.toolbox.filter_particles(self.population)
+        ## the while loop exists, as meta-heuristic makes no sense till we find at least one particle that is within valid region...
+        at_least_one_in_valid_region = False
+        while(not at_least_one_in_valid_region):
+            self.population = self.toolbox.population(
+                n=self.configuration.population_size)
+            self.toolbox.filter_particles(self.population)
 
-        if self.configuration.eval_correct:
-            self.population[0] = creator.Particle(
-                self.fitness.alwaysCorrect())  # This will break
-        for i, part in enumerate(self.population):
-            if i < self.configuration.F:
-                part.fitness.values, part.code = self.toolbox.evaluate(part)
+            if self.configuration.eval_correct:
+                self.population[0] = creator.Particle(
+                    self.fitness.alwaysCorrect())  # This will break
+            for i, part in enumerate(self.population):
+                if i < self.configuration.F:
+                    part.fitness.values, part.code = self.toolbox.evaluate(part)
+                    at_least_one_in_valid_region = (part.code == 0) or at_least_one_in_valid_region
+            self.configuration.F = 1
 
     def meta_iterate(self):
+        #TODO - reavluate one random particle... do it.. very important!
+        while(self.all_particles_in_invalid_area):
+            logging.info("All particles within invalid area... have to randomly sample the design space to find one that is OK...")             
+            
         #Update Bests
         for part in self.population:
             if not part.best or self.fitness.is_better(part.fitness,
@@ -359,7 +364,8 @@ class PSOTrial(Trial):
                 self.best = creator.Particle(part)
                 self.best.fitness.values = part.fitness.values
                 self.M_best = self.best
-
+                self.new_best = True
+                logging.info('New global best found' + str(self.M_best) + ' fitness:'+ str(part.fitness.values))                
         #PSO
         for part in self.population:
             self.toolbox.update(part, self.counter_dictionary['g'])
@@ -373,4 +379,80 @@ class PSOTrial(Trial):
     def set_counter_plot(self, counter_plot):
         self.latest_counter_plot = max(counter_plot, self.latest_counter_plot)
         self.controller.view_graph_update(self, counter_plot)
-       
+    
+    def meta_plot(self):
+        self.graph_dictionary["meta_plot"] = {"particles":{'marker':"o",'data':self.population}}
+    
+    def evaluate_best(self):        
+        if self.new_best:
+            self.fitness_function(self.best)
+            logging.info('New best was found after M')
+        else:
+            ## TODO - clean it up...  messy
+            logging.info('Best was already evalauted.. adding perturbation')
+            perturbation = self.get_perturbation()                        
+            perturbedParticle = creator.Particle(self.best)
+            for i,val in enumerate(perturbation):
+                perturbedParticle[i] = perturbedParticle[i] + val       
+            self.toolbox.filter_particle(perturbedParticle)
+            self.fitness_function(perturbedParticle) 
+        self.new_best = False
+        
+    ## not used currently
+    def get_dist(pop,best,conf,gpTrainingSet):
+        if best:
+            distances = sqrt(sum(pow((gpTrainingSet-best),2),axis=1))
+            orderAccordingToManhatan = argsort(distances)
+            #print "aaa ",[(distances[index],gpTrainingSet[index]) for index in orderAccordingToManhatan[0:conf.nClosest]]
+            closestArray = [gpTrainingSet[index] for index in orderAccordingToManhatan[0:conf.nClosest]]
+        ###        
+        ## limit to hypercube around the points
+        #find maximum
+        #print "[getDist] closestArray ",closestArray
+        maxDiag = deepcopy(closestArray[0])
+        for part in closestArray:
+            maxDiag = maximum(part,maxDiag)
+        ###find minimum vectors
+        minDiag = deepcopy(closestArray[0])
+        for part in closestArray:
+            minDiag = minimum(part,minDiag)
+        return [maxDiag,minDiag]
+
+    ## not used currently
+    def get_perturbation_dist(pop,fitnessScript,best,conf):
+        [maxDiag,minDiag] = get_dist(pop,best,conf)
+        d = (maxDiag - minDiag)/2.0
+        if best:
+            maxDiag = best + d
+            for i,dd in enumerate(fitnessScript.designSpace):
+                maxDiag[i] = minimum(maxDiag[i],dd["max"])
+            minDiag = best - d
+            for i,dd in enumerate(fitnessScript.designSpace):
+                minDiag[i] = maximum(minDiag[i],dd["min"])
+            return [maxDiag,minDiag]
+        else:
+            return getHypercube(pop)
+        
+    def get_hypercube(self):
+        #find maximum
+        maxDiag = deepcopy(self.population[0])
+        for part in self.population:
+            maxDiag = maximum(part,maxDiag)
+        ###find minimum vectors
+        minDiag = deepcopy(self.population[0])
+        for part in self.population:
+            minDiag = minimum(part,minDiag)
+        return [maxDiag,minDiag]
+        
+    def get_perturbation(self):
+        radius = 100.0
+        [maxDiag,minDiag] = self.get_hypercube()
+        d = (maxDiag - minDiag)/radius
+        for i,dd in enumerate(d):
+            if self.fitness.designSpace[i]["type"] == "discrete":
+                d[i] = maximum(dd,self.fitness.designSpace[i]["step"])
+            elif self.fitness.designSpace[i]["type"] == "continuous":
+                d[i] = maximum(dd,self.smax[i])
+        dimensions = len(self.fitness.designSpace)
+        pertubation =  multiply(((rand(1,dimensions)-0.5)*2.0),d)[0] #TODO add the dimensions
+        return pertubation
