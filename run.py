@@ -31,6 +31,7 @@ class Run(object):
             trial = Trial(trial_no, self.name, self.fitness,
                           self.configuration, self.controller,
                           self.results_folder_path)
+            trial.daemon = True
             if trial.initialise():
                 self.trials.append(trial)
 
@@ -40,9 +41,10 @@ class Run(object):
         for trial in self.trials:
             trial.start()
 
+    ## TODO - this has to be changed... its just that ctrl+c wont be propagated otherwise...
     def join(self):
         for trial in self.trials:
-            trial.join()
+            trial.join(1000)
 
     def restart(self):
         """

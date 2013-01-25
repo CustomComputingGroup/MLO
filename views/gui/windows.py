@@ -231,7 +231,7 @@ class RunWindow(wx.Frame):
         bar.SetValue(trial.counter_dictionary['g'])
 
     def get_graph_attributes(self, trial, graph_name):
-        self.controller.get_graph_attributes(trial, graph_name)
+        return self.controller.get_graph_attributes(trial, graph_name)
 
     def regenerate_graph(self, trial, generation):
         self.controller.revisualize_trial(trial, generation)
@@ -335,7 +335,7 @@ class GraphWindow(wx.Frame):
         event.Skip()
 
     def make_file_name(self, plot_number):
-        return '{}/plot{:03d}.png'.format(self.results_folder, plot_number)
+        return '{}/plot{:03d}.png'.format(self.results_image_folder, plot_number)
 
     def update_image(self):
         ### Called when current_plot is updated, to display the new graph
@@ -359,6 +359,8 @@ class GraphWindow(wx.Frame):
         logging.debug('current plot: {}'.format(self.current_plot))
         self.GetParent().regenerate_graph(trial, self.current_plot)
 
+    def get_graph_attributes(self, trial, graph_name):
+        return self.GetParent().get_graph_attributes(trial, graph_name)
 
 class OptionsWindow(wx.Frame):
 

@@ -206,7 +206,10 @@ class Plot_View(object):
         plot.set_ylabel(graph_dict['y-axis'], fontsize=font_size)
 
         ### Other settings
-        plot.set_xlim(1,   max(10, max(d['generations_array'])))
+        try:
+            plot.set_xlim(1,   max(10, max(d['generations_array'])))
+        except ValueError, e:
+            plot.set_xlim(1,   10)
         plot.set_ylim(0.0, max(d['best_fitness_array']) * 1.1)
 
         ### Data
@@ -277,7 +280,7 @@ class Plot_View(object):
             'All':         ['subtitle', 'x-axis', 'y-axis', 'z-axis',
                             'font size', 'colour map', 'x-colour', 'o-colour',
                             'position'],
-            'SVM':         ['subtitle', 'x-axis', 'y-axis', 'font size',
+            'DesignSpace':         ['subtitle', 'x-axis', 'y-axis', 'font size',
                             'colour map', 'x-colour', 'o-colour', 'position'],
             'Mean':        ['subtitle', 'x-axis', 'y-axis', 'z-axis',
                             'font size', 'colour map', 'position'],

@@ -26,7 +26,6 @@ class Trial(Thread):
     def __init__(self, trial_no, run_name, fitness, configuration, controller,
                  run_results_folder_path):
         Thread.__init__(self)
-        
         self.all_particles_in_invalid_area = False
         self.name = '{} Trial {}'.format(run_name, trial_no)
         self.run_name = run_name
@@ -58,7 +57,7 @@ class Trial(Thread):
         self.generations_array = []
         self.max_fitness = configuration.max_fitness
         self.best_fitness_array = []
-
+        
         self.clf = None
         self.gp_training_fitness = None
         self.gp_training_set = None
@@ -73,14 +72,13 @@ class Trial(Thread):
 
         # Contains all the counter variables that may be used for visualization
         self.counter_dictionary = {}
-        self.counter_dictionary['g'] = 1
+        self.counter_dictionary['g'] = 0
         self.counter_dictionary['fit'] = 0
 
         # The last counter value to be visualized, 0 means none
         self.latest_counter_plot = 0
 
         self.controller.register_trial(self)
-
         self.backup = self.create_backup_manager()
 
     def initialise(self):
@@ -92,7 +90,7 @@ class Trial(Thread):
         if not self.results_folder:
             # Results folder could not be created
             return False
-
+            
         self.run_initialize()
 
         self.best = None
@@ -110,7 +108,6 @@ class Trial(Thread):
         self.svc_training_set = None
 
         self.initialize_population()
-
         return True
 
     def run(self):
@@ -124,7 +121,6 @@ class Trial(Thread):
         
         self.check = False
         
-        self.initialize_population()
         while self.counter_dictionary['g'] < self.GEN + 1:
             logging.info('[{}] Generation {}'.format(
                 self.get_name(), self.counter_dictionary['g']))
@@ -180,12 +176,11 @@ class Trial(Thread):
 
     def _create_results_folder(self):
         """
-        Creates a folder used for storing results.
+        Creates folder structure used for storing results.
         Returns a results folder path or None if it could not be created.
         """
         path = '{}/trial-{}'.format(self.run_results_folder_path,
                                     self.trial_no)
-
         try:
             os.makedirs(path)
             return path
@@ -196,7 +191,7 @@ class Trial(Thread):
             logging.error('Could not create folder: {}, aborting'.format(path),
                           exc_info=sys.exc_info())
             return None
-
+    
     ### check first if part is already within the training set
     def fitness_function(self, part):
     
@@ -346,6 +341,7 @@ class PSOTrial(Trial):
                 if i < self.configuration.F:
                     part.fitness.values, part.code = self.toolbox.evaluate(part)
                     at_least_one_in_valid_region = (part.code == 0) or at_least_one_in_valid_region
+            ## add one example till we find something that works
             self.configuration.F = 1
 
     def meta_iterate(self):
