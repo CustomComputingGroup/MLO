@@ -112,6 +112,8 @@ class Trial(Thread):
         
         return True
 
+        
+        
     def run(self):
         self.start_time = datetime.now().strftime('%d-%m-%Y  %H:%M:%S')
         
@@ -139,20 +141,23 @@ class Trial(Thread):
             if self.training_set_updated():
                 self.surrogate_model.train(self.population)
 
-            code, mean, variance = \
-                self.surrogate_model.model_particles(self.population)
-
-            self.post_model_filter(self.population, code, mean, variance)
-            #logging.info(self.population[0].fitness.values)
-
-                                    
-            # Iteration of meta-heuristic
-            self.meta_iterate()
-            self.filter_population()
+            code, mean, variance = self.surrogate_model.predict(self.population)
+                
+            self.post_model_filter(code, mean, variance)
             
-            #Check if perturbation is neccesary 
-            if self.counter_dictionary['g'] % self.configuration.M == 0:
-                self.evaluate_best()
+            ##
+            if self.get_model_failed():
+                logging.info('Model Failed, sampling design space')
+                self.sample_design_space()
+            else:
+                self.reevalute_best()
+                # Iteration of meta-heuristic
+                self.meta_iterate()
+                self.filter_population()
+                
+                #Check if perturbation is neccesary 
+                if self.counter_dictionary['g'] % self.configuration.M == 0:
+                    self.evaluate_best()
                 
             # Wait until the user unpauses the trial.
             while self.wait:
@@ -169,7 +174,11 @@ class Trial(Thread):
         self.status = 'Finished'
         logging.info('{} finished'.format(self.get_name()))
         sys.exit(0)
+           
 
+    def get_model_failed(self):
+        return self.model_failed
+        
     def _create_results_folder(self):
         """
         Creates folder structure used for storing results.
@@ -230,9 +239,9 @@ class Trial(Thread):
     def load(self, generation=None):
         return self.backup.load_trial(self, generation)
 
-    ### 
-    def post_model_filter(self, population, code, mean, variance):
-        for i, (p, c, m, v) in enumerate(zip(population, code,
+    ### TODO - its just copy and pasted ciode now..w could rewrite it realyl
+    def post_model_filter(self, code, mean, variance):
+        for i, (p, c, m, v) in enumerate(zip(self.population, code,
                                              mean, variance)):
             if v > self.configuration.max_stdv and c == 0:
                 p.fitness.values, p.code = self.toolbox.evaluate(p)
@@ -241,7 +250,22 @@ class Trial(Thread):
                     p.fitness.values = m
                 else:
                     p.fitness.values = [self.fitness.worst_value]
+        ## at least one particle has to have std smaller then max_stdv
+        ## if all particles are in invalid zone
+        self.model_failed = not (False in [self.configuration.max_stdv < pred for pred in variance])
 
+   
+    def reevalute_best(self):
+        bests_to_model = [p.best for p in self.population if p.best] ### Elimate Nones -- in case M < Number of particles, important for initialb iteratiions
+        if self.best:
+            bests_to_model.append(self.best)
+        if bests_to_model:
+            bests_to_fitness = self.surrogate_model.predict(bests_to_model)[1]
+            for i,part in enumerate([p for p in self.population if p.best]):
+                part.best.fitness.values = bests_to_fitness[i]
+            if self.best.model:
+                best.fitness.values = bests_to_fitness[-1]
+                
     # Abstract methods that can be overriden by concrete implementations (optional)
     
     ## is used by the plot.py to add specific meta-heuristic markers onto the design space... currently very primitive. 
@@ -280,7 +304,11 @@ class Trial(Thread):
         raise NotImplementedError('Trial is an abstract class, '
                                   'this should not be called.')
                                   
-                                  
+    def sample_design_space(self):
+        raise NotImplementedError('Trial is an abstract class, '
+                                  'this should not be called.')
+        pass
+        
 class PSOTrial(Trial):
 
     def run_initialize(self):
@@ -427,6 +455,21 @@ class PSOTrial(Trial):
             minDiag = minimum(part,minDiag)
         return [maxDiag,minDiag]
 
+    def sample_design_space(self):
+        
+        logging.info('Evaluating best perturbation perturbation')
+        perturbation = self.get_perturbation()                        
+        hypercube = self.get_hypercube()
+        particle = self.surrogate_model.max_uncertainty()
+        if particle is None:
+            logging.info('Evaluating a perturbation of a random particle')
+            particle = self.toolbox.particle()
+        perturbedParticle = creator.Particle(particle)
+        for i,val in enumerate(perturbation):
+            perturbedParticle[i] = perturbedParticle[i] + val       
+        self.toolbox.filter_particle(perturbedParticle)
+        self.fitness_function(perturbedParticle) 
+        
     ## not used currently
     def get_perturbation_dist(pop,fitnessScript,best,conf):
         [maxDiag,minDiag] = get_dist(pop,best,conf)
@@ -453,8 +496,7 @@ class PSOTrial(Trial):
             minDiag = minimum(part,minDiag)
         return [maxDiag,minDiag]
         
-    def get_perturbation(self):
-        radius = 100.0
+    def get_perturbation(self, radius = 100.0):
         [maxDiag,minDiag] = self.get_hypercube()
         d = (maxDiag - minDiag)/radius
         for i,dd in enumerate(d):

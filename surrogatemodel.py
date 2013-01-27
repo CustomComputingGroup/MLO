@@ -4,6 +4,8 @@ from classifiers import Classifier, SupportVectorMachineClassifier
 from regressors import Regressor, GaussianProcessRegressor, GaussianProcessRegressor2
 
 from utils import numpy_array_index
+from scipy.interpolate import griddata
+from numpy import linspace, meshgrid, reshape, array, argmax
 
 class SurrogateModel(object):
 
@@ -17,7 +19,7 @@ class SurrogateModel(object):
         raise NotImplementedError('SurrogateModel is an abstract class, this '
                                   'should not be called.')
 
-    def model_particles(self, particles):
+    def predict(self, particles):
         MU, S2 = self.regressor.predict(particles)
         return self.classifier.predict(particles), MU, S2
 
@@ -44,6 +46,9 @@ class SurrogateModel(object):
         pass
     
     def model_failed(self, part):
+        pass
+        
+    def max_uncertainty(self):
         pass
 
 class DummySurrogateModel(SurrogateModel):
@@ -81,9 +86,10 @@ class ProperSurrogateModel(SurrogateModel):
                 configuration.regressor))
 
     def train(self, pop):
-        dimensions = self.fitness.dimensions
+        dimensions = len(pop[0])
         return self.classifier.train(pop) and self.regressor.train(
             pop, self.configuration, dimensions)
+
 
     def add_training_instance(self, part, code, fitness, addReturn):
         self.classifier.add_training_instance(part, code)
@@ -105,3 +111,38 @@ class ProperSurrogateModel(SurrogateModel):
     def model_failed(self, part):
         return False
 
+    def max_uncertainty(self, hypercube=None, npts=200):
+        designSpace = self.fitness.designSpace
+        if len(designSpace)==2:
+            # make up data.
+            if hypercube:
+                logging.info("[returnMaxS2]: using hypercube ",hypercube)
+                x = linspace(hypercube[1][0],hypercube[0][0],npts)
+                y = linspace(hypercube[1][1],hypercube[0][1],npts) 
+            else:
+                x = linspace(designSpace[0]["min"],designSpace[0]["max"],npts)
+                y = linspace(designSpace[1]["min"],designSpace[1]["max"],npts)
+            x,y = meshgrid(x,y)
+            x=reshape(x,-1)
+            y=reshape(y,-1)
+            z = array([[a,b] for (a,b) in zip(x,y)])
+        else:
+            x,y,v = mgrid[designSpace[0]["min"]:designSpace[0]["max"]:(int(designSpace[0]["max"]-designSpace[0]["min"])+1)*1.0j,designSpace[1]["min"]:designSpace[1]["max"]:(int(designSpace[1]["max"]-designSpace[1]["min"])+1)*1.0j , designSpace[2]["min"]:designSpace[2]["max"]:(int(designSpace[2]["max"]-designSpace[2]["min"])+1)*1.0j]
+            x=reshape(x,-1)
+            y=reshape(y,-1)
+            v=reshape(v,-1)
+            z = array([[a,b,c] for (a,b,c) in zip(x,y,v)])
+            
+        try:             
+            zClass, MU, S2 = self.predict(z)
+            filteredS2=[]
+            filteredZ=[]
+            for i,s2 in enumerate(S2):
+                if zClass[i]==0.0:
+                    filteredS2.append(s2)
+                    filteredZ.append(z[i])
+            S2 = array(filteredS2) 
+            return filteredZ[argmax(S2)]
+        except Exception,e:
+            logging.error("Finding max S2 failed: {}".format(e))
+            return None

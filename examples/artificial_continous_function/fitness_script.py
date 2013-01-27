@@ -6,7 +6,7 @@ dimensions = 2  # Dimensionality of solution space
 
 # Min and max fitness values
 minVal = 0.0
-maxVal = 10
+maxVal = 10.0
 
 # Defines names for classification codes
 error_labels = {0: 'Valid', 1: 'Invalid'}
@@ -33,7 +33,7 @@ def is_valid(part):
 
 # Example Termination condition
 def termCond(best):
-    return best < 0.001
+    return best < 0.00001
 
 
 # Name of the benchmark
