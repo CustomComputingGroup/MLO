@@ -224,7 +224,7 @@ class RunWindow(wx.Frame):
     def update_trial(self, event):
         ### Called to update display to represent trial's changed state
         trial = event.trial
-        if trial.counter_dictionary['g'] % trial.configuration.vis_every_X_steps == 0:
+        if trial.counter_dictionary['g'] % trial.configuration.vis_every_X_steps == 0: ### TODO - it should really be done a bit differently...
              self.controller.visualize_trial(trial)
              
         drawn = trial.get_name() in self.bars
@@ -260,7 +260,7 @@ class GraphWindow(wx.Frame):
 
     def __init__(self, parent, title, trial):
         super(GraphWindow, self).__init__(parent, title=title,
-                                          size=(1200, 650))
+                                          size=(1320, 650))
 
         ### Initialisation (take graph options from given trial)
         self.trial = trial
@@ -323,7 +323,7 @@ class GraphWindow(wx.Frame):
         
     def on_first(self, event):
         logging.info('click')
-        self.set_first()
+        self.set_first_plot()
         self.update_image()
 
     def on_right(self, event):

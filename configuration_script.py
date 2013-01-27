@@ -90,13 +90,13 @@ plot_view = 'default'
 
 
 ### Regressor and classifier type
-regressor = 'GaussianProcess'
+regressor = 'GaussianProcess2'
 classifier = 'SupportVectorMachine'
 
 ### GPR Regression settings
-regr = 'quadratic'
-corr = 'squared_exponential'
-#corr = 'isotropic'
+#regr = 'quadratic'
+#corr = 'squared_exponential'
+corr = 'isotropic'
 theta0 = 0.01
 thetaL = 0.0001
 thetaU = 3.0

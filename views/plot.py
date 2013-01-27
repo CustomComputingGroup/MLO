@@ -262,3 +262,11 @@ class MLO_IMAGE_VIEWER(object):
                             'font size', 'colour map', 'position']
         }
         return attribute_dictionary.get(name, None)
+
+##This class returns a string 
+##It should return either a string, a file reference or 
+class MLO_REPORT_VIEWER(object):
+
+    @staticmethod
+    def render(dictionary):
+        pass
