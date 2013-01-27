@@ -16,40 +16,12 @@ from numpy import array, linspace, meshgrid, reshape, argmin
 from scipy.interpolate import griddata
 
 
-### TODO: this should be renamed
-class Plot_View(object):
+## This class containts 
+class MLO_IMAGE_VIEWER(object):
 
     DPI = 400
     LABEL_FONT_SIZE = 10
     TITLE_FONT_SIZE = 10
-
-    ### Takes a snapshot of the values for visualization
-    @staticmethod
-    def snapshot(t):
-        fitness = t.fitness
-        best_fitness_array = copy.copy(t.best_fitness_array)
-        generations_array = copy.copy(t.generations_array)
-        results_folder = copy.copy(t.results_folder)
-        counter = copy.copy(t.counter_dictionary[t.configuration.counter])
-        name = t.get_name()
-
-        sm = t.surrogate_model
-        classifier = copy.copy(sm.classifier) if hasattr(sm, 'classifier') \
-            else None
-        regressor = copy.copy(sm.regressor) if hasattr(sm, 'regressor') \
-            else None
-
-        return_dictionary = {
-            'fitness': fitness,
-            'best_fitness_array': best_fitness_array,
-            'generations_array': generations_array,
-            'results_folder': results_folder,
-            'counter': counter,
-            'name': name,
-            'classifier': classifier,
-            'regressor': regressor
-        }
-        return return_dictionary
 
     @staticmethod
     def render(dictionary):
@@ -80,30 +52,30 @@ class Plot_View(object):
 
         ### Generate the graphs according to the user's selection
         if dictionary['all_graph_dicts']['Mean']['generate']:
-            Plot_View.plot_MU(figure, dictionary)
+            MLO_IMAGE_VIEWER.plot_MU(figure, dictionary)
         if dictionary['all_graph_dicts']['Fitness']['generate']:
-            Plot_View.plot_fitness_function(figure, dictionary)
+            MLO_IMAGE_VIEWER.plot_fitness_function(figure, dictionary)
         if dictionary['all_graph_dicts']['Progression']['generate']:
-            Plot_View.plot_fitness_progression(figure, dictionary)
+            MLO_IMAGE_VIEWER.plot_fitness_progression(figure, dictionary)
         if dictionary['all_graph_dicts']['DesignSpace']['generate']:
-            Plot_View.plot_design_space(figure, dictionary)
+            MLO_IMAGE_VIEWER.plot_design_space(figure, dictionary)
 
         ### Save and exit
-        filename = '{}/plot{:03d}.png'.format(dictionary['results_folder'],
+        filename = '{}/plot{:03d}.png'.format(dictionary['images_folder'],
                                               dictionary['counter'])
         if rerender and os.path.isfile(filename):
             os.remove(filename)
         try:
             #P = Process(target=Plot_View.save_fig, args=(figure, filename,
             #                                             Plot_View.DPI))
-            Plot_View.save_fig(figure, filename, Plot_View.DPI)
+            MLO_IMAGE_VIEWER.save_fig(figure, filename, MLO_IMAGE_VIEWER.DPI)
         except:
             logging.error(
-                'Plot_View could not render a plot for {}'.format(name),
+                'MLO_IMAGE_VIEWER could not render a plot for {}'.format(name),
                 exc_info=sys.exc_info())
         mpl.pyplot.close(figure)
-        sys.exit(0)
-
+        #sys.exit(0) ## I let it as a reminder... do NOT uncomment this! will get the applciation to get stuck
+        
     @staticmethod
     def save_fig(figure, filename, DPI):
         logging.debug('Save fig {}'.format(filename))
@@ -118,7 +90,7 @@ class Plot_View(object):
         ### User settings
         font_size = int(graph_dict['font size'])
         plot.set_title(graph_dict['subtitle'],
-                       fontsize=Plot_View.TITLE_FONT_SIZE)
+                       fontsize=MLO_IMAGE_VIEWER.TITLE_FONT_SIZE)
         plot.set_ylabel('\n' + graph_dict['y-axis'], linespacing=3,
                         fontsize=font_size)
         plot.set_xlabel('\n' + graph_dict['x-axis'], linespacing=3,
@@ -155,7 +127,7 @@ class Plot_View(object):
         ### User settings
         font_size = int(graph_dict['font size'])
         plot.set_title(graph_dict['subtitle'],
-                       fontsize=Plot_View.TITLE_FONT_SIZE)
+                       fontsize=MLO_IMAGE_VIEWER.TITLE_FONT_SIZE)
         plot.set_ylabel('\n' + graph_dict['y-axis'], linespacing=3,
                         fontsize=font_size)
         plot.set_xlabel('\n' + graph_dict['x-axis'], linespacing=3,
@@ -201,7 +173,7 @@ class Plot_View(object):
         ### User settings
         font_size = int(graph_dict['font size'])
         plot.set_title(graph_dict['subtitle'],
-                       fontsize=Plot_View.TITLE_FONT_SIZE)
+                       fontsize=MLO_IMAGE_VIEWER.TITLE_FONT_SIZE)
         plot.set_xlabel(graph_dict['x-axis'], fontsize=font_size)
         plot.set_ylabel(graph_dict['y-axis'], fontsize=font_size)
 
@@ -224,7 +196,7 @@ class Plot_View(object):
         ### User settings
         font_size = int(graph_dict['font size'])
         plot.set_title(graph_dict['subtitle'],
-                       fontsize=Plot_View.TITLE_FONT_SIZE)
+                       fontsize=MLO_IMAGE_VIEWER.TITLE_FONT_SIZE)
         plot.set_xlabel(graph_dict['x-axis'], fontsize=font_size)
         plot.set_ylabel(graph_dict['y-axis'], fontsize=font_size)
         colour_map = mpl.cm.get_cmap(graph_dict['colour map'])
@@ -250,7 +222,7 @@ class Plot_View(object):
         cbar.ax.set_yticklabels(["" * (int(len(v)/2) + 13) + v
                                  for k, v in fitness.error_labels.items()],
                                 rotation='vertical',
-                                fontsize=Plot_View.TITLE_FONT_SIZE)
+                                fontsize=MLO_IMAGE_VIEWER.TITLE_FONT_SIZE)
 
         #
         plot_trainingset_x = [] 

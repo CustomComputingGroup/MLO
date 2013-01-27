@@ -5,19 +5,18 @@ from threading import Thread
 import time
 from time import strftime
 from datetime import datetime
+from copy import copy, deepcopy
 
 ##TODO - clean it up... only should be loaded when needed... 
 
 from surrogatemodel import DummySurrogateModel, ProperSurrogateModel
 from particles import *
 from trialbackup import PSOTrialBackup
-from views.plot import Plot_View
 
 from deap import base, creator, tools
 from numpy.random import uniform, rand
 import wx
 
-from copy import deepcopy 
 from numpy import multiply
 
 
@@ -37,6 +36,7 @@ class Trial(Thread):
         self.status = 'Running'  # TODO - BAD
         self.retrain_model = False
         self.terminating_condition_reached = False
+        self.model_failed = False
         # True if the user has selected to pause the trial
         self.wait = False
 
@@ -49,8 +49,8 @@ class Trial(Thread):
         for name in configuration.graph_names:
             self.graph_dictionary['all_graph_dicts'][name]['generate'] = True
 
-        if configuration.plot_view != 'special':
-            self.plot_view = Plot_View
+        #if configuration.plot_view != 'special':
+        #    self.plot_view = Plot_View
 
         self.enable_traceback = configuration.enable_traceback
         self.GEN = configuration.max_iter
@@ -86,7 +86,7 @@ class Trial(Thread):
         Initialises the trial and returns True if everything went OK,
         False otherwise.
         """
-        self.results_folder = self._create_results_folder()
+        self.results_folder, self.images_folder = self._create_results_folder()
         if not self.results_folder:
             # Results folder could not be created
             return False
@@ -108,12 +108,13 @@ class Trial(Thread):
         self.svc_training_set = None
 
         self.initialize_population()
+        self.view_update()
+        
         return True
 
     def run(self):
         self.start_time = datetime.now().strftime('%d-%m-%Y  %H:%M:%S')
-        self.view_update()
-
+        
         logging.info('{} started'.format(self.get_name()))
 
         logging.info('Run prepared... executing')
@@ -137,9 +138,6 @@ class Trial(Thread):
             # Train surrogate model
             if self.training_set_updated():
                 self.surrogate_model.train(self.population)
-            #while not :
-            #    logging.info('initializing population')
-            #    self.initialize_population()
 
             code, mean, variance = \
                 self.surrogate_model.model_particles(self.population)
@@ -161,7 +159,6 @@ class Trial(Thread):
                 time.sleep(0)
 
             self.increment_counter('g')
-            self.meta_plot()
             self.view_update()
 
             # termination condition
@@ -170,7 +167,6 @@ class Trial(Thread):
                 break
                 
         self.status = 'Finished'
-        self.view_update()
         logging.info('{} finished'.format(self.get_name()))
         sys.exit(0)
 
@@ -183,7 +179,8 @@ class Trial(Thread):
                                     self.trial_no)
         try:
             os.makedirs(path)
-            return path
+            os.makedirs(path + "/images")
+            return path, path + "/images"
         except OSError, e:
             # Folder already exists
             return path
@@ -216,6 +213,7 @@ class Trial(Thread):
     def get_name(self):
         return self.name
 
+    ## indicator for the controller and viewer that the state has changed. 
     def view_update(self):
         self.controller.view_update(self)
 
@@ -224,14 +222,6 @@ class Trial(Thread):
             self.best_fitness_array.append(self.best.fitness.values[0])
             self.generations_array.append(self.counter_dictionary[counter])
             self.save()
-
-            if self.counter_dictionary[counter] % \
-                    self.configuration.vis_every_X_steps == 0:
-
-                logging.debug('counter {}'.format(
-                    self.counter_dictionary[counter]))
-                self.controller.visualize_trial(self)
-
         self.counter_dictionary[counter] += 1
 
     def save(self):
@@ -256,8 +246,6 @@ class Trial(Thread):
     
     ## is used by the plot.py to add specific meta-heuristic markers onto the design space... currently very primitive. 
     ## check PSOTrial for examples. 
-    def meta_plot(self):
-        pass
                     
     # Abstract methods that should be overriden by concrete implementations
 
@@ -291,6 +279,7 @@ class Trial(Thread):
     def evaluate_best():
         raise NotImplementedError('Trial is an abstract class, '
                                   'this should not be called.')
+                                  
                                   
 class PSOTrial(Trial):
 
@@ -372,13 +361,37 @@ class PSOTrial(Trial):
     def create_backup_manager(self):
         return PSOTrialBackup()
 
-    def set_counter_plot(self, counter_plot):
-        self.latest_counter_plot = max(counter_plot, self.latest_counter_plot)
-        self.controller.view_graph_update(self, counter_plot)
-    
-    def meta_plot(self):
-        self.graph_dictionary["meta_plot"] = {"particles":{'marker':"o",'data':self.population}}
-    
+    ### returns a snapshot of the trial state
+    def snapshot(self):
+        fitness = self.fitness
+        best_fitness_array = copy(self.best_fitness_array)
+        generations_array = copy(self.generations_array)
+        results_folder = copy(self.results_folder)
+        images_folder = copy(self.images_folder)
+        counter = copy(self.counter_dictionary[self.configuration.counter])
+        name = self.get_name()
+
+        sm = self.surrogate_model
+        classifier = copy(sm.classifier) if hasattr(sm, 'classifier') \
+            else None
+        regressor = copy(sm.regressor) if hasattr(sm, 'regressor') \
+            else None
+
+        return_dictionary = {
+            'fitness': fitness,
+            'best_fitness_array': best_fitness_array,
+            'generations_array': generations_array,
+            'results_folder': results_folder,
+            'images_folder': images_folder,
+            'counter': counter,
+            'name': name,
+            'classifier': classifier,
+            'regressor': regressor,
+            'meta_plot': {"particles":{'marker':"o",'data':self.population}}
+        }
+        return_dictionary.update(copy(self.graph_dictionary))
+        return return_dictionary
+   
     def evaluate_best(self):        
         if self.new_best:
             self.fitness_function(self.best)

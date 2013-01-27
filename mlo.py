@@ -64,6 +64,7 @@ def main():
     controller.take_over_control()
 
     logging.info('MLO finished successfully')
-
+    sys.exit(0)
+    
 if __name__ == '__main__':
     main()

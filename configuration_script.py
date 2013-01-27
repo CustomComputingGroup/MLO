@@ -1,6 +1,9 @@
 from trial import PSOTrial
 
 results_folder_path = '/data/log'
+
+##set to wherever you want the images to be stored
+#images_folder_path = 
 enable_traceback = True
 eval_correct = False
 
@@ -17,7 +20,7 @@ max_stdv = 0.05
 
 surrogate_type = 'proper'  # Can be proper or dummy
 F = 10  # The size of the initial training set
-M = 2  # How often to perturb the population, used in discrete problems
+M = 100  # How often to perturb the population, used in discrete problems
 
 
 ### Trial-specific variables
@@ -42,13 +45,13 @@ KK = 0.73
 
 ### Visualisation
 
-vis_every_X_steps = 250 # How often to visualize
+vis_every_X_steps = 2 # How often to visualize
 counter = 'g'  # The counter that visualization uses as a 'step'
 max_counter = max_iter  # Maximum value of counter
 
 # Default values for describing graph visualization
 graph_title = 'Title'
-graph_names = ['Progression', 'Fitness', 'Mean', 'SVM']
+graph_names = ['Progression', 'Fitness', 'Mean', 'DesignSpace']
 
 graph_dict1 = {'subtitle': 'Currently Best Found Solution',
                'x-axis': 'Iteration',
@@ -69,7 +72,7 @@ graph_dict3 = {'subtitle': 'Regression Mean',
                'font size': '10',
                'colour map': 'PuBuGn',
                'position': '223'}
-graph_dict4 = {'subtitle': 'SVM',
+graph_dict4 = {'subtitle': 'Design Space',
                'x-axis': 'X',
                'y-axis': 'Y',
                'font size': '10',
@@ -81,7 +84,7 @@ graph_dict4 = {'subtitle': 'SVM',
 all_graph_dicts = {'Progression': graph_dict1,
                    'Fitness': graph_dict2,
                    'Mean': graph_dict3,
-                   'SVM': graph_dict4}
+                   'DesignSpace': graph_dict4}
 
 plot_view = 'default'
 
@@ -90,11 +93,12 @@ plot_view = 'default'
 regressor = 'GaussianProcess'
 classifier = 'SupportVectorMachine'
 
-
-### Regression
+### GPR Regression settings
 regr = 'quadratic'
 corr = 'squared_exponential'
+#corr = 'isotropic'
 theta0 = 0.01
-thetaL = 0.001
+thetaL = 0.0001
 thetaU = 3.0
 nugget = 3
+random_start = 50

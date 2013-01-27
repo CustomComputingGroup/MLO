@@ -44,7 +44,7 @@ class Run(object):
     ## TODO - this has to be changed... its just that ctrl+c wont be propagated otherwise...
     def join(self):
         for trial in self.trials:
-            trial.join(1000)
+            trial.join(100000000)
 
     def restart(self):
         """

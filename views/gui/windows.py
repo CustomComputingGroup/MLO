@@ -18,7 +18,6 @@ class RunWindow(wx.Frame):
                                         size=(700, 500))
 
         self.GetEventHandler().Bind(EVT_UPDATE, self.update_trial)
-        self.GetEventHandler().Bind(EVT_REGEN, self.update_trial_graph)
 
         self.controller = controller
 
@@ -128,23 +127,27 @@ class RunWindow(wx.Frame):
     def on_right_click_list(self, event):
         self.right_clicked_item = event.GetText()
         menu = wx.Menu()
+        try:
+            logging.info('click')
+            status = self.controller.get_trial_status(self.right_clicked_item)
+            if status == 'Running':
+                pause = menu.Append(wx.ID_ANY, 'Pause')
+                self.Bind(wx.EVT_MENU, self.on_pause, pause)
+            elif status == 'Paused':
+                resume = menu.Append(wx.ID_ANY, 'Resume')
+                self.Bind(wx.EVT_MENU, self.on_resume, resume)
+            elif status == 'Finished':
+                pass
 
-        status = self.controller.get_trial_status(self.right_clicked_item)
-        if status == 'Running':
-            pause = menu.Append(wx.ID_ANY, 'Pause')
-            self.Bind(wx.EVT_MENU, self.on_pause, pause)
-        elif status == 'Paused':
-            resume = menu.Append(wx.ID_ANY, 'Resume')
-            self.Bind(wx.EVT_MENU, self.on_resume, resume)
-        elif status == 'Finished':
+            show_graphs = menu.Append(wx.ID_ANY, 'Show Graphs')
+            self.Bind(wx.EVT_MENU, self.on_show_graphs, show_graphs)
+            delete = menu.Append(wx.ID_ANY, 'Delete')
+            self.Bind(wx.EVT_MENU, self.on_delete, delete)
+            self.PopupMenu(menu, event.GetPosition())
+            menu.Destroy()
+        except KeyError,e:
+            logging.info('No trial selected')
             pass
-
-        show_graphs = menu.Append(wx.ID_ANY, 'Show Graphs')
-        self.Bind(wx.EVT_MENU, self.on_show_graphs, show_graphs)
-        delete = menu.Append(wx.ID_ANY, 'Delete')
-        self.Bind(wx.EVT_MENU, self.on_delete, delete)
-        self.PopupMenu(menu, event.GetPosition())
-        menu.Destroy()
 
     def on_new(self, event):
         self.childlist.append(NewRunWindow(self, 'New Run'))
@@ -156,17 +159,20 @@ class RunWindow(wx.Frame):
 
     def on_pause(self, event):
         ### Pause trial in controller
+        logging.info('click')
         item = self.list_ctrl.GetFocusedItem()
         name = self.list_ctrl.GetItem(item).GetText()
         self.controller.pause_trial(name)
 
     def on_resume(self, event):
+        logging.info('click')
         ### Resume trial in controller
         item = self.list_ctrl.GetFocusedItem()
         name = self.list_ctrl.GetItem(item).GetText()
         self.controller.resume_trial(name)
 
     def on_delete(self, event):
+        logging.info('click')
         dlg = wx.MessageDialog(self, 'Delete this trial?', '',
                                wx.OK | wx.CANCEL | wx.ICON_QUESTION)
         result = dlg.ShowModal()
@@ -181,6 +187,7 @@ class RunWindow(wx.Frame):
             self.list_ctrl.Refresh()
 
     def on_show_graphs(self, event):
+        logging.info('click')
         trial_name = self.list_ctrl.GetItem(
             self.list_ctrl.GetFocusedItem()).GetText()
         trial = self.controller.find_trial(trial_name)
@@ -191,6 +198,7 @@ class RunWindow(wx.Frame):
         event.Skip()
 
     def on_exit(self, event):
+        logging.info('click')
         self.controller.kill_visualizer()
         self.Destroy()
 
@@ -216,36 +224,37 @@ class RunWindow(wx.Frame):
     def update_trial(self, event):
         ### Called to update display to represent trial's changed state
         trial = event.trial
+        if trial.counter_dictionary['g'] % trial.configuration.vis_every_X_steps == 0:
+             self.controller.visualize_trial(trial)
+             
         drawn = trial.get_name() in self.bars
         if drawn:
             index = self.list_ctrl.FindItem(0, trial.get_name())
             self.list_ctrl.SetStringItem(index, 1, trial.status)
             self.update_bar(trial)
+            self.update_trial_graph(trial)
         else:
             self.add_listctrl_trial(trial)
             self.add_progress_bar(trial)
+            self.update_trial_graph(trial)
             self.on_paint()
 
+    def update_trial_graph(self, trial):
+        ### May update the displayed graph in all graph windows for trial
+        trial_ref = trial
+        for child in self.childlist:
+            try:
+                if child.trial == trial_ref:
+                    child.update_trial()
+            except (wx.PyDeadObjectError, AttributeError):
+                pass
+            
     def update_bar(self, trial):
         bar = self.bars[trial.get_name()]
         bar.SetValue(trial.counter_dictionary['g'])
 
     def get_graph_attributes(self, trial, graph_name):
         return self.controller.get_graph_attributes(trial, graph_name)
-
-    def regenerate_graph(self, trial, generation):
-        self.controller.revisualize_trial(trial, generation)
-
-    def update_trial_graph(self, event):
-        ### May update the displayed graph in all graph windows for trial
-        trial_ref = event.trial
-        for child in self.childlist:
-            try:
-                if child.trial == trial_ref:
-                    child.update_trial(event.counter_plot)
-            except (wx.PyDeadObjectError, AttributeError):
-                pass
-
 
 class GraphWindow(wx.Frame):
 
@@ -255,11 +264,8 @@ class GraphWindow(wx.Frame):
 
         ### Initialisation (take graph options from given trial)
         self.trial = trial
-        self.results_folder = trial.results_folder
-        self.current_plot = trial.latest_counter_plot
-        self.latest_plot = trial.latest_counter_plot
-        self.gap = trial.configuration.vis_every_X_steps
-
+        self.images_folder = trial.images_folder
+        
         ### Set up display
         self.panel = wx.ScrolledWindow(self)
         self.panel.SetScrollRate(4, 16)
@@ -268,36 +274,38 @@ class GraphWindow(wx.Frame):
         option_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         ### Initialise scrolling and options buttons
+        first_button = wx.Button(self.panel, label='<<', size=(40, -1))
+        first_button.Bind(wx.EVT_BUTTON, self.on_first)
+        
         left_button = wx.Button(self.panel, label='<', size=(40, -1))
         left_button.Bind(wx.EVT_BUTTON, self.on_left)
+        
         right_button = wx.Button(self.panel, label='>', size=(40, -1))
         right_button.Bind(wx.EVT_BUTTON, self.on_right)
+        
+        last_button = wx.Button(self.panel, label='>>', size=(40, -1))
+        last_button.Bind(wx.EVT_BUTTON, self.on_last)
+        
         options_button = wx.Button(self.panel, label='Options', size=(400, -1))
         options_button.Bind(wx.EVT_BUTTON, self.on_options)
 
-        self.update_checkbox = wx.CheckBox(self.panel,
-                                           label='Automatically update graphs')
-
-        ### If no graph has yet been generated, display default image
-        if self.latest_plot != 0:
-            self.file_name = '{}/plot{:03d}.png'.format(self.results_folder,
-                                                        self.current_plot)
-            image = wx.Image(self.file_name, wx.BITMAP_TYPE_PNG)
-        else:
-            self.file_name = 'views/img/nothing.jpg'
-            image = wx.Image(self.file_name, wx.BITMAP_TYPE_JPEG)
-        image = image.Scale(1060, 580, wx.IMAGE_QUALITY_HIGH)
-        self.bmp = wx.StaticBitmap(self.panel, wx.ID_ANY,
-                                   wx.BitmapFromImage(image),
-                                   size=(image.GetWidth(), image.GetHeight()))
+        ## TODO - Fix the functionality of 
+        ##self.update_checkbox = wx.CheckBox(self.panel,
+        ##                                   label='Automatically update graphs')
+                           
+        self.bmp = None
+        self.update_plots()
+        self.set_first_plot()
 
         ### Finish sizer setup
+        graph_sizer.Add(first_button, 0, wx.GROW | wx.ALL, 10)
         graph_sizer.Add(left_button, 0, wx.GROW | wx.ALL, 10)
         graph_sizer.Add(self.bmp, 1, wx.GROW | wx.ALL, 10)
         graph_sizer.Add(right_button, 0, wx.GROW | wx.ALL, 10)
+        graph_sizer.Add(last_button, 0, wx.GROW | wx.ALL, 10)
         main_sizer.Add(graph_sizer, 0)
 
-        option_sizer.Add(self.update_checkbox, 0, wx.ALL, 10)
+        ##option_sizer.Add(self.update_checkbox, 0, wx.ALL, 10)
         option_sizer.AddStretchSpacer(1)
         option_sizer.Add(options_button, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
         main_sizer.Add(option_sizer, 1, wx.GROW)
@@ -309,58 +317,108 @@ class GraphWindow(wx.Frame):
         self.Show()
 
     def on_left(self, event):
-        if self.latest_plot == 0 or self.current_plot == 0 \
-                or self.update_checkbox.GetValue():
-            return
-
-        filename = self.make_file_name(self.current_plot - self.gap)
-        if os.path.isfile(filename):
-            self.current_plot -= self.gap
-            self.update_image()
+        logging.info('click')
+        self.set_previous_plot()
+        self.update_image()
+        
+    def on_first(self, event):
+        logging.info('click')
+        self.set_first()
+        self.update_image()
 
     def on_right(self, event):
-        if self.latest_plot == 0 or self.update_checkbox.GetValue():
-            return
+        logging.info('click')
+        self.set_next_plot()
+        self.update_image()
 
-        filename = self.make_file_name(self.current_plot + self.gap)
-        if os.path.isfile(filename):
-            self.current_plot += self.gap
-            self.update_image()
-
+    def on_last(self, event):
+        logging.info('click')
+        self.set_last_plot()
+        self.update_image()
+        
     def on_options(self, event):
+        logging.info('click')
         self.childlist.append(OptionsWindow(self,
                                             'Graphs Options For ' +
                                             self.trial.get_name(),
                                             self.trial))
         event.Skip()
 
-    def make_file_name(self, plot_number):
-        return '{}/plot{:03d}.png'.format(self.results_image_folder, plot_number)
+    def make_file_name(self, plot):
+        return self.images_folder + "/" + plot
 
+    def update_trial(self):
+        self.update_image()
+        ##if self.update_checkbox.GetValue():
+        ##    self.set_last_plot()
+        ##    self.update_image()
+        ##
+            ### Update to keep track of trial's newest plot
+          ##  if self.latest_plot % self.gap == 0:
+            ##    self.current_plot = self.latest_plot
+             ##   self.update_image()
+        ##elif counter_plot == self.current_plot:
+            ### Or if the graph has been regenerated
+            
     def update_image(self):
         ### Called when current_plot is updated, to display the new graph
-        self.file_name = self.make_file_name(self.current_plot)
-        image = wx.Image(self.file_name, wx.BITMAP_TYPE_PNG)
+        try:
+            self.current_plot = self.all_plots[self.plot_index]
+            self.file_name = self.make_file_name(self.current_plot)
+            image = wx.Image(self.file_name, wx.BITMAP_TYPE_PNG)
+        except Exception,e:
+            logging.info('No images found or error happened {}'.format(e))
+            self.plot_index = 0
+            self.file_name = 'views/img/nothing.jpg'
+            image = wx.Image(self.file_name, wx.BITMAP_TYPE_JPEG)
         image = image.Scale(1060, 580, wx.IMAGE_QUALITY_HIGH)
-        self.bmp.SetBitmap(wx.BitmapFromImage(image))
+        if self.bmp is None:
+            self.bmp = wx.StaticBitmap(self.panel, wx.ID_ANY,
+                           wx.BitmapFromImage(image),
+                           size=(image.GetWidth(), image.GetHeight()))
+        else:
+            self.bmp.SetBitmap(wx.BitmapFromImage(image))   
 
-    def update_trial(self, counter_plot):
-        if self.update_checkbox.GetValue():
-            ### Update to keep track of trial's newest plot
-            self.latest_plot = self.trial.latest_counter_plot
-            if self.latest_plot % self.gap == 0:
-                self.current_plot = self.latest_plot
-                self.update_image()
-        elif counter_plot == self.current_plot:
-            ### Or if the graph has been regenerated
-            self.update_image()
-
+    
     def regenerate_graph(self, trial):
         logging.debug('current plot: {}'.format(self.current_plot))
-        self.GetParent().regenerate_graph(trial, self.current_plot)
-
+        gd = trial.graph_dictionary  # Save graph_dictionary
+        Trial = trial.configuration.trials_type
+        vis_trial = Trial(trial.trial_no, trial.name, trial.fitness,
+                          trial.configuration, trial.controller,
+                          trial.run_results_folder_path)
+        vis_trial.results_folder = trial.results_folder
+        vis_trial.load(generation)
+        vis_trial.graph_dictionary = gd
+        self.controller.visualize_trial(trial)
+        
     def get_graph_attributes(self, trial, graph_name):
         return self.GetParent().get_graph_attributes(trial, graph_name)
+       
+    ## returns the list of all possible plots
+    def update_plots(self):
+        self.all_plots = os.listdir(self.images_folder)
+        self.all_plots.sort()
+        
+    def set_first_plot(self):
+        self.update_plots()
+        self.plot_index = 0
+        self.update_image()
+       
+    def set_last_plot(self):
+        self.update_plots()
+        self.plot_index = len(self.all_plots) - 1
+        self.update_image()
+       
+    def set_previous_plot(self):
+        self.update_plots()
+        self.plot_index = max(0,self.plot_index - 1)
+        self.update_image()
+       
+    def set_next_plot(self):
+        self.update_plots()
+        self.plot_index = min(self.plot_index + 1,len(self.all_plots) - 1)
+        self.update_image()
 
 class OptionsWindow(wx.Frame):
 
@@ -431,6 +489,15 @@ class OptionsWindow(wx.Frame):
         regen_button = wx.Button(self.panel, label='Regenerate', size=(-1, -1))
         regen_button.Bind(wx.EVT_BUTTON, self.on_regen)
         button_sizer.Add(regen_button, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
+        
+        ### Add buttons, and display the window TODO.. overwrites old images
+        regen_all_button = wx.Button(self.panel, label='Regenerate all', size=(-1, -1))
+        regen_all_button.Bind(wx.EVT_BUTTON, self.on_regen)
+        button_sizer.Add(regen_all_button, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
+        
+        ### refresh view button TODO - 
+        refresh_button = wx.Button(self.panel, label='Refresh', size=(-1, -1))
+        button_sizer.Add(refresh_button, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
 
         main_sizer.Add(option_sizer, 0, wx.GROW)
         main_sizer.Add(button_sizer, 0, wx.ALIGN_RIGHT | wx.TOP, 10)

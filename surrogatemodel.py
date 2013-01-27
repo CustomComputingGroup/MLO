@@ -43,7 +43,8 @@ class SurrogateModel(object):
     def particle_value(self, part):
         pass
     
- 
+    def model_failed(self, part):
+        pass
 
 class DummySurrogateModel(SurrogateModel):
 
@@ -56,7 +57,9 @@ class DummySurrogateModel(SurrogateModel):
     def contains_training_instance(self, part):
         return False
 
-
+    def model_failed(self, part):
+        return False
+        
 class ProperSurrogateModel(SurrogateModel):
 
     def __init__(self, fitness, configuration, controller):
@@ -98,4 +101,7 @@ class ProperSurrogateModel(SurrogateModel):
         if self.regressor.contains_training_instance(part):
             fitness = self.regressor.get_training_instance(part)            
         return code, fitness
+        
+    def model_failed(self, part):
+        return False
 

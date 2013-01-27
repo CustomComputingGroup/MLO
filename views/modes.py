@@ -27,10 +27,12 @@ class TerminalView(View):
     """
 
     def initialize(self, controller):
-        controller.run_in_terminal()
-
+        self.controller = controller
+        self.controller.run_in_terminal()
+        
+    ## Print out run statistics, define a new stats printer
     def update(self, trial):
-        pass
+        self.controller.visualize_trial(trial)
 
 
 class GUIView(View):
@@ -46,6 +48,6 @@ class GUIView(View):
     def update(self, trial):
         wx.PostEvent(self.window.GetEventHandler(), UpdateEvent(trial=trial))
 
-    def regen(self, trial, counter_plot):
+    def regen(self, trial):
         wx.PostEvent(self.window.GetEventHandler(),
-                     RegenEvent(trial=trial, counter_plot=counter_plot))
+                     RegenEvent(trial=trial))
