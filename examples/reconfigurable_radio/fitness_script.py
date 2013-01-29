@@ -98,10 +98,10 @@ def fitnessFunc(particle):
     #print "p ",p," frequency ",frequency," reconfiguration_time ",reconfiguration_time," t_total ",t_total," proccesing_time ",( n * (steps * proccesing_time) / p)
     
     if frequency > maxfreq:
-        return (array([maxvalue]),array([1.0]),array([1]))
+        return (array([maxvalue]),array([1]),array([1]))
         
     if slices > max_slices:
-        return (array([maxvalue]),array([2.0]),array([1]))
+        return (array([maxvalue]),array([2]),array([1]))
     
     t_total = ( n * (steps * proccesing_time) / p) + reconfiguration_time
     
@@ -109,13 +109,13 @@ def fitnessFunc(particle):
     #    return array([10.0])
         
     if functionType == "execution_time":
-        return (array([t_total]),array([0.0]),array([0]))
+        return (array([t_total]),array([0]),array([0]))
 
     elif functionType == "aecc":
     
         apcc = p / steps * frequency
         aecc = ( n * (steps * proccesing_time) / p) * apcc
-        return (array([aecc]),array([0.0]),array([0]))
+        return (array([aecc]),array([0]),array([0]))
         
 def changeParams(params):
     global designSpace,reconfiguration_time_set,maxvalue,maxVal,minVal

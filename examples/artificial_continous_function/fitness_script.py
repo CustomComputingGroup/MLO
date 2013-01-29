@@ -23,7 +23,8 @@ worst_value = maxVal
 # Example fitness function for surrogate model testing
 def fitnessFunc(part):
     code = 0 if is_valid(part) else 1
-    return benchmarks.sphere(part), code, 0
+    return benchmarks.sphere(part), array([code]), array([0])
+    
 
 
 # Example function to define if a design is valid or invalid

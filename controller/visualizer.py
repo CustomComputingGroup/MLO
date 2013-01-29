@@ -69,13 +69,13 @@ class ParallelisedVisualizer(Visualizer):
         logging.info('Visualizer Finished')
 
     def render_graph(self, function, snapshot, name, child_end):
-        try:
-            function(snapshot)
-            logging.info('{} visualized'.format(name))
-            child_end.send(True)
-        except Exception,e:
-            logging.info('Exception {}'.format(e)) 
-            child_end.send(False)
+       ## try:
+        function(snapshot)
+        logging.info('{} visualized'.format(name))
+        child_end.send(True)
+        ##except Exception,e:
+         ##   logging.info('Exception {}'.format(e)) 
+          ##  child_end.send(False)
         sys.exit(0)
         
 ## Todo - need to modify it.... changed the architecture of visualizer ( its currently broken)

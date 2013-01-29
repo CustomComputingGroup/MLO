@@ -56,7 +56,6 @@ class Controller(object):
 
     def delete_trial(self, name):
         trial = self.trials[name]
-        trial.progress_bar.Destroy()
         self.trials = {key: value for key, value
                        in self.trials.items()
                        if key != name}

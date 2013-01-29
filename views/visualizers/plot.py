@@ -107,16 +107,17 @@ class MLOImageViewer(object):
         plot.set_zlim3d(fitness.minVal, fitness.maxVal)
 
         ### Data
-        MU, S2 = d['regressor'].predict(d['z'])
-        MU_z = MU
-        MU_z = array([item[0] for item in MU_z])
-        zi = griddata((d['x'], d['y']), MU_z,
-                      (d['xi'][None, :], d['yi'][:, None]), method='nearest')
+        if not (d['regressor'] is None):
+            MU, S2 = d['regressor'].predict(d['z'])
+            MU_z = MU
+            MU_z = array([item[0] for item in MU_z])
+            zi = griddata((d['x'], d['y']), MU_z,
+                          (d['xi'][None, :], d['yi'][:, None]), method='nearest')
 
-        norm = mpl.pyplot.matplotlib.colors.Normalize(MU_z)
-        surf = plot.plot_surface(d['X'], d['Y'], zi, rstride=1, cstride=1,
-                                 linewidth=0.05, antialiased=True,
-                                 cmap=colour_map)
+            norm = mpl.pyplot.matplotlib.colors.Normalize(MU_z)
+            surf = plot.plot_surface(d['X'], d['Y'], zi, rstride=1, cstride=1,
+                                     linewidth=0.05, antialiased=True,
+                                     cmap=colour_map)
 
     @staticmethod
     def plot_fitness_function(figure, d):
@@ -181,9 +182,14 @@ class MLOImageViewer(object):
         try:
             plot.set_xlim(1,   max(10, max(d['generations_array'])))
         except ValueError, e:
-            plot.set_xlim(1,   10)
-        plot.set_ylim(0.0, max(d['best_fitness_array']) * 1.1)
-
+            ##passing here will automatically set the limits ( not great)
+            pass
+        try:
+            plot.set_ylim(0.0, max(d['best_fitness_array']) * 1.1)
+        except ValueError, e:
+            ##passing here will automatically set the limits ( not great)
+            pass 
+            
         ### Data
         plot.plot(d['generations_array'], d['best_fitness_array'],
                   c='red', marker='x')
@@ -209,41 +215,42 @@ class MLOImageViewer(object):
 
         ### Data
         fitness = d['fitness']
-        zClass = d['classifier'].predict(d['z'])
-        zi3 = griddata((d['x'], d['y']), zClass,
-                       (d['xi'][None, :], d['yi'][:, None]), method='nearest')
+        if not (d['classifier'] is None):
+            zClass = d['classifier'].predict(d['z'])
+            zi3 = griddata((d['x'], d['y']), zClass,
+                           (d['xi'][None, :], d['yi'][:, None]), method='nearest')
 
-        levels = [k for k, v in fitness.error_labels.items()]
-        levels = [l-0.1 for l in levels]
-        levels.append(levels[-1]+1.0)
-        CS = plot.contourf(d['X'], d['Y'], zi3, levels, cmap=colour_map)
+            levels = [k for k, v in fitness.error_labels.items()]
+            levels = [l-0.1 for l in levels]
+            levels.append(levels[-1]+1.0)
+            CS = plot.contourf(d['X'], d['Y'], zi3, levels, cmap=colour_map)
 
-        cbar = figure.colorbar(CS, ticks=CS.levels)
-        cbar.ax.set_yticklabels(["" * (int(len(v)/2) + 13) + v
-                                 for k, v in fitness.error_labels.items()],
-                                rotation='vertical',
-                                fontsize=MLOImageViewer.TITLE_FONT_SIZE)
+            cbar = figure.colorbar(CS, ticks=CS.levels)
+            cbar.ax.set_yticklabels(["" * (int(len(v)/2) + 13) + v
+                                     for k, v in fitness.error_labels.items()],
+                                    rotation='vertical',
+                                    fontsize=MLOImageViewer.TITLE_FONT_SIZE)
 
-        #
-        plot_trainingset_x = [] 
-        plot_trainingset_y = []
-        training_set = d['classifier'].training_set
-        training_labels = d['classifier'].training_labels
+            #
+            plot_trainingset_x = [] 
+            plot_trainingset_y = []
+            training_set = d['classifier'].training_set
+            training_labels = d['classifier'].training_labels
+            
+            for i in range(0, len(training_set)):
+                p = training_set[i]
+                plot_trainingset_x.append(p[0])
+                plot_trainingset_y.append(p[1])
+
+            if len(plot_trainingset_x) > 0:
+                plot.scatter(x=plot_trainingset_x, y=plot_trainingset_y, c=ocolour, marker='x')
         
-        for i in range(0, len(training_set)):
-            p = training_set[i]
-            plot_trainingset_x.append(p[0])
-            plot_trainingset_y.append(p[1])
-
-        if len(plot_trainingset_x) > 0:
-            plot.scatter(x=plot_trainingset_x, y=plot_trainingset_y, c=ocolour, marker='x')
-        
-        ## plot meta-heuristic specific markers 
-        ## TODO - come up with a way of adding extra colours
-        #print d['all_graph_dicts']
-        for key in d['meta_plot'].keys():
-            data = d['meta_plot'][key]["data"]
-            plot.scatter(array([item[0] for item in data]),array([item[1] for item in data]), c="white",marker=d['meta_plot'][key]["marker"])
+            ## plot meta-heuristic specific markers 
+            ## TODO - come up with a way of adding extra colours
+            #print d['all_graph_dicts']
+            for key in d['meta_plot'].keys():
+                data = d['meta_plot'][key]["data"]
+                plot.scatter(array([item[0] for item in data]),array([item[1] for item in data]), c="white",marker=d['meta_plot'][key]["marker"])
         
         
     @staticmethod

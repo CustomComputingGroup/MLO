@@ -91,7 +91,7 @@ class SupportVectorMachineClassifier(Classifier):
         try:
             if len(unique(asarray(self.training_labels))) < 2:
                 ## TODO - rewrite it not to use a stupid loop...
-                return array([self.training_labels[0]] * len(z))
+                return array([self.training_labels[0][0]] * len(z))
             else:
                 # Scale inputs and particles
                 inputScaler = preprocessing.Scaler().fit(self.training_set)

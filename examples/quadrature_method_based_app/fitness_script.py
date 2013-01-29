@@ -75,8 +75,8 @@ if doDf:
 maxvalue = 0.0
 ## if  [ 14.  11.   4.]   0.000275081632653
 
-#errorLabels = {0:'Valid',1:'Overmap',3:'Inaccuracy'}
-error_labels = {0:'Valid',3:'Inaccuracy'}
+error_labels = {0:'Valid',1:'Overmap',3:'Inaccuracy'}
+#error_labels = {0:'Valid',3:'Inaccuracy'}
 
 def get_z_axis_name():
     return "Throughput ($\phi_{int}$)"
@@ -155,15 +155,15 @@ def fitnessFunc(particle):
     #executionTime = array([error])
     #print " df ",df," mw ",mw," ",error," ",allData[11][mw][df][2]
     if error > maxError:
-        return (executionTime,array([3.0]),array([1])) ##!!!! zmien na 0.0 
+        return (executionTime,array([3]),array([1])) ##!!!! zmien na 0.0 
     ### accuracy error
         
     ### overmapping error
     if allData[11][mw][df][0] < cores :
-        return (array([maxvalue]),array([1.0]),array([1])) 
+        return (array([maxvalue]),array([1]),array([1])) 
     
     ### ok values execution time
-    return (executionTime,array([0.0]),array([0])) 
+    return (executionTime,array([0]),array([0])) 
     
 def calcMax():    
     if len(designSpace)==2:

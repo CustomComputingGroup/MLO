@@ -14,11 +14,15 @@ class SurrogateModel(object):
         self.configuration = configuration
         self.classifier = Classifier()
         self.regressor = Regressor(controller)        
+        self.was_trained = False
         
     def train(self, pop):
         raise NotImplementedError('SurrogateModel is an abstract class, this '
                                   'should not be called.')
 
+    def trained(self):
+        return self.was_trained
+                                  
     def predict(self, particles):
         MU, S2 = self.regressor.predict(particles)
         return self.classifier.predict(particles), MU, S2
@@ -54,6 +58,7 @@ class SurrogateModel(object):
 class DummySurrogateModel(SurrogateModel):
 
     def train(self, pop):
+        self.was_trained = True
         return True
 
     def model_particle(self, particle):
@@ -87,8 +92,10 @@ class ProperSurrogateModel(SurrogateModel):
 
     def train(self, pop):
         dimensions = len(pop[0])
+        self.was_trained = True
         return self.classifier.train(pop) and self.regressor.train(
             pop, self.configuration, dimensions)
+        
 
 
     def add_training_instance(self, part, code, fitness, addReturn):

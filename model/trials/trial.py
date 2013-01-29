@@ -109,7 +109,7 @@ class Trial(Thread):
         self.svc_training_set = None
 
         self.initialize_population()
-#        self.view_update()
+        self.view_update()
         
         return True
 
@@ -124,6 +124,7 @@ class Trial(Thread):
         # Initialise termination check
         
         self.check = False
+#        self.view_update()
         
         while self.counter_dictionary['g'] < self.GEN + 1:
             logging.info('[{}] Generation {}'.format(
@@ -143,10 +144,9 @@ class Trial(Thread):
             if self.training_set_updated():
                 logging.info('Retraining model')
                 self.surrogate_model.train(self.population)
-
             code, mean, variance = self.surrogate_model.predict(self.population)
             self.post_model_filter(code, mean, variance)
-            
+
             ##
             if self.get_model_failed():
                 logging.info('Model Failed, sampling design space')
@@ -257,13 +257,13 @@ class Trial(Thread):
         ## at least one particle has to have std smaller then max_stdv
         ## if all particles are in invalid zone
         self.model_failed = not (False in [self.configuration.max_stdv < pred for pred in variance])
-
    
     def reevalute_best(self):
         bests_to_model = [p.best for p in self.population if p.best] ### Elimate Nones -- in case M < Number of particles, important for initialb iteratiions
         if self.best:
             bests_to_model.append(self.best)
         if bests_to_model:
+            logging.info("Reevaluating")
             bests_to_fitness = self.surrogate_model.predict(bests_to_model)[1]
             for i,part in enumerate([p for p in self.population if p.best]):
                 part.best.fitness.values = bests_to_fitness[i]
@@ -401,11 +401,16 @@ class PSOTrial(Trial):
         counter = copy(self.counter_dictionary[self.configuration.counter])
         name = self.get_name()
 
+        
         sm = self.surrogate_model
-        classifier = copy(sm.classifier) if hasattr(sm, 'classifier') \
-            else None
-        regressor = copy(sm.regressor) if hasattr(sm, 'regressor') \
-            else None
+        if sm.trained():
+            classifier = copy(sm.classifier) if hasattr(sm, 'classifier') \
+                else None
+            regressor = copy(sm.regressor) if hasattr(sm, 'regressor') \
+                else None
+        else:
+            classifier = None
+            regressor = None
 
         return_dictionary = {
             'fitness': fitness,
