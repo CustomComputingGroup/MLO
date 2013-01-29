@@ -60,7 +60,23 @@ testing contains all of the testing scripts. Currently implementing regression t
 ###views
 -----------------------------------------------------------------------------------------------------------------------
 
-creates the viewer code
+creates the code of view part of the MVC system. All modes, currently GUI and TERMINAL, reside in this directory. All 
+the possible visualizers are also containted in this directory. Visualizers can be used to generate reports, images
+and others. 
+
+-----------------------------------------------------------------------------------------------------------------------
+###controller
+-----------------------------------------------------------------------------------------------------------------------
+
+contains code of the controller of the applications. Model and View use it to communiate with each other. 
+It also contains code of visualizer, which is used to generate any plots and reports.  
+
+-----------------------------------------------------------------------------------------------------------------------
+###model
+-----------------------------------------------------------------------------------------------------------------------
+
+contains code of the optimization algorithms, runs, trials and surrogate models. It contains code to back them up
+based on save data. 
 
 -----------------------------------------------------------------------------------------------------------------------
 ###scripts within the directory
