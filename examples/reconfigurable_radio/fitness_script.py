@@ -21,7 +21,7 @@ rotate = False
 #aecc or execution time
 functionType = "execution_time"
 
-reconfiguration_time_set = 1
+reconfiguration_time_set = 0
 
 designSpace = [ #[min,max,stepSize]#
                     {"min":1.0,"max":112.0,"step":1.0,"type":"discrete","smin":-35.0,"smax":35.0},
@@ -59,10 +59,8 @@ def get_y_axis_name():
 def termCond(best):
     global reconfiguration_time_set
     if reconfiguration_time_set == 0:   
-        print "[termCond]: " + str(best < 0.526) + " " + str(best)
         return best < 0.526             
     else:
-        print "[termCond]: " + str(best < 8.38) + " " + str(best)
         return best < 8.38
                        
 def fitnessFunc(particle):
@@ -100,10 +98,10 @@ def fitnessFunc(particle):
     #print "p ",p," frequency ",frequency," reconfiguration_time ",reconfiguration_time," t_total ",t_total," proccesing_time ",( n * (steps * proccesing_time) / p)
     
     if frequency > maxfreq:
-        return (array([maxvalue]),array([1.0]),array([1.0]))
+        return (array([maxvalue]),array([1.0]),array([1]))
         
     if slices > max_slices:
-        return (array([maxvalue]),array([2.0]),array([1.0]))
+        return (array([maxvalue]),array([2.0]),array([1]))
     
     t_total = ( n * (steps * proccesing_time) / p) + reconfiguration_time
     
@@ -111,13 +109,13 @@ def fitnessFunc(particle):
     #    return array([10.0])
         
     if functionType == "execution_time":
-        return (array([t_total]),array([0.0]),array([0.0]))
+        return (array([t_total]),array([0.0]),array([0]))
 
     elif functionType == "aecc":
     
         apcc = p / steps * frequency
         aecc = ( n * (steps * proccesing_time) / p) * apcc
-        return (array([aecc]),array([0.0]),array([0.0]))
+        return (array([aecc]),array([0.0]),array([0]))
         
 def changeParams(params):
     global designSpace,reconfiguration_time_set,maxvalue,maxVal,minVal

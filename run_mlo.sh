@@ -1,3 +1,3 @@
 #!/bin/bash
 export PYTHONPATH=libs/pyXGPR/src
-python mlo.py $@ | grep -v "Segmentation fault"
+python2.7 optimizer.py $@ | grep -v "Segmentation fault"

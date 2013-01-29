@@ -5,6 +5,7 @@ import time
 
 import wx
 from wx.lib.newevent import NewEvent
+from ..visualizers.plot import MLOImageViewer
 
 UpdateEvent, EVT_UPDATE = NewEvent()
 RegenEvent, EVT_REGEN = NewEvent()
@@ -18,7 +19,7 @@ class RunWindow(wx.Frame):
                                         size=(700, 500))
 
         self.GetEventHandler().Bind(EVT_UPDATE, self.update_trial)
-
+        self.plot_view = MLOImageViewer
         self.controller = controller
 
         ### Set up display
@@ -225,7 +226,7 @@ class RunWindow(wx.Frame):
         ### Called to update display to represent trial's changed state
         trial = event.trial
         if trial.counter_dictionary['g'] % trial.configuration.vis_every_X_steps == 0: ### TODO - it should really be done a bit differently...
-             self.controller.visualize_trial(trial)
+             self.visualize_trial(trial)
              
         drawn = trial.get_name() in self.bars
         if drawn:
@@ -369,7 +370,7 @@ class GraphWindow(wx.Frame):
         except Exception,e:
             logging.info('No images found or error happened {}'.format(e))
             self.plot_index = 0
-            self.file_name = 'views/img/nothing.jpg'
+            self.file_name = 'views/gui/img/nothing.jpg'
             image = wx.Image(self.file_name, wx.BITMAP_TYPE_JPEG)
         image = image.Scale(1060, 580, wx.IMAGE_QUALITY_HIGH)
         if self.bmp is None:
@@ -390,7 +391,12 @@ class GraphWindow(wx.Frame):
         vis_trial.results_folder = trial.results_folder
         vis_trial.load(generation)
         vis_trial.graph_dictionary = gd
-        self.controller.visualize_trial(trial)
+        self.visuzalize_trial(trial)
+        
+        
+    def visuzalize_trial(self, trial):
+        snapshot = trial.snapshot()
+        self.controller.visualize(snapshot, self.plot_view.render)
         
     def get_graph_attributes(self, trial, graph_name):
         return self.GetParent().get_graph_attributes(trial, graph_name)

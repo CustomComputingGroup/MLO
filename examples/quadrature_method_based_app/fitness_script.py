@@ -1,5 +1,4 @@
 import math
-import generateFitnessFunction
 import operator
 import csv
 
@@ -61,6 +60,7 @@ maxError = 0.01
 errorCorrection=True
 
 minVal = 0.0
+maxVal = 300.0
 worst_value = 0.0
 optVal = {0.1:75.37,0.01:1.44,0.05:11.1,0.001:0.469 }[maxError]
 
@@ -76,7 +76,7 @@ maxvalue = 0.0
 ## if  [ 14.  11.   4.]   0.000275081632653
 
 #errorLabels = {0:'Valid',1:'Overmap',3:'Inaccuracy'}
-errorLabels = {0:'Valid',3:'Inaccuracy'}
+error_labels = {0:'Valid',3:'Inaccuracy'}
 
 def get_z_axis_name():
     return "Throughput ($\phi_{int}$)"
@@ -95,7 +95,6 @@ def get_y_axis_name():
 
 def termCond(best):
     global optVal
-    print "[termCond]: " + str(best > optVal) + " " + str(best)
     return best > optVal
 
 def name():
@@ -108,7 +107,7 @@ def alwaysCorrect():
         return array([53.0,32.0]) 
     
 def fitnessFunc(particle):
-    allData = generateFitnessFunction.getAllData()
+    allData = getAllData()
     # Dimensions dynamically rescalled
     ############Dimensions
     if doCores:
@@ -156,15 +155,15 @@ def fitnessFunc(particle):
     #executionTime = array([error])
     #print " df ",df," mw ",mw," ",error," ",allData[11][mw][df][2]
     if error > maxError:
-        return (executionTime,array([3.0]),array([0.0])) ##!!!! zmien na 0.0 
+        return (executionTime,array([3.0]),array([1])) ##!!!! zmien na 0.0 
     ### accuracy error
         
     ### overmapping error
     if allData[11][mw][df][0] < cores :
-        return (array([maxvalue]),array([1.0]),array([1.0])) 
+        return (array([maxvalue]),array([1.0]),array([1])) 
     
     ### ok values execution time
-    return (executionTime,array([0.0]),array([0.0])) 
+    return (executionTime,array([0.0]),array([0])) 
     
 def calcMax():    
     if len(designSpace)==2:
@@ -251,4 +250,51 @@ def trialgen():
                 params["doCores"] = doCores
                 changeParams(params)
                 yield params
-                
+               
+#python data dict creator
+#
+#AnsonExec.csv
+#text delimiter " field delimiter  ,
+#
+#to get number of cores
+#AnsonCores.csv
+
+
+global allData ## Todo - very bad practice!!! only other thing i could come up with was inlining here...
+allData = None
+
+def getAllData():
+    global allData
+    if allData is None:
+        path = os.path.abspath(__file__)
+        dir_path = os.path.dirname(path)
+        spamReader = csv.reader(open(dir_path + '/AnsonCores.csv', 'rb'), delimiter=',', quotechar='"')
+        cores = {11:{}}
+        for row in spamReader:
+            cores[11][int(row[1])] = int(row[0])
+
+        maxcores = cores
+        spamReader = csv.reader(open(dir_path +'/AnsonExec.csv', 'rb'), delimiter=';', quotechar='"')
+
+        allData = {}
+        for row in spamReader:
+            row_0 = int(row[0])
+            row_1 = int(row[1])
+            row_2 = int(row[2])
+            row_3 = float(row[3])
+            row_4 = float(row[4])
+            data = [cores[row_0][row_1],row_3,row_4]
+            
+            try:
+                try:
+                    allData[row_0][row_1][row_2] = data
+                except:
+                    allData[row_0][row_1] = {row_2:data}
+            except:
+                allData[row_0] = {row_1:{row_2:data}}
+    #spamReader.close()
+#print allData
+    return allData
+#print allData
+#print cores
+            

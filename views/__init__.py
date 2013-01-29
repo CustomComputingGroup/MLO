@@ -1,1 +1,1 @@
-__all__ = ['gui', 'modes', 'plot']
+__all__ = ['modes', 'gui', 'visualizers']
