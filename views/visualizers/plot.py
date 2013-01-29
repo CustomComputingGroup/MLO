@@ -78,7 +78,7 @@ class MLOImageViewer(object):
         
     @staticmethod
     def save_fig(figure, filename, DPI):
-        logging.debug('Save fig {}'.format(filename))
+        logging.info('Save fig {}'.format(filename))
         figure.savefig(filename, dpi=DPI)
 
     @staticmethod
@@ -108,6 +108,7 @@ class MLOImageViewer(object):
 
         ### Data
         if not (d['regressor'] is None):
+            logging.info(str(d['regressor']))
             MU, S2 = d['regressor'].predict(d['z'])
             MU_z = MU
             MU_z = array([item[0] for item in MU_z])
@@ -216,7 +217,6 @@ class MLOImageViewer(object):
         ### Data
         fitness = d['fitness']
         if not (d['classifier'] is None):
-            zClass = d['classifier'].predict(d['z'])
             zi3 = griddata((d['x'], d['y']), zClass,
                            (d['xi'][None, :], d['yi'][:, None]), method='nearest')
 

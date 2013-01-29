@@ -233,11 +233,11 @@ class RunWindow(wx.Frame):
             index = self.list_ctrl.FindItem(0, trial.get_name())
             self.list_ctrl.SetStringItem(index, 1, trial.status)
             self.update_bar(trial)
-            self.update_trial_graph(trial)
+            ##self.update_trial_graph(trial)
         else:
             self.add_listctrl_trial(trial)
             self.add_progress_bar(trial)
-            self.update_trial_graph(trial)
+            ##self.update_trial_graph(trial)
             self.on_paint()
 
     def update_trial_graph(self, trial):
