@@ -49,7 +49,7 @@ class Controller(object):
         self.trials[trial.get_name()] = trial
 
     def get_trial_status(self, name):
-        return self.trials[name].status
+        return self.trials[name].get_status()
 
     def find_trial(self, trial_name):
         return self.trials[trial_name]

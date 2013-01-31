@@ -61,7 +61,7 @@ def updateParticle(part, generation, trial, conf, designSpace):
     u1 = [uniform(0, conf.phi1)] * len(part)
     u2 = [uniform(0, conf.phi2)] * len(part)
     v_u1 = map(operator.mul, u1, map(operator.sub, part.best, part))
-    v_u2 = map(operator.mul, u2, map(operator.sub, trial.best, part))
+    v_u2 = map(operator.mul, u2, map(operator.sub, trial.get_best(), part))
 
     weight = 1.0
     if conf.weight_mode == 'linear':

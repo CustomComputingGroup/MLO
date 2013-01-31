@@ -108,17 +108,19 @@ class MLOImageViewer(object):
 
         ### Data
         if not (d['regressor'] is None):
-            logging.info(str(d['regressor']))
-            MU, S2 = d['regressor'].predict(d['z'])
-            MU_z = MU
-            MU_z = array([item[0] for item in MU_z])
-            zi = griddata((d['x'], d['y']), MU_z,
-                          (d['xi'][None, :], d['yi'][:, None]), method='nearest')
+            try:
+                MU, S2 = d['regressor'].predict(d['z'])
+                MU_z = MU
+                MU_z = array([item[0] for item in MU_z])
+                zi = griddata((d['x'], d['y']), MU_z,
+                              (d['xi'][None, :], d['yi'][:, None]), method='nearest')
 
-            norm = mpl.pyplot.matplotlib.colors.Normalize(MU_z)
-            surf = plot.plot_surface(d['X'], d['Y'], zi, rstride=1, cstride=1,
-                                     linewidth=0.05, antialiased=True,
-                                     cmap=colour_map)
+                norm = mpl.pyplot.matplotlib.colors.Normalize(MU_z)
+                surf = plot.plot_surface(d['X'], d['Y'], zi, rstride=1, cstride=1,
+                                         linewidth=0.05, antialiased=True,
+                                         cmap=colour_map)
+            except TypeError,e:
+                logging.error('Could not create MU plot for the GPR plot')
 
     @staticmethod
     def plot_fitness_function(figure, d):
@@ -217,6 +219,7 @@ class MLOImageViewer(object):
         ### Data
         fitness = d['fitness']
         if not (d['classifier'] is None):
+            zClass = d['classifier'].predict(d['z'])
             zi3 = griddata((d['x'], d['y']), zClass,
                            (d['xi'][None, :], d['yi'][:, None]), method='nearest')
 

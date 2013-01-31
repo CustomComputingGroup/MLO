@@ -6,19 +6,21 @@ import time
 from time import strftime
 from datetime import datetime
 from copy import copy, deepcopy
+import io
+import pickle
+import re
+import wx
+from numpy import multiply, array
+from numpy.random import uniform, rand
 
 ##TODO - clean it up... only should be loaded when needed... 
 
 from ..surrogatemodels.surrogatemodel import DummySurrogateModel, ProperSurrogateModel
 from particles import *
-from trialbackup import PSOTrialBackup
 
 from deap import base, creator, tools
-from numpy.random import uniform, rand
 
-import wx
 
-from numpy import multiply, array
 
 
 class Trial(Thread):
@@ -26,21 +28,10 @@ class Trial(Thread):
     def __init__(self, trial_no, run_name, fitness, configuration, controller,
                  run_results_folder_path):
         Thread.__init__(self)
-        self.all_particles_in_invalid_area = False
-        self.name = '{} Trial {}'.format(run_name, trial_no)
-        self.run_name = run_name
-        self.trial_no = trial_no
         self.fitness = fitness
-        self.configuration = configuration
         self.controller = controller
-        self.run_results_folder_path = run_results_folder_path
-        self.status = 'Running'  # TODO - BAD
-        self.retrain_model = False
-        self.terminating_condition_reached = False
-        self.model_failed = False
         # True if the user has selected to pause the trial
-        self.wait = False
-
+        
         self.graph_dictionary = {
             'rerendering': False,
             'graph_title': configuration.graph_title,
@@ -49,74 +40,72 @@ class Trial(Thread):
         }
         for name in configuration.graph_names:
             self.graph_dictionary['all_graph_dicts'][name]['generate'] = True
-
-        #if configuration.plot_view != 'special':
-        #    self.plot_view = Plot_View
-
-        self.enable_traceback = configuration.enable_traceback
-        self.GEN = configuration.max_iter
-        self.generations_array = []
-        self.max_fitness = configuration.max_fitness
-        self.best_fitness_array = []
         
-        self.clf = None
-        self.gp_training_fitness = None
-        self.gp_training_set = None
-
         if configuration.surrogate_type == "dummy":
-            self.surrogate_model = DummySurrogateModel(fitness, configuration,
+            surrogate_model = DummySurrogateModel(configuration,
                                                        self.controller)
         else:
-            self.surrogate_model = ProperSurrogateModel(fitness,
-                                                        configuration,
+            surrogate_model = ProperSurrogateModel(configuration,
                                                         self.controller)
 
         # Contains all the counter variables that may be used for visualization
-        self.counter_dictionary = {}
-        self.counter_dictionary['g'] = 0
-        self.counter_dictionary['fit'] = 0
-
-        # The last counter value to be visualized, 0 means none
-        self.latest_counter_plot = 0
+        counter_dictionary = {}
+        counter_dictionary['g'] = 0
+        counter_dictionary['fit'] = 0
+        
+        self.state_dictionary = {
+            'status' : 'Running',
+            'retrain_model' : False,
+            'terminating_condition_reached' : False,
+            'model_failed' : False,
+            'run_results_folder_path' : run_results_folder_path,
+            'run_name' : run_name,
+            'trial_no' : trial_no,
+            'name' : '{} Trial {}'.format(run_name, trial_no),
+            'all_particles_in_invalid_area' : False,
+            'configuration' : configuration,
+            'wait' : False,
+            'generations_array' : [],
+            'best_fitness_array' : [],
+            'enable_traceback' : configuration.enable_traceback,
+            'graph_dictionary' : self.graph_dictionary,
+            'counter_dictionary' : counter_dictionary,
+            'best' : None,
+            'surrogate_model' : surrogate_model,
+            # True if the user has selected to pause the trial
+        }
 
         self.controller.register_trial(self)
-        self.backup = self.create_backup_manager()
-
+        
     def initialise(self):
         """
         Initialises the trial and returns True if everything went OK,
         False otherwise.
         """
-        self.results_folder, self.images_folder = self._create_results_folder()
-        if not self.results_folder:
-            # Results folder could not be created
-            return False
-            
+        logging.info("KURWOOOO")
         self.run_initialize()
 
-        self.best = None
-        self.fitness_evaluated = False
-        self.gp = None
-        self.model_failed = False
-        self.model_retrained = True
-
-        #TODO - maybe remove this boolean
-        self.new_best_over_iteration = False
-        self.M_best = self.fitness.worst_value
-
-        self.population = None
-        self.svc_training_labels = None
-        self.svc_training_set = None
-
+        self.state_dictionary['best'] = None
+        self.state_dictionary['fitness_evaluated'] = False
+        self.state_dictionary['model_failed'] = False
+        self.state_dictionary['new_best_over_iteration'] = False
+        self.state_dictionary['population'] = None
         self.initialize_population()
-        self.view_update()
         
-        return True
+        results_folder, images_folder = self.create_results_folder()
+        if not results_folder or not images_folder:
+            # Results folder could not be created
+            logging.error('Results and images folders cound not be created, terminating.')
+            return False
 
+        return True
         
+    #############################
+    ### Main computation Loop ###
+    #############################
         
     def run(self):
-        self.start_time = datetime.now().strftime('%d-%m-%Y  %H:%M:%S')
+        self.set_start_time(datetime.now().strftime('%d-%m-%Y  %H:%M:%S'))
         
         logging.info('{} started'.format(self.get_name()))
 
@@ -125,67 +114,76 @@ class Trial(Thread):
         
         self.check = False
 #        self.view_update()
-        
-        while self.counter_dictionary['g'] < self.GEN + 1:
+
+        while self.get_counter_dictionary('g') < self.get_configuration().max_iter + 1:
             logging.info('[{}] Generation {}'.format(
-                self.get_name(), self.counter_dictionary['g']))
+                self.get_name(), self.get_counter_dictionary('g')))
             logging.info('[{}] Fitness {}'.format(
-                self.get_name(), self.counter_dictionary['fit']))
+                self.get_name(), self.get_counter_dictionary('fit')))
+                
+            self.view_update()
+            # termination condition - we put it here so that when the trial is reloaded
+            # it wont run if the run has terminated already
+            if self.get_terminating_condition(): 
+                break
                 
             # Roll population
-            first_pop = self.population.pop(0)
-            self.population.append(first_pop)
+            first_pop = self.get_population().pop(0)
+            self.get_population().append(first_pop)
             
-            if self.counter_dictionary['fit'] > self.max_fitness:
+            if self.get_counter_dictionary('fit') > self.get_configuration().max_fitness:
                 logging.info('Fitness counter exceeded the limit... exiting')
                 break
 
             # Train surrogate model
             if self.training_set_updated():
-                logging.info('Retraining model')
-                self.surrogate_model.train(self.population)
-            code, mean, variance = self.surrogate_model.predict(self.population)
+                self.train_surrogate_model(self.get_population())
+            ##print self.get_population()
+            code, mean, variance = self.predict_surrogate_model(self.get_population())
             self.post_model_filter(code, mean, variance)
 
             ##
             if self.get_model_failed():
                 logging.info('Model Failed, sampling design space')
                 self.sample_design_space()
-            else:
-                self.reevalute_best()
+            else:#
+                if self.training_set_updated():
+                    self.reevalute_best()
                 # Iteration of meta-heuristic
                 self.meta_iterate()
                 self.filter_population()
                 
                 #Check if perturbation is neccesary 
-                if self.counter_dictionary['g'] % self.configuration.M == 0:
+                if self.get_counter_dictionary('g') % self.get_configuration().M == 0:
                     self.evaluate_best()
                 
             # Wait until the user unpauses the trial.
-            while self.wait:
+            while self.get_wait():
                 time.sleep(0)
 
-            self.increment_counter('g')
-            self.view_update()
-
-            # termination condition
-            if self.terminating_condition_reached:
-                break
+            self.increment_main_counter()
                 
-        self.status = 'Finished'
+        self.set_status('Finished')
         logging.info('{} finished'.format(self.get_name()))
         sys.exit(0)
            
-    def get_model_failed(self):
-        return self.model_failed
+    ####################
+    ## Helper Methods ##
+    ####################
+    
+    def train_surrogate_model(self, population):
+        logging.info('Training model')
+        self.state_dictionary["surrogate_model"].train(population)
+    
+    def predict_surrogate_model(self, population):
+        return self.get_surrogate_model().predict(population)
         
-    def _create_results_folder(self):
+    def create_results_folder(self):
         """
         Creates folder structure used for storing results.
         Returns a results folder path or None if it could not be created.
         """
-        path = '{}/trial-{}'.format(self.run_results_folder_path,
-                                    self.trial_no)
+        path = '{}/trial-{}'.format(self.get_run_results_folder_path(), self.get_trial_no())
         try:
             os.makedirs(path)
             os.makedirs(path + "/images")
@@ -196,21 +194,24 @@ class Trial(Thread):
         except Exception, e:
             logging.error('Could not create folder: {}, aborting'.format(path),
                           exc_info=sys.exc_info())
-            return None
+            return None, None
     
     ### check first if part is already within the training set
     def fitness_function(self, part):
         ##this bit traverses the particle set and checks if it has already been evaluated. 
-        if self.surrogate_model.contains_training_instance(part):
-            return self.surrogate_model.get_training_instance(part)
+        if self.get_surrogate_model().contains_training_instance(part):
+            code, fitness = self.get_surrogate_model().get_training_instance(part)
+            if fitness is None:
+                fitness = self.get
+            return code, fitness
         self.increment_counter('fit')
         fitness, code, addReturn = self.fitness.fitnessFunc(part)
-        self.surrogate_model.add_training_instance(part, code, fitness, addReturn)
-        self.retrain_model = True
+        self.get_surrogate_model().add_training_instance(part, code, fitness, addReturn)
+        self.set_retrain_model(True)
         
         if addReturn[0] == 0:
-            self.terminating_condition_reached = self.terminating_condition(fitness) 
-            if self.terminating_condition_reached:
+            self.set_terminating_condition(fitness) 
+            if self.get_terminating_condition():
                 logging.info('Terminating condition reached...' + str(part) + ' ' + str(fitness))
             return fitness, code
         else:
@@ -218,65 +219,112 @@ class Trial(Thread):
     
     ###check if between two calls to this functions any fitness functions have been evaluted, so that the models have to be retrained
     def training_set_updated(self):
-        retrain_model_temp = self.retrain_model
-        self.retrain_model = False
+        retrain_model_temp = self.get_retrain_model()
+        self.set_retrain_model(False)
         return retrain_model_temp
-    
-    # TODO - this could be removed
-    def get_name(self):
-        return self.name
 
     ## indicator for the controller and viewer that the state has changed. 
     def view_update(self):
         self.controller.view_update(self)
-
+        
+    def increment_main_counter(self):
+        self.get_best_fitness_array().append(self.get_best().fitness.values[0])
+        self.get_generations_array().append(self.get_counter_dictionary('g'))
+        self.save()
+        self.increment_counter('g')
+        
     def increment_counter(self, counter):
-        if counter == self.configuration.counter:
-            self.best_fitness_array.append(self.best.fitness.values[0])
-            self.generations_array.append(self.counter_dictionary[counter])
-            self.save()
-        self.counter_dictionary[counter] += 1
-
+        self.set_counter_dictionary(counter, self.get_counter_dictionary(counter) + 1)
+        
     def save(self):
-        self.backup.save_trial(self)
+        self.save_trial(self)
 
     def load(self, generation=None):
-        return self.backup.load_trial(self, generation)
+        return self.load_trial(self, generation)
 
     ### TODO - its just copy and pasted ciode now..w could rewrite it realyl
     def post_model_filter(self, code, mean, variance):
-        for i, (p, c, m, v) in enumerate(zip(self.population, code,
-                                             mean, variance)):
-            if v > self.configuration.max_stdv and c == 0:
-                p.fitness.values, p.code = self.toolbox.evaluate(p)
-            else:
-                if c == 0:
-                    p.fitness.values = m
+        if (code is None) or (mean is None) or (variance is None):
+            self.set_model_failed(False)
+        else:
+            for i, (p, c, m, v) in enumerate(zip(self.get_population(), code,
+                                                 mean, variance)):
+                if v > self.get_configuration().max_stdv and c == 0:
+                    p.fitness.values, p.code = self.toolbox.evaluate(p)
                 else:
-                    p.fitness.values = [self.fitness.worst_value]
-        ## at least one particle has to have std smaller then max_stdv
-        ## if all particles are in invalid zone
-        self.model_failed = not (False in [self.configuration.max_stdv < pred for pred in variance])
+                    if c == 0:
+                        p.fitness.values = m
+                    else:
+                        p.fitness.values = [self.fitness.worst_value]
+            ## at least one particle has to have std smaller then max_stdv
+            ## if all particles are in invalid zone
+            self.set_model_failed(not (False in [self.get_configuration().max_stdv < pred for pred in variance]))
    
     def reevalute_best(self):
-        bests_to_model = [p.best for p in self.population if p.best] ### Elimate Nones -- in case M < Number of particles, important for initialb iteratiions
-        if self.best:
-            bests_to_model.append(self.best)
+        bests_to_model = [p.best for p in self.get_population() if p.best] ### Elimate Nones -- in case M < Number of particles, important for initialb iteratiions
+        if self.get_best():
+            bests_to_model.append(self.get_best())
         if bests_to_model:
             logging.info("Reevaluating")
             bests_to_fitness = self.surrogate_model.predict(bests_to_model)[1]
-            for i,part in enumerate([p for p in self.population if p.best]):
+            for i,part in enumerate([p for p in self.get_population() if p.best]):
                 part.best.fitness.values = bests_to_fitness[i]
-            if self.best.model:
+            if self.get_best().model:
                 best.fitness.values = bests_to_fitness[-1]
                 
-    # Abstract methods that can be overriden by concrete implementations (optional)
-    
-    ## is used by the plot.py to add specific meta-heuristic markers onto the design space... currently very primitive. 
-    ## check PSOTrial for examples. 
-                    
-    # Abstract methods that should be overriden by concrete implementations
+    def save_trial(self, trial):
+        try:
+            trial_file = ('{}/{:0' + str(10) +
+                  'd}.txt').format(trial.get_results_folder(),
+                                   trial.get_counter_dictionary('g'))
+            with io.open(trial_file, 'wb') as outfile:
+                pickle.dump(dict, outfile)            
+        except Exception, e:
+            logging.error(str(e))
+            return False
+            
+    ## by default find the latest generation
+    def load_trial(self, trial, generation = None):
+        #try:
+        if generation is None:
+            # Figure out what the last generation before crash was
+            found = False
+            for filename in reversed(os.listdir(trial.results_folder)):
+                match = re.search(r'^(\d+)\.txt', filename)
+                if match:
+                    # Found the last generation
+                    generation = int(match.group(1))
+                    found = True
+                    break
 
+            if not found:
+                return False
+                
+        generation_file = ('{:0' + str(10) +
+                           'd}').format(generation)
+        trial_file = '{}/{}.txt'.format(trial.get_results_folder(), generation_file)
+        with open(trial_file, 'rb') as outfile:
+            dict = pickle.load(outfile)
+            print dict
+            trial.set_state_dictionary(pickle.load(outfile))
+        
+        return True
+        #except Exception, e:
+        #    logging.error("Loading error" + str(e))
+        #    return False
+        
+    #######################
+    ## Abstract Methods  ##
+    #######################
+
+    def get_main_counter_iterator(self):
+        raise NotImplementedError('Trial is an abstract class, '
+                                   'this should not be called.')
+        
+    def get_main_counter(self):
+        raise NotImplementedError('Trial is an abstract class, '
+                                   'this should not be called.')
+                                  
     def run_initialize(self):
         raise NotImplementedError('Trial is an abstract class, '
                                   'this should not be called.')
@@ -292,17 +340,6 @@ class Trial(Thread):
     def meta_iterate(self):
         raise NotImplementedError('Trial is an abstract class, '
                                   'this should not be called.')
-    
-    def terminating_condition(self, fitness):
-        return self.fitness.termCond(fitness[0])
-
-    def create_backup_manager(self):
-        """
-        Returns an instance of a subclass of trialbackup.TrialBackup suited for
-        saving and loading a specific Trial subclass.
-        """
-        raise NotImplementedError('Trial is an abstract class, '
-                                  'this should not be called.')
         
     def evaluate_best():
         raise NotImplementedError('Trial is an abstract class, '
@@ -311,17 +348,116 @@ class Trial(Thread):
     def sample_design_space(self):
         raise NotImplementedError('Trial is an abstract class, '
                                   'this should not be called.')
-        pass
+    def snapshot(self):
+        raise NotImplementedError('Trial is an abstract class, '
+                                  'this should not be called.')
+        
+    #######################
+    ### GET/SET METHODS ###
+    #######################
+    
+    def set_state_dictionary(self, new_dictionary):
+        self.set_state_dictionary = new_dictionary 
+        
+    def get_fitness(self):
+        return self.fitness
+        
+    def get_graph_dictionary(self):
+        return self.graph_dictionary
+        
+    def get_best(self):
+        return self.state_dictionary['best']
+        
+    def set_best(self, new_best):
+        self.state_dictionary['best'] = new_best
+        
+    def set_population(self, population):
+        self.state_dictionary["population"] = population
+        
+    def get_population(self):
+        return self.state_dictionary["population"]
+        
+    def get_counter_dictionary(self, counter):
+        return self.state_dictionary['counter_dictionary'][counter]
+        
+    def set_counter_dictionary(self, counter, value):
+        self.state_dictionary['counter_dictionary'][counter] = value
+        
+    def get_configuration(self):
+        return self.state_dictionary['configuration']
+        
+    def set_start_time(self, start_time):
+        self.state_dictionary['start_time'] = start_time
+
+    def get_start_time(self):
+        return self.state_dictionary['start_time']
+    
+    def get_surrogate_model(self):
+        return self.state_dictionary["surrogate_model"]
+        
+    def set_surrogate_model(self, new_model):
+        self.state_dictionary["surrogate_model"] = new_model
+        
+    def get_wait(self):
+        return self.state_dictionary["wait"]
+
+    def get_status(self):
+        return self.state_dictionary["status"]
+        
+    def set_status(self, status):
+        self.state_dictionary["status"] = status
+        
+    def set_retrain_model(self, status):
+        self.state_dictionary["retrain_model"] = status
+
+    def get_retrain_model(self):
+        return self.state_dictionary["retrain_model"]
+        
+    def get_model_failed(self):
+        return self.state_dictionary["model_failed"]
+    
+    def set_model_failed(self, state):
+        self.state_dictionary["model_failed"] = state
+    
+    def get_run_results_folder_path(self):
+        return self.state_dictionary["run_results_folder_path"]
+        
+    def get_trial_no(self):
+        return self.state_dictionary["trial_no"]
+    
+    def get_terminating_condition(self):
+        return self.state_dictionary["terminating_condition"]
+    
+    def set_terminating_condition(self, fitness):
+        self.state_dictionary["terminating_condition"] = self.fitness.termCond(fitness[0])
+        
+    def get_name(self):
+        return self.name
+        
+    def get_best_fitness_array(self):
+        return self.state_dictionary['best_fitness_array']
+        
+    def get_generations_array(self):
+        return self.state_dictionary['generations_array']
+        
+    def get_results_folder(self):
+        return '{}/trial-{}'.format(self.get_run_results_folder_path(), self.get_trial_no()) #self.state_dictionary['results_folder']
+        
+    def set_images_folder(self, folder):
+        self.state_dictionary['images_folder'] = folder
+
+    def get_images_folder(self):
+        return self.get_results_folder() + "/images"
         
 class PSOTrial(Trial):
 
     def run_initialize(self):
         design_space = self.fitness.designSpace
 
-        self.smin = [-1.0 * self.configuration.max_speed *
+        self.smin = [-1.0 * self.get_configuration().max_speed *
                 (dimSetting['max'] - dimSetting['min'])
                 for dimSetting in design_space]
-        self.smax = [self.configuration.max_speed *
+        self.smax = [self.get_configuration().max_speed *
                 (dimSetting['max'] - dimSetting['min'])
                 for dimSetting in design_space]
 
@@ -343,75 +479,58 @@ class PSOTrial(Trial):
         self.toolbox.register('population', tools.initRepeat,
                               list, self.toolbox.particle)
         self.toolbox.register('update', updateParticle, trial=self,
-                              conf=self.configuration,
+                              conf=self.get_configuration(),
                               designSpace=design_space)
         self.toolbox.register('evaluate', self.fitness_function)
-
+        self.state_dictionary['at_least_one_in_valid_region'] = False
+        
     def initialize_population(self):
         ## the while loop exists, as meta-heuristic makes no sense till we find at least one particle that is within valid region...
-        at_least_one_in_valid_region = False
-        while (not at_least_one_in_valid_region):
-            self.population = self.toolbox.population(
-                n=self.configuration.population_size)
-            self.toolbox.filter_particles(self.population)
-
-            if self.configuration.eval_correct:
-                self.population[0] = creator.Particle(
+        self.set_at_least_one_in_valid_region(False)
+        while (not self.get_at_least_one_in_valid_region()):
+            self.set_population(self.toolbox.population(self.get_configuration().population_size))
+            self.toolbox.filter_particles(self.get_population())
+            if self.get_configuration().eval_correct:
+                self.get_population()[0] = creator.Particle(
                     self.fitness.alwaysCorrect())  # This will break
-            for i, part in enumerate(self.population):
-                if i < self.configuration.F:
+            for i, part in enumerate(self.get_population()):
+                if i < self.get_configuration().F:
                     part.fitness.values, part.code = self.toolbox.evaluate(part)
-                    at_least_one_in_valid_region = (part.code == 0) or at_least_one_in_valid_region
+                    self.set_at_least_one_in_valid_region((part.code == 0) or self.get_at_least_one_in_valid_region())
             ## add one example till we find something that works
-            self.configuration.F = 1
+            self.get_configuration().F = 1
 
     def meta_iterate(self):
         #TODO - reavluate one random particle... do it.. very important!
-        while(self.all_particles_in_invalid_area):
-            logging.info("All particles within invalid area... have to randomly sample the design space to find one that is OK...")             
+        ##while(self.get_at_least_one_in_valid_region()):
+        ##    logging.info("All particles within invalid area... have to randomly sample the design space to find one that is OK...")             
             
         #Update Bests
-        for part in self.population:
+        for part in self.get_population():
             if not part.best or self.fitness.is_better(part.fitness, part.best.fitness):
                 part.best = creator.Particle(part)
                 part.best.fitness.values = part.fitness.values
-            if not self.best or self.fitness.is_better(part.fitness, self.best.fitness):
-                self.best = creator.Particle(part)
-                self.best.fitness.values = part.fitness.values
-                self.M_best = self.best
+            if not self.get_best() or self.fitness.is_better(part.fitness, self.get_best().fitness):
+                self.set_best(creator.Particle(part))
+                self.get_best().fitness.values = part.fitness.values
                 self.new_best = True
-                logging.info('New global best found' + str(self.M_best) + ' fitness:'+ str(part.fitness.values))                
+                logging.info('New global best found' + str(self.get_best()) + ' fitness:'+ str(part.fitness.values))                
         #PSO
-        for part in self.population:
-            self.toolbox.update(part, self.counter_dictionary['g'])
+        for part in self.get_population():
+            self.toolbox.update(part, self.get_counter_dictionary('g'))
 
     def filter_population(self):
-        self.toolbox.filter_particles(self.population)
-
-    def create_backup_manager(self):
-        return PSOTrialBackup()
-
+        self.toolbox.filter_particles(self.get_population())
+        
     ### returns a snapshot of the trial state
     def snapshot(self):
         fitness = self.fitness
-        best_fitness_array = copy(self.best_fitness_array)
-        generations_array = copy(self.generations_array)
-        results_folder = copy(self.results_folder)
-        images_folder = copy(self.images_folder)
-        counter = copy(self.counter_dictionary[self.configuration.counter])
+        best_fitness_array = copy(self.get_best_fitness_array())
+        generations_array = copy(self.get_generations_array())
+        results_folder = copy(self.get_results_folder())
+        images_folder = copy(self.get_images_folder())
+        counter = copy(self.get_counter_dictionary('g'))
         name = self.get_name()
-
-        
-        sm = self.surrogate_model
-        if sm.trained():
-            classifier = copy(sm.classifier) if hasattr(sm, 'classifier') \
-                else None
-            regressor = copy(sm.regressor) if hasattr(sm, 'regressor') \
-                else None
-        else:
-            classifier = None
-            regressor = None
-
         return_dictionary = {
             'fitness': fitness,
             'best_fitness_array': best_fitness_array,
@@ -420,39 +539,38 @@ class PSOTrial(Trial):
             'images_folder': images_folder,
             'counter': counter,
             'name': name,
-            'classifier': classifier,
-            'regressor': regressor,
-            'meta_plot': {"particles":{'marker':"o",'data':self.population}}
+            'classifier': self.get_surrogate_model().classifier,
+            'regressor': self.get_surrogate_model().regressor,
+            'meta_plot': {"particles":{'marker':"o",'data':self.get_population()}}
         }
         return_dictionary.update(copy(self.graph_dictionary))
         return return_dictionary
    
     def evaluate_best(self):        
         if self.new_best:
-            self.fitness_function(self.best)
+            self.fitness_function(self.get_best())
             logging.info('New best was found after M')
         else:
             ## TODO - clean it up...  messy
             logging.info('Best was already evalauted.. adding perturbation')
-            perturbation = self.get_perturbation()                        
-            perturbed_particle = creator.Particle(self.best)
+            perturbation = self.perturbation()                        
+            perturbed_particle = creator.Particle(self.get_best())
             for i,val in enumerate(perturbation):
                 perturbed_particle[i] = perturbed_particle[i] + val       
             self.toolbox.filter_particle(perturbed_particle)
             fitness, code = self.fitness_function(perturbed_particle) 
             ##check if the value is not a new best
             perturbed_particle.fitness.values = fitness
-            if not self.best or self.fitness.is_better(perturbed_particle.fitness, self.best.fitness):
-                self.best = perturbed_particle
-                self.M_best = self.best
+            if not self.get_best() or self.fitness.is_better(perturbed_particle.fitness, self.get_best().fitness):
+                self.set_best(perturbed_particle)
         self.new_best = False
         
 
     def sample_design_space(self):
         logging.info('Evaluating best perturbation')
-        perturbation = self.get_perturbation()                        
-        hypercube = self.get_hypercube()
-        particle = self.surrogate_model.max_uncertainty()
+        perturbation = self.perturbation()                        
+        hypercube = self.hypercube()
+        particle = self.get_surrogate_model().max_uncertainty()
         if particle is None:
             logging.info('Evaluating a perturbation of a random particle')
             particle = self.toolbox.particle()
@@ -463,19 +581,19 @@ class PSOTrial(Trial):
         self.fitness_function(perturbedParticle) 
         
     ## not used currently
-    def get_perturbation_dist(self):
-        [max_diag, min_diag] = self.get_dist()
-        d = (max_diag - min_diag)/2.0
-        if best:
-            max_diag = best + d
-            for i,dd in enumerate(self.fitness.designSpace):
-                max_diag[i] = minimum(max_diag[i],dd["max"])
-            min_diag = best - d
-            for i,dd in enumerate(self.fitness.designSpace):
-                min_diag[i] = maximum(min_diag[i],dd["min"])
-            return [max_diag,min_diag]
-        else:
-            return getHypercube(pop)
+    # def get_perturbation_dist(self):
+        # [max_diag, min_diag] = self.get_dist()
+        # d = (max_diag - min_diag)/2.0
+        # if best:
+            # max_diag = best + d
+            # for i,dd in enumerate(self.fitness.designSpace):
+                # max_diag[i] = minimum(max_diag[i],dd["max"])
+            # min_diag = best - d
+            # for i,dd in enumerate(self.fitness.designSpace):
+                # min_diag[i] = maximum(min_diag[i],dd["min"])
+            # return [max_diag,min_diag]
+        # else:
+            # return getHypercube(pop)
             
      ## not used currently
     def get_dist(self):
@@ -496,19 +614,19 @@ class PSOTrial(Trial):
             min_diag = minimum(part, min_diag)
         return [max_diag, min_diag]
         
-    def get_hypercube(self):
+    def hypercube(self):
         #find maximum
-        max_diag = deepcopy(self.population[0])
-        for part in self.population:
+        max_diag = deepcopy(self.get_population()[0])
+        for part in self.get_population():
             max_diag = maximum(part,max_diag)
         ###find minimum vectors
-        min_diag = deepcopy(self.population[0])
-        for part in self.population:
+        min_diag = deepcopy(self.get_population()[0])
+        for part in self.get_population():
             min_diag = minimum(part,min_diag)
         return [max_diag,min_diag]
         
-    def get_perturbation(self, radius = 10.0):
-        [max_diag,min_diag] = self.get_hypercube()
+    def perturbation(self, radius = 10.0):
+        [max_diag,min_diag] = self.hypercube()
         d = (max_diag - min_diag)/radius
         for i,dd in enumerate(d):
             if self.fitness.designSpace[i]["type"] == "discrete":
@@ -518,5 +636,21 @@ class PSOTrial(Trial):
         dimensions = len(self.fitness.designSpace)
         pertubation =  multiply(((rand(1,dimensions)-0.5)*2.0),d)[0] #TODO add the dimensions
         return pertubation
+        
+    #######################
+    ### GET/SET METHODS ###
+    #######################
+    
+    def get_main_counter_iterator(self):
+        return range(0, self.counter_dictionary['g'] + 1)
+        
+    def get_main_counter(self):
+        return self.get_counter_dictionary('g')
+        
+    def set_at_least_one_in_valid_region(self, state):
+        self.state_dictionary['at_least_one_in_valid_region'] = state
+
+    def get_at_least_one_in_valid_region(self):
+        return self.state_dictionary['at_least_one_in_valid_region']
         
         

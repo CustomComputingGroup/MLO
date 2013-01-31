@@ -68,7 +68,7 @@ class Run(object):
 
         # Run trials
         for trial in self.trials:
-            trial.counter_dictionary['g'] += 1
+            ##trial.counter_dictionary['g'] += 1  -- not sure about this one... plus doesnt really has no impact on the perofrmance...
             trial.start()
 
     def reload(self):
@@ -81,9 +81,10 @@ class Run(object):
 
         # Run trials
         for trial in self.trials:
-            trial.counter_dictionary['g'] += 1
+            ##trial.counter_dictionary['g'] += 1 -- not sure about this one... plus doesnt really has no impact on the perofrmance... same
             trial.start()
 
+    ## TODO - look into trial save_trial / load_trial class. All of the configuration should be saved in similar way. 
     def save_run_data(self):
         """
         Saves settings of the run so that they can be recovered later.
@@ -109,7 +110,7 @@ class Run(object):
             run_data.write(configuration_file_name)
             run_data.write('\n')
             for trial in self.trials:
-                run_data.write(trial.results_folder)
+                run_data.write(trial.get_results_folder())
                 run_data.write('\n')
 
     def load_run_data(self):
@@ -119,6 +120,8 @@ class Run(object):
         trial_results_folders = []
 
         run_file = self.results_folder_path + '/run_data.txt'
+        logging.info(run_file)
+        logging.info(self.results_folder_path)
         try:
             with open(run_file, 'r') as run_data:
                 self.name = run_data.readline().rstrip('\n')
@@ -141,12 +144,11 @@ class Run(object):
             sys.exit(1)
 
         self.no_of_trials = self.configuration.trials_count
-        Trial = self.configuration.trials_type
-
+        #Trial = self.configuration.trials_type
+        from trials.trial import PSOTrial
+        Trial = PSOTrial
         for trial_no in range(1, self.no_of_trials + 1):
-            trial = Trial(trial_no, self.name, self.fitness,
-                          self.configuration, self.controller,
-                          self.results_folder_path)
+            trial = Trial(trial_no, self.name, self.fitness,  self.configuration, self.controller, self.results_folder_path)
             trial.results_folder = trial_results_folders[trial_no - 1]
             trial.run_initialize()
             if not trial.load():

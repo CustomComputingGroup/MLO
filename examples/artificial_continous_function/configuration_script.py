@@ -43,7 +43,7 @@ KK = 0.73
 
 ### Visualisation
 
-vis_every_X_steps = 2 # How often to visualize
+vis_every_X_steps = 10 # How often to visualize
 counter = 'g'  # The counter that visualization uses as a 'step'
 max_counter = max_iter  # Maximum value of counter
 
@@ -99,4 +99,4 @@ theta0 = 0.01
 thetaL = 0.0001
 thetaU = 3.0
 nugget = 3
-random_start = 50
+random_start = 200

@@ -38,7 +38,7 @@ class TerminalView(View):
         
     ## Print out run statistics, define a new stats printer
     def update(self, trial):
-        if trial.counter_dictionary['g'] % trial.configuration.vis_every_X_steps == 0: ## TODO - its not ideal... rethink it... 
+        if trial.get_main_counter() % trial.get_configuration().vis_every_X_steps == 0: ## TODO - its not ideal... rethink it... 
             snapshot = trial.snapshot()
             self.controller.visualize(snapshot, self.plot_view.render)
 

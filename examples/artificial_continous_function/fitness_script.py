@@ -34,7 +34,7 @@ def is_valid(part):
 
 # Example Termination condition
 def termCond(best):
-    return best < 0.00001
+    return best < 0.001
 
 
 # Name of the benchmark
@@ -44,5 +44,5 @@ def name():
 # Example definition of the design space
 designSpace = []
 for d in xrange(dimensions):
-    designSpace.append({'min': -20, 'max': 20, 'step': 0.5,
+    designSpace.append({'min': -2, 'max': 2, 'step': 0.5,
                         'type': 'continuous'})

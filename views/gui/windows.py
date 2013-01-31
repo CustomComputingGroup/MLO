@@ -29,12 +29,12 @@ class RunWindow(wx.Frame):
         ### Create and set the Menu bar
         menu_bar = wx.MenuBar()
         file_menu = wx.Menu()
-        menu_new = file_menu.Append(wx.ID_NEW, '&New run from scripts',
+        menu_new = file_menu.Append(wx.ID_NEW, '&New run',
                                     ' Create new run')
-        menu_reload = file_menu.Append(wx.ID_OPEN, '&Reload run from CSV',
+        menu_reload = file_menu.Append(wx.ID_OPEN, '&Reload run',
                                        ' Reload run')
         menu_exit = file_menu.Append(wx.ID_EXIT, 'E&xit',
-                                     ' Terminate all runs and quit')
+                                     ' Quit')
         self.Bind(wx.EVT_MENU, self.on_new, menu_new)
         self.Bind(wx.EVT_MENU, self.on_reload, menu_reload)
         self.Bind(wx.EVT_MENU, self.on_exit, menu_exit)
@@ -204,16 +204,14 @@ class RunWindow(wx.Frame):
         self.Destroy()
 
     def add_listctrl_trial(self, trial):
-        trial.gui_status = trial.status
-        trial.drawn = True
-        self.list_ctrl.Append((trial.get_name(), trial.status, '',
-                              trial.start_time))
+        self.list_ctrl.Append((trial.get_name(), trial.get_status(), '',
+                              trial.get_start_time()))
 
     def add_progress_bar(self, trial):
         rect = self.list_ctrl.GetItemRect(0)
         size = (self.list_ctrl.GetColumnWidth(2)-4, rect[3]-4)
-        bar = wx.Gauge(self.panel, range=trial.GEN, size=size)
-        bar.SetValue(trial.counter_dictionary['g'])
+        bar = wx.Gauge(self.panel, range=trial.get_configuration().max_iter, size=size)
+        bar.SetValue(trial.get_main_counter())
         self.bars[trial.get_name()] = bar
 
     def start_run(self, name, fitness, configuration):
@@ -225,13 +223,13 @@ class RunWindow(wx.Frame):
     def update_trial(self, event):
         ### Called to update display to represent trial's changed state
         trial = event.trial
-        if trial.counter_dictionary['g'] % trial.configuration.vis_every_X_steps == 0: ### TODO - it should really be done a bit differently...
+        if (trial.get_main_counter() % trial.get_configuration().vis_every_X_steps) == 0: ### TODO - it should really be done a bit differently...
              self.visuzalize_trial(trial)
              
         drawn = trial.get_name() in self.bars
         if drawn:
             index = self.list_ctrl.FindItem(0, trial.get_name())
-            self.list_ctrl.SetStringItem(index, 1, trial.status)
+            self.list_ctrl.SetStringItem(index, 1, trial.get_status())
             self.update_bar(trial)
             ##self.update_trial_graph(trial)
         else:
@@ -252,7 +250,7 @@ class RunWindow(wx.Frame):
             
     def update_bar(self, trial):
         bar = self.bars[trial.get_name()]
-        bar.SetValue(trial.counter_dictionary['g'])
+        bar.SetValue(trial.get_main_counter())
 
     def get_graph_attributes(self, trial, graph_name):
         return self.controller.get_graph_attributes(trial, graph_name)
@@ -269,7 +267,7 @@ class GraphWindow(wx.Frame):
 
         ### Initialisation (take graph options from given trial)
         self.trial = trial
-        self.images_folder = trial.images_folder
+        self.images_folder = trial.get_images_folder()
         
         ### Set up display
         self.panel = wx.ScrolledWindow(self)
@@ -297,7 +295,13 @@ class GraphWindow(wx.Frame):
         ## TODO - Fix the functionality of 
         ##self.update_checkbox = wx.CheckBox(self.panel,
         ##                                   label='Automatically update graphs')
-                           
+                       
+        refresh_button = wx.Button(self.panel, label='Refresh', size=(60, -1))
+        refresh_button.Bind(wx.EVT_BUTTON, self.on_refresh)
+
+        regenerate_button = wx.Button(self.panel, label='Regenerate All', size=(120, -1))
+        regenerate_button.Bind(wx.EVT_BUTTON, self.on_regenerate)
+                       
         self.bmp = None
         self.update_plots()
         self.set_first_plot()
@@ -311,6 +315,8 @@ class GraphWindow(wx.Frame):
         main_sizer.Add(graph_sizer, 0)
 
         ##option_sizer.Add(self.update_checkbox, 0, wx.ALL, 10)
+        option_sizer.Add(refresh_button, 0, wx.ALL, 10)
+        option_sizer.Add(regenerate_button, 0, wx.ALL, 10)
         option_sizer.AddStretchSpacer(1)
         option_sizer.Add(options_button, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
         main_sizer.Add(option_sizer, 1, wx.GROW)
@@ -321,6 +327,22 @@ class GraphWindow(wx.Frame):
         self.Centre()
         self.Show()
 
+    def on_regenerate(self, event):
+        trial = self.trial
+        for iteration in self.trial.get_iterator():
+            from ..model.trials.trial import PSOTrial ## TODO -... you know what
+            Trial = PSOTrial
+            vis_trial = Trial(trial.get_trial_no(), trial.get_name(), trial.get_fitness(),
+                              trial.get_configuration(), trial.controller,
+                              trial.run_results_folder_path)
+            vis_trial.load(iteration)
+            self.visuzalize_trial(vis_trial)
+        
+    def on_refresh(self, event):
+        logging.info('click')
+        self.set_previous_plot()
+        self.update_image()
+        
     def on_left(self, event):
         logging.info('click')
         self.set_previous_plot()
@@ -396,7 +418,7 @@ class GraphWindow(wx.Frame):
         vis_trial = Trial(trial.trial_no, trial.name, trial.fitness,
                           trial.configuration, trial.controller,
                           trial.run_results_folder_path)
-        vis_trial.results_folder = trial.results_folder
+        vis_trial.set_results_folder(trial.get_results_folder())
         vis_trial.load(generation)
         vis_trial.graph_dictionary = gd
         self.visuzalize_trial(trial)
@@ -439,7 +461,7 @@ class OptionsWindow(wx.Frame):
                                             size=(1000, 500))
 
         self.trial = trial
-        self.graph_names = trial.graph_dictionary['graph_names']
+        self.graph_names = trial.get_graph_dictionary()['graph_names']
 
         ### Set up display
         self.panel = wx.ScrolledWindow(self)
@@ -455,7 +477,7 @@ class OptionsWindow(wx.Frame):
         title_sizer = wx.BoxSizer(wx.VERTICAL)
         self.tc_dictionary['title'] = wx.TextCtrl(
             self.panel,
-            value=self.trial.graph_dictionary['graph_title'])
+            value=self.trial.get_graph_dictionary()['graph_title'])
         title_sizer.Add(wx.StaticText(self.panel, -1, 'Title:'), 0,
                         wx.TOP | wx.LEFT, 10)
         title_sizer.Add(self.tc_dictionary['title'], 1,
@@ -463,7 +485,7 @@ class OptionsWindow(wx.Frame):
         option_sizer.Add(title_sizer, 1, wx.GROW)
 
         ### Add the checkbox sizers
-        trial_gd = trial.graph_dictionary['all_graph_dicts']
+        trial_gd = trial.get_graph_dictionary()['all_graph_dicts']
         checkbox_sizer = wx.BoxSizer(wx.HORIZONTAL)
         for graph_name in self.graph_names:
             self.checkbox_dictionary[graph_name] = wx.CheckBox(
@@ -521,7 +543,7 @@ class OptionsWindow(wx.Frame):
     def make_sizer(self, name, dictionary_value, text):
         new_sizer = wx.BoxSizer(wx.VERTICAL)
         new_name = wx.StaticText(self.panel, -1, text)
-        trial_gd_name = self.trial.graph_dictionary['all_graph_dicts'][name]
+        trial_gd_name = self.trial.get_graph_dictionary()['all_graph_dicts'][name]
         if dictionary_value in trial_gd_name:
             tc_value = trial_gd_name[dictionary_value]
         else:
@@ -534,9 +556,9 @@ class OptionsWindow(wx.Frame):
 
     def on_regen(self, event):
         ### Save all regeneration data
-        trial_gd = self.trial.graph_dictionary['all_graph_dicts']
+        trial_gd = self.trial.get_graph_dictionary()['all_graph_dicts']
 
-        self.trial.graph_dictionary['graph_title'] = \
+        self.trial.get_graph_dictionary()['graph_title'] = \
             self.tc_dictionary['title'].GetValue()
         for graph_name in self.graph_names:
             trial_gd[graph_name]['generate'] = \
@@ -549,7 +571,7 @@ class OptionsWindow(wx.Frame):
                 trial_gd[graph_name][attribute] = \
                     self.tc_dictionary[attribute+graph_name].GetValue()
 
-        self.trial.graph_dictionary['rerendering'] = True
+        self.trial.get_graph_dictionary()['rerendering'] = True
         self.GetParent().regenerate_graph(self.trial)
         self.Close(True)
 

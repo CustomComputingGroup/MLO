@@ -30,6 +30,8 @@ class Visualizer(Thread):
     def terminate(self):
         self.stop = True
 
+    def max_process(self, integer):
+        pass
 
 class ParallelisedVisualizer(Visualizer):
     """
@@ -63,7 +65,6 @@ class ParallelisedVisualizer(Visualizer):
                 logging.info('Visualizing {}'.format(run_name))
                 p = Process(target=self.render_graph,
                             args=(function, snapshot, run_name, child_end))
-                p.daemon = True
                 p.start()
                 
         logging.info('Visualizer Finished')
@@ -77,6 +78,9 @@ class ParallelisedVisualizer(Visualizer):
          ##   logging.info('Exception {}'.format(e)) 
           ##  child_end.send(False)
         sys.exit(0)
+    
+    def max_process(self, integer):
+        self.max_process = integer
         
 ## Todo - need to modify it.... changed the architecture of visualizer ( its currently broken)
 class SingleThreadVisualizer(Visualizer):

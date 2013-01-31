@@ -128,7 +128,7 @@ class GaussianProcessRegressor(Regressor):
             return MU, S2
         except Exception, e:
             logging.error('Prediction failed.. {}'.format(e))
-            return None
+            return None, None
 
     def fit_data(self, gp, scaled_training_set, adjusted_training_fitness,
                  child_end):
@@ -212,7 +212,7 @@ class GaussianProcessRegressor2(Regressor):
             return MU, S2
         except Exception, e:
             logging.error('Prediction failed.. {}'.format(e))
-            return None
+            return None, None
     
     
     # def returnMaxS2(pop,resultsFolder,iterations,toolbox,npts=200,d1=0,d2=1,fitness=None,gp=None,hypercube=None):

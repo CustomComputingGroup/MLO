@@ -9,8 +9,7 @@ from numpy import linspace, meshgrid, reshape, array, argmax
 
 class SurrogateModel(object):
 
-    def __init__(self, fitness, configuration, controller):
-        self.fitness = fitness
+    def __init__(self, configuration, controller):
         self.configuration = configuration
         self.classifier = Classifier()
         self.regressor = Regressor(controller)        
@@ -39,7 +38,6 @@ class SurrogateModel(object):
     def __getstate__(self):
         # Don't pickle fitness and configuration
         d = dict(self.__dict__)
-        del d['fitness']
         del d['configuration']
         return d
 
@@ -72,8 +70,8 @@ class DummySurrogateModel(SurrogateModel):
         
 class ProperSurrogateModel(SurrogateModel):
 
-    def __init__(self, fitness, configuration, controller):
-        super(ProperSurrogateModel, self).__init__(fitness, configuration,
+    def __init__(self, configuration, controller):
+        super(ProperSurrogateModel, self).__init__(configuration,
                                                    controller)
 
         if configuration.classifier == 'SupportVectorMachine':
@@ -108,7 +106,7 @@ class ProperSurrogateModel(SurrogateModel):
 
     def get_training_instance(self, part):
         code = self.classifier.get_training_instance(part) 
-        fitness = self.fitness.worst_value
+        fitness = None
         if self.regressor.contains_training_instance(part):
             fitness = self.regressor.get_training_instance(part)            
         return code, fitness
@@ -116,8 +114,7 @@ class ProperSurrogateModel(SurrogateModel):
     def model_failed(self, part):
         return False
 
-    def max_uncertainty(self, hypercube=None, npts=200):
-        designSpace = self.fitness.designSpace
+    def max_uncertainty(self, designSpace, hypercube=None, npts=200):
         if len(designSpace)==2:
             # make up data.
             if hypercube:
@@ -137,7 +134,6 @@ class ProperSurrogateModel(SurrogateModel):
             y=reshape(y,-1)
             v=reshape(v,-1)
             z = array([[a,b,c] for (a,b,c) in zip(x,y,v)])
-            
         try:             
             zClass, MU, S2 = self.predict(z)
             filteredS2=[]
