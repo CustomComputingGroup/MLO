@@ -55,6 +55,18 @@ class Classifier(object):
             logging.error('cannot call get_training_instance if training_set does not contain the particle')
             return False
 
+    ###############
+    ### GET/SET ###
+    ###############
+        
+    def get_state_dictionary(self):
+        dict = {'training_set' : self.training_set,
+                'training_labels': self.training_labels}
+        return dict
+        
+    def set_state_dictionary(self, dict):
+        self.training_set = dict['training_set']
+        self.training_labels = dict['training_labels']
 
 class SupportVectorMachineClassifier(Classifier):
 

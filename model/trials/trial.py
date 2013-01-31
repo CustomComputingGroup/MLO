@@ -42,28 +42,26 @@ class Trial(Thread):
             self.graph_dictionary['all_graph_dicts'][name]['generate'] = True
         
         if configuration.surrogate_type == "dummy":
-            surrogate_model = DummySurrogateModel(configuration,
+            self.surrogate_model = DummySurrogateModel(configuration,
                                                        self.controller)
         else:
-            surrogate_model = ProperSurrogateModel(configuration,
+            self.surrogate_model = ProperSurrogateModel(configuration,
                                                         self.controller)
 
         # Contains all the counter variables that may be used for visualization
         counter_dictionary = {}
         counter_dictionary['g'] = 0
         counter_dictionary['fit'] = 0
-        
+        self.configuration = configuration
         self.state_dictionary = {
             'status' : 'Running',
             'retrain_model' : False,
-            'terminating_condition_reached' : False,
             'model_failed' : False,
             'run_results_folder_path' : run_results_folder_path,
             'run_name' : run_name,
             'trial_no' : trial_no,
             'name' : '{} Trial {}'.format(run_name, trial_no),
             'all_particles_in_invalid_area' : False,
-            'configuration' : configuration,
             'wait' : False,
             'generations_array' : [],
             'best_fitness_array' : [],
@@ -71,7 +69,6 @@ class Trial(Thread):
             'graph_dictionary' : self.graph_dictionary,
             'counter_dictionary' : counter_dictionary,
             'best' : None,
-            'surrogate_model' : surrogate_model,
             # True if the user has selected to pause the trial
         }
 
@@ -82,7 +79,6 @@ class Trial(Thread):
         Initialises the trial and returns True if everything went OK,
         False otherwise.
         """
-        logging.info("KURWOOOO")
         self.run_initialize()
 
         self.state_dictionary['best'] = None
@@ -136,7 +132,7 @@ class Trial(Thread):
                 break
 
             # Train surrogate model
-            if self.training_set_updated():
+            if self.get_retrain_model():
                 self.train_surrogate_model(self.get_population())
             ##print self.get_population()
             code, mean, variance = self.predict_surrogate_model(self.get_population())
@@ -173,7 +169,7 @@ class Trial(Thread):
     
     def train_surrogate_model(self, population):
         logging.info('Training model')
-        self.state_dictionary["surrogate_model"].train(population)
+        self.get_surrogate_model().train(population)
     
     def predict_surrogate_model(self, population):
         return self.get_surrogate_model().predict(population)
@@ -236,11 +232,6 @@ class Trial(Thread):
     def increment_counter(self, counter):
         self.set_counter_dictionary(counter, self.get_counter_dictionary(counter) + 1)
         
-    def save(self):
-        self.save_trial(self)
-
-    def load(self, generation=None):
-        return self.load_trial(self, generation)
 
     ### TODO - its just copy and pasted ciode now..w could rewrite it realyl
     def post_model_filter(self, code, mean, variance):
@@ -266,17 +257,20 @@ class Trial(Thread):
             bests_to_model.append(self.get_best())
         if bests_to_model:
             logging.info("Reevaluating")
-            bests_to_fitness = self.surrogate_model.predict(bests_to_model)[1]
+            bests_to_fitness = self.get_surrogate_model().predict(bests_to_model)[1]
             for i,part in enumerate([p for p in self.get_population() if p.best]):
                 part.best.fitness.values = bests_to_fitness[i]
             if self.get_best().model:
                 best.fitness.values = bests_to_fitness[-1]
                 
-    def save_trial(self, trial):
+    def save(self):
         try:
             trial_file = ('{}/{:0' + str(10) +
-                  'd}.txt').format(trial.get_results_folder(),
-                                   trial.get_counter_dictionary('g'))
+                  'd}.txt').format(self.get_results_folder(),
+                                   self.get_counter_dictionary('g'))
+            dict = self.state_dictionary
+            surrogate_model_state_dict = self.get_surrogate_model().get_state_dictionary()
+            dict['surrogate_model_state_dict'] = surrogate_model_state_dict
             with io.open(trial_file, 'wb') as outfile:
                 pickle.dump(dict, outfile)            
         except Exception, e:
@@ -284,12 +278,12 @@ class Trial(Thread):
             return False
             
     ## by default find the latest generation
-    def load_trial(self, trial, generation = None):
+    def load(self, generation = None):
         #try:
         if generation is None:
             # Figure out what the last generation before crash was
             found = False
-            for filename in reversed(os.listdir(trial.results_folder)):
+            for filename in reversed(os.listdir(self.get_results_folder())):
                 match = re.search(r'^(\d+)\.txt', filename)
                 if match:
                     # Found the last generation
@@ -302,12 +296,12 @@ class Trial(Thread):
                 
         generation_file = ('{:0' + str(10) +
                            'd}').format(generation)
-        trial_file = '{}/{}.txt'.format(trial.get_results_folder(), generation_file)
+        trial_file = '{}/{}.txt'.format(self.get_results_folder(), generation_file)
         with open(trial_file, 'rb') as outfile:
             dict = pickle.load(outfile)
-            print dict
-            trial.set_state_dictionary(pickle.load(outfile))
-        
+        self.set_state_dictionary(dict)
+        self.get_surrogate_model().set_state_dictionary(dict['surrogate_model_state_dict'])
+        logging.info("Loaded Trial")
         return True
         #except Exception, e:
         #    logging.error("Loading error" + str(e))
@@ -356,8 +350,11 @@ class Trial(Thread):
     ### GET/SET METHODS ###
     #######################
     
+    def get_state_dictionary(self):
+        return self.state_dictionary
+    
     def set_state_dictionary(self, new_dictionary):
-        self.set_state_dictionary = new_dictionary 
+        self.state_dictionary = new_dictionary 
         
     def get_fitness(self):
         return self.fitness
@@ -384,7 +381,7 @@ class Trial(Thread):
         self.state_dictionary['counter_dictionary'][counter] = value
         
     def get_configuration(self):
-        return self.state_dictionary['configuration']
+        return self.configuration
         
     def set_start_time(self, start_time):
         self.state_dictionary['start_time'] = start_time
@@ -393,10 +390,10 @@ class Trial(Thread):
         return self.state_dictionary['start_time']
     
     def get_surrogate_model(self):
-        return self.state_dictionary["surrogate_model"]
+        return self.surrogate_model
         
     def set_surrogate_model(self, new_model):
-        self.state_dictionary["surrogate_model"] = new_model
+        self.surrogate_model = new_model
         
     def get_wait(self):
         return self.state_dictionary["wait"]

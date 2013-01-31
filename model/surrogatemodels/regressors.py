@@ -63,8 +63,20 @@ class Regressor(object):
         d = dict(self.__dict__)
         del d['controller']
         return d
-
-
+        
+    ###############
+    ### GET/SET ###
+    ###############
+        
+    def get_state_dictionary(self):
+        dict = {'training_set' : self.training_set,
+                'training_fitness': self.training_fitness}
+        return dict
+        
+    def set_state_dictionary(self, dict):
+        self.training_set = dict['training_set']
+        self.training_fitness = dict['training_fitness']
+        
 class GaussianProcessRegressor(Regressor):
 
     def _init_(self, controller):

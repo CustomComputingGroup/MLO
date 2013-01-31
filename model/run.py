@@ -82,8 +82,13 @@ class Run(object):
         # Run trials
         for trial in self.trials:
             ##trial.counter_dictionary['g'] += 1 -- not sure about this one... plus doesnt really has no impact on the perofrmance... same
+            #print trial.get_state_dictionary()
             trial.start()
 
+    def get_run_state_dict(self):
+        return self.state_dictionary
+        
+        
     ## TODO - look into trial save_trial / load_trial class. All of the configuration should be saved in similar way. 
     def save_run_data(self):
         """
@@ -154,5 +159,6 @@ class Run(object):
             if not trial.load():
                 logging.error('Failed loading a trial from {}'.format(
                     trial.results_folder))
-                trial.initialize_population()
+                sys.exit(1)
+            ##print trial.state_dictionary
             self.trials.append(trial)

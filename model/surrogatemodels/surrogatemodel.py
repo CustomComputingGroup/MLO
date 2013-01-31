@@ -18,7 +18,6 @@ class SurrogateModel(object):
     def train(self, pop):
         raise NotImplementedError('SurrogateModel is an abstract class, this '
                                   'should not be called.')
-
     def trained(self):
         return self.was_trained
                                   
@@ -39,6 +38,7 @@ class SurrogateModel(object):
         # Don't pickle fitness and configuration
         d = dict(self.__dict__)
         del d['configuration']
+        del d['fitness']
         return d
 
     def contains_particle(self, part):
@@ -53,6 +53,13 @@ class SurrogateModel(object):
     def max_uncertainty(self):
         pass
 
+    def get_state_dictionary(self):
+        return {"regressor_state_dict" : self.regressor.get_state_dictionary(), "classifier_state_dicts" : self.classifier.get_state_dictionary()}
+        
+    def set_state_dictionary(self, dict):
+        self.regressor.set_state_dictionary(dict["regressor_state_dict"])
+        self.classifier.set_state_dictionary(dict["classifier_state_dicts"])
+        
 class DummySurrogateModel(SurrogateModel):
 
     def train(self, pop):
@@ -94,8 +101,6 @@ class ProperSurrogateModel(SurrogateModel):
         return self.classifier.train(pop) and self.regressor.train(
             pop, self.configuration, dimensions)
         
-
-
     def add_training_instance(self, part, code, fitness, addReturn):
         self.classifier.add_training_instance(part, code)
         if addReturn[0] == 0: ## only update regressor if the fitness function produced a result
