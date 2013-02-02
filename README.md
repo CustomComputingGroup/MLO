@@ -64,16 +64,26 @@ testing contains all of the testing scripts. Currently implementing regression t
 -----------------------------------------------------------------------------------------------------------------------
 
 creates the code of VIEW part of the MVC system. All modes, currently GUI and TERMINAL, reside in this directory. All 
-the possible visualizers are also containted in this directory. 
+the possible visualizers are also containted in this directory. All the modes(views) are notified of changes within the
+model by the controller update method call. 
 
-#### modes.py script contains the code that starts up relevant mode. Currently either terminal or gui. 
 
-#### gui folder contains gui code. 
+#### modes.py 
+script contains the code that starts up relevant mode. Currently either terminal or gui. 
 
-#### visualizers folder contains model visuzalization relevant scripts. Visualizers can be used to generate reports, 
+#### gui 
+folder contains gui code. 
+
+#### gui/windows.py
+contains the whole of gui implementation
+
+#### gui/images
+contains images needed to generate gui.
+
+#### visualizers 
+folder contains model visuzalization relevant scripts. Visualizers can be used to generate reports, 
 images, plots and others. Currently only plot visuzalizer of the PSOTrial is avaiable (MLOImageViewer). 
 
-all the viewers are notified of changes within the model by the update method call. 
 
 -----------------------------------------------------------------------------------------------------------------------
 ###controller
