@@ -109,7 +109,6 @@ class Trial(Thread):
         # Initialise termination check
         
         self.check = False
-#        self.view_update()
 
         while self.get_counter_dictionary('g') < self.get_configuration().max_iter + 1:
             logging.info('[{}] Generation {}'.format(
@@ -118,11 +117,13 @@ class Trial(Thread):
                 self.get_name(), self.get_counter_dictionary('fit')))
                 
             self.view_update()
+                
             # termination condition - we put it here so that when the trial is reloaded
             # it wont run if the run has terminated already
             if self.get_terminating_condition(): 
+                logging.info('Terminating condition reached...')
                 break
-                
+            
             # Roll population
             first_pop = self.get_population().pop(0)
             self.get_population().append(first_pop)
@@ -207,8 +208,6 @@ class Trial(Thread):
         
         if addReturn[0] == 0:
             self.set_terminating_condition(fitness) 
-            if self.get_terminating_condition():
-                logging.info('Terminating condition reached...' + str(part) + ' ' + str(fitness))
             return fitness, code
         else:
             return array([self.fitness.worst_value]), code
@@ -232,7 +231,6 @@ class Trial(Thread):
     def increment_counter(self, counter):
         self.set_counter_dictionary(counter, self.get_counter_dictionary(counter) + 1)
         
-
     ### TODO - its just copy and pasted ciode now..w could rewrite it realyl
     def post_model_filter(self, code, mean, variance):
         if (code is None) or (mean is None) or (variance is None):
@@ -479,10 +477,10 @@ class PSOTrial(Trial):
                               conf=self.get_configuration(),
                               designSpace=design_space)
         self.toolbox.register('evaluate', self.fitness_function)
-        self.state_dictionary['at_least_one_in_valid_region'] = False
         
     def initialize_population(self):
         ## the while loop exists, as meta-heuristic makes no sense till we find at least one particle that is within valid region...
+        
         self.set_at_least_one_in_valid_region(False)
         while (not self.get_at_least_one_in_valid_region()):
             self.set_population(self.toolbox.population(self.get_configuration().population_size))
@@ -496,6 +494,7 @@ class PSOTrial(Trial):
                     self.set_at_least_one_in_valid_region((part.code == 0) or self.get_at_least_one_in_valid_region())
             ## add one example till we find something that works
             self.get_configuration().F = 1
+        
 
     def meta_iterate(self):
         #TODO - reavluate one random particle... do it.. very important!
@@ -645,7 +644,10 @@ class PSOTrial(Trial):
         return self.get_counter_dictionary('g')
         
     def set_at_least_one_in_valid_region(self, state):
-        self.state_dictionary['at_least_one_in_valid_region'] = state
+        if self.state_dictionary.has_key('at_least_one_in_valid_region'):
+            self.state_dictionary['at_least_one_in_valid_region'] = state
+        else:
+            self.state_dictionary['at_least_one_in_valid_region'] = False
 
     def get_at_least_one_in_valid_region(self):
         return self.state_dictionary['at_least_one_in_valid_region']

@@ -31,12 +31,12 @@ class RunWindow(wx.Frame):
         file_menu = wx.Menu()
         menu_new = file_menu.Append(wx.ID_NEW, '&New run',
                                     ' Create new run')
-        menu_reload = file_menu.Append(wx.ID_OPEN, '&Reload run',
-                                       ' Reload run')
+        menu_load = file_menu.Append(wx.ID_OPEN, '&load run',
+                                       ' load run')
         menu_exit = file_menu.Append(wx.ID_EXIT, 'E&xit',
                                      ' Quit')
         self.Bind(wx.EVT_MENU, self.on_new, menu_new)
-        self.Bind(wx.EVT_MENU, self.on_reload, menu_reload)
+        self.Bind(wx.EVT_MENU, self.on_load, menu_load)
         self.Bind(wx.EVT_MENU, self.on_exit, menu_exit)
 
         menu_bar.Append(file_menu, '&File')
@@ -69,8 +69,8 @@ class RunWindow(wx.Frame):
         new_trial_button = wx.Button(self.panel, label='New Run From Scripts')
         new_trial_button.Bind(wx.EVT_BUTTON, self.on_new)
         button_sizer.Add(new_trial_button, 1, wx.GROW | wx.RIGHT, 10)
-        old_trial_button = wx.Button(self.panel, label='Reload Run From CSV')
-        old_trial_button.Bind(wx.EVT_BUTTON, self.on_reload)
+        old_trial_button = wx.Button(self.panel, label='Load Run')
+        old_trial_button.Bind(wx.EVT_BUTTON, self.on_load)
         button_sizer.Add(old_trial_button, 1, wx.GROW)
 
         main_sizer.Add(button_sizer, 0,
@@ -154,8 +154,8 @@ class RunWindow(wx.Frame):
         self.childlist.append(NewRunWindow(self, 'New Run'))
         event.Skip()
 
-    def on_reload(self, event):
-        self.childlist.append(ReloadRunWindow(self, 'Reload Run'))
+    def on_load(self, event):
+        self.childlist.append(loadRunWindow(self, 'load Run'))
         event.Skip()
 
     def on_pause(self, event):
@@ -217,8 +217,8 @@ class RunWindow(wx.Frame):
     def start_run(self, name, fitness, configuration):
         self.controller.start_run(name, fitness, configuration)
 
-    def reload_run(self, folder_path):
-        self.controller.reload_run(folder_path)
+    def load_run(self, folder_path):
+        self.controller.load_run(folder_path)
 
     def update_trial(self, event):
         ### Called to update display to represent trial's changed state
@@ -714,10 +714,10 @@ class NewRunWindow(wx.Frame):
                 logging.error('File Dialog incorrectly called')
 
 
-class ReloadRunWindow(wx.Frame):
+class loadRunWindow(wx.Frame):
 
     def __init__(self, parent, title):
-        super(ReloadRunWindow, self).__init__(parent, title=title,
+        super(loadRunWindow, self).__init__(parent, title=title,
                                               size=(600, 170),
                                               style=wx.DEFAULT_FRAME_STYLE ^
                                               wx.RESIZE_BORDER)
@@ -731,7 +731,7 @@ class ReloadRunWindow(wx.Frame):
 
         ### CSV sizer and description
         select_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        select_button = wx.Button(self.panel, label='Select CSV Folder',
+        select_button = wx.Button(self.panel, label='Select Run Folder',
                                   size=(200, -1))
         select_button.Bind(wx.EVT_BUTTON, self.on_open_file)
         self.selected_folder_name = wx.StaticText(self.panel, -1,
@@ -773,7 +773,7 @@ class ReloadRunWindow(wx.Frame):
                           wx.OK | wx.ICON_EXCLAMATION)
             return
 
-        self.GetParent().reload_run(self.folder_path)
+        self.GetParent().load_run(self.folder_path)
         self.Close(True)
 
     def on_cancel(self, event):

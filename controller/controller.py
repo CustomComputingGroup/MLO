@@ -40,10 +40,10 @@ class Controller(object):
         run.run()
         return run
 
-    def reload_run(self, run_path):
+    def load_run(self, run_path):
         run = Run(None, None, None, self)
         run.results_folder_path = run_path
-        run.reload()
+        run.load()
 
     def register_trial(self, trial):
         self.trials[trial.get_name()] = trial

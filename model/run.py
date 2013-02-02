@@ -3,6 +3,8 @@ import os
 import sys
 from threading import Thread
 from time import strftime
+import io
+import pickle 
 
 from utils import load_script
 
@@ -11,40 +13,53 @@ class Run(object):
 
     def __init__(self, name, fitness, configuration, controller):
         self.trials = []
-        if configuration:
-            self.no_of_trials = configuration.trials_count
-        self.name = name
+        
         self.fitness = fitness
         self.configuration = configuration
         self.controller = controller
-
+        self.set_trial_type() ## TODO
+        fitness_file_name = None
+        configuration_file_name = None
+        if fitness:
+            fitness_file_name = os.path.abspath(self.fitness.__file__)
+            if fitness_file_name[-1] == 'c':  # .pyc
+                fitness_file_name = fitness_file_name[:-1]
+        if configuration:
+            configuration_file_name = os.path.abspath(
+                self.configuration.__file__)
+            if configuration_file_name[-1] == 'c':  # .pyc
+                configuration_file_name = configuration_file_name[:-1]
+        self.state_dictionary = {"fitness_file_name": fitness_file_name,
+                                 "configuration_file_name" : configuration_file_name,
+                                 "name": name,
+                                 }
+                                 
+        if configuration:
+            self.set_no_of_trials(configuration.trials_count)
+        
     def run(self):
         # Initialise results folder
         now = strftime('%Y-%m-%d_%H-%M-%S')
         self.results_folder_path = '{}/{}'.format(
             self.configuration.results_folder_path, now)
-
-        ## TODO - add different trial types..
-        ##Trial = self.configuration.trials_type
-        from trials.trial import PSOTrial
-        Trial = PSOTrial
         
         # Initialise trials
-        for trial_no in range(1, self.no_of_trials + 1):
-            trial = Trial(trial_no, self.name, self.fitness,
+        for trial_no in range(0, self.get_no_of_trials()):
+            trial = self.get_trial_type()(trial_no, self.get_name(), self.fitness,
                           self.configuration, self.controller,
                           self.results_folder_path)
             trial.daemon = True
             if trial.initialise():
                 self.trials.append(trial)
 
-        self.save_run_data()
+        self.save()
 
         # Run trials
         for trial in self.trials:
             trial.start()
 
     ## TODO - this has to be changed... its just that ctrl+c wont be propagated otherwise...
+    
     def join(self):
         for trial in self.trials:
             trial.join(100000000)
@@ -56,7 +71,7 @@ class Run(object):
         logging.debug('Restarting the Run')
 
         try:
-            with open('run_data.txt', 'r') as run_data:
+            with open(self.get_run_file(), 'rb') as run_data:
                 self.results_folder_path = run_data.readline().rstrip('\n')
         except:
             logging.error('Error loading run_data.txt. Cannot restart without '
@@ -64,101 +79,81 @@ class Run(object):
             print sys.exc_info()[1]
             sys.exit(1)
 
-        self.load_run_data()
-
         # Run trials
         for trial in self.trials:
-            ##trial.counter_dictionary['g'] += 1  -- not sure about this one... plus doesnt really has no impact on the perofrmance...
             trial.start()
 
-    def reload(self):
-        """
-        Reloading Run when reopened from CSV and TXT files.
-        """
-        logging.debug('Reloading the Run')
-
-        self.load_run_data()
-
-        # Run trials
-        for trial in self.trials:
-            ##trial.counter_dictionary['g'] += 1 -- not sure about this one... plus doesnt really has no impact on the perofrmance... same
-            #print trial.get_state_dictionary()
-            trial.start()
-
-    def get_run_state_dict(self):
-        return self.state_dictionary
-        
-        
-    ## TODO - look into trial save_trial / load_trial class. All of the configuration should be saved in similar way. 
-    def save_run_data(self):
-        """
-        Saves settings of the run so that they can be recovered later.
-        """
-        # Save run data needed for automatic recovery
-        with open('run_data.txt', 'w') as run_data:
-            run_data.write(self.results_folder_path)
-            run_data.write('\n')
-
-        # Save run data needed for reloading the run
-        fitness_file_name = os.path.abspath(self.fitness.__file__)
-        if fitness_file_name[-1] == 'c':  # .pyc
-            fitness_file_name = fitness_file_name[:-1]
-        configuration_file_name = os.path.abspath(
-            self.configuration.__file__)
-        if configuration_file_name[-1] == 'c':  # .pyc
-            configuration_file_name = configuration_file_name[:-1]
-        with open(self.results_folder_path + '/run_data.txt', 'w') as run_data:
-            run_data.write(self.name)
-            run_data.write('\n')
-            run_data.write(fitness_file_name)
-            run_data.write('\n')
-            run_data.write(configuration_file_name)
-            run_data.write('\n')
-            for trial in self.trials:
-                run_data.write(trial.get_results_folder())
-                run_data.write('\n')
-
-    def load_run_data(self):
-        """
-        Loads settings of a previously crashed run from the disc.
-        """
-        trial_results_folders = []
-
-        run_file = self.results_folder_path + '/run_data.txt'
-        logging.info(run_file)
-        logging.info(self.results_folder_path)
+    def load(self):
+        logging.info('Loading the Run')
         try:
-            with open(run_file, 'r') as run_data:
-                self.name = run_data.readline().rstrip('\n')
-                fitness = run_data.readline().rstrip('\n')
-                self.fitness = load_script(fitness, 'fitness')
-                configuration = run_data.readline().rstrip('\n')
-                self.configuration = load_script(configuration,
-                                                 'configuration')
-                if not self.fitness or not self.configuration:
-                    raise 'Error loading scripts'
-
-                for line in run_data:
-                    trial_results_folders.append(line.rstrip('\n'))
-        except:
+            with open(self.get_run_file(), 'rb') as outfile:
+               dict = pickle.load(outfile)
+               self.configuration = load_script(dict["configuration_file_name"],'configuration')
+               self.fitness = load_script(dict["fitness_file_name"],'fitness')
+        except Exception, e:
             logging.error('Error loading run\'s run_data.txt. Cannot restart '
-                          'without this file.')
+                          'without this file. {}'.format(str(e)))
             logging.error('Could not load fitness and/or configuration '
-                          'scripts. Terminating...')
-            print sys.exc_info()[1]
+                          'scripts. Terminating...')            
+            logging.error('Check if configuration script ' + str(dict["configuration_file_name"]) + ' and fitness script ' + str(dict["fitness_file_name"]) + ' are in the specified directories.')
             sys.exit(1)
-
-        self.no_of_trials = self.configuration.trials_count
-        #Trial = self.configuration.trials_type
-        from trials.trial import PSOTrial
-        Trial = PSOTrial
-        for trial_no in range(1, self.no_of_trials + 1):
-            trial = Trial(trial_no, self.name, self.fitness,  self.configuration, self.controller, self.results_folder_path)
-            trial.results_folder = trial_results_folders[trial_no - 1]
+        
+        self.set_state_dictionary(dict)
+        self.set_trial_type()
+        
+        for trial_no in range(0, self.get_no_of_trials()): ###
+            trial = self.get_trial_type()(trial_no, self.get_name(), self.fitness,  self.configuration, self.controller, self.results_folder_path)
             trial.run_initialize()
+            trial.daemon = True
             if not trial.load():
-                logging.error('Failed loading a trial from {}'.format(
-                    trial.results_folder))
+                logging.error('Failed loading a trial no.'.format(
+                    trial.get_trial_no()))
                 sys.exit(1)
             ##print trial.state_dictionary
             self.trials.append(trial)
+            
+        # Run trials
+        for trial in self.trials:
+            trial.start()
+        
+    def save(self):
+        try:
+            dict = self.get_state_dictionary()
+            with open(self.results_folder_path + '/run_data.txt', 'w') as outfile:
+                pickle.dump(dict, outfile)    
+        except Exception, e:
+            logging.error(str(e))
+            return False
+                        
+    #############
+    ## GET/SET ##
+    #############
+    
+    def get_run_file(self):
+        return self.results_folder_path + '/run_data.txt'
+    
+    def set_state_dictionary(self, dict):
+        self.state_dictionary = dict
+        
+    def get_state_dictionary(self):
+        return self.state_dictionary
+
+    def get_no_of_trials(self):
+        return self.state_dictionary["no_of_trials"]
+        
+    def set_no_of_trials(self, num):
+        self.state_dictionary["no_of_trials"] = num    
+        
+    def set_name(self, name):
+        self.state_dictionary["name"] = name
+        
+    def get_name(self):
+        return self.state_dictionary["name"]
+        
+    def set_trial_type(self):
+        from trials.trial import PSOTrial
+        self.Trial = PSOTrial
+     
+    def get_trial_type(self):
+        return self.Trial
+        
