@@ -50,6 +50,9 @@ Contains reconfigurable computing fitness function examples. The fitness functio
 well documentated papers, and used for research purpose. Preferably csv files containing the fitness functions and scripts
 used to obtain this are provided. 
 
+Each folder within examples directory contains a fitnes and configuration script. each of the folder contains a small 
+README.txt file refereing to fitness function relevant literature. 
+
 -----------------------------------------------------------------------------------------------------------------------
 ###testing
 -----------------------------------------------------------------------------------------------------------------------
@@ -60,16 +63,33 @@ testing contains all of the testing scripts. Currently implementing regression t
 ###views
 -----------------------------------------------------------------------------------------------------------------------
 
-creates the code of view part of the MVC system. All modes, currently GUI and TERMINAL, reside in this directory. All 
-the possible visualizers are also containted in this directory. Visualizers can be used to generate reports, images
-and others. 
+creates the code of VIEW part of the MVC system. All modes, currently GUI and TERMINAL, reside in this directory. All 
+the possible visualizers are also containted in this directory. 
+
+#### modes.py script contains the code that starts up relevant mode. Currently either terminal or gui. 
+
+#### gui folder contains gui code. 
+
+#### visualizers folder contains model visuzalization relevant scripts. Visualizers can be used to generate reports, 
+images, plots and others. Currently only plot visuzalizer of the PSOTrial is avaiable (MLOImageViewer). 
+
+all the viewers are notified of changes within the model by the update method call. 
 
 -----------------------------------------------------------------------------------------------------------------------
 ###controller
 -----------------------------------------------------------------------------------------------------------------------
 
-contains code of the controller of the applications. Model and View use it to communiate with each other. 
+Contains code of the controller of the applications. MODEL and VIEW use it to communiate with each other. 
 It also contains code of visualizer, which is used to generate any plots and reports.  
+
+#### controller.py 
+it is a script used to define top level of the controller. It contains methods to provide comunication
+between the VIEW and MODEL.
+
+#### visualizer.py
+It is a pool of workers that recieves visualization jobs from the controller/viewer. It recieves
+a snapshot of the model and a reference to a visualization function. currently it is a multi-threaded process, it could
+be ported onto a computer cluster. 
 
 -----------------------------------------------------------------------------------------------------------------------
 ###model
@@ -78,12 +98,27 @@ It also contains code of visualizer, which is used to generate any plots and rep
 contains code of the optimization algorithms, runs, trials and surrogate models. It contains code to back them up
 based on save data. 
 
+#### surrogatemodels 
+contains code of the avaiable regressors, classifiers and surrogate model frameworks. Currently there are two flavours
+of GPR available for regression , and one flavour of SVM for classification. Feel free to extend if neccesary. 
+
+#### trials/trial 
+contains the code of all possible trial types. Other scritps within the trials directory are specific
+to trial types. Currently only one flavour of MLO is implemented the PSOTrial, which with the GP/SVM surrogate 
+model is the MLO algorithm presented in the FPT'12/ARC'13 papers. 
+
+#### run.py 
+scripts prepares a bunch of trials of the same type, using a configuration script, and runs them. 
+
 -----------------------------------------------------------------------------------------------------------------------
 ###scripts within the directory
 -----------------------------------------------------------------------------------------------------------------------
-For detailed architecture of the application please refer to doc/groupproj-rep13.pdf
 
+#### optimizer.py 
+the optimizer initialization script
 
+#### utils.py
+some utility functions used throught the whole application. 
 ************************************************************************************************************************
 
 ##Version convention vA.B.C.
