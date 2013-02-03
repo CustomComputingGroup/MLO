@@ -253,7 +253,7 @@ class RunWindow(wx.Frame):
         bar.SetValue(trial.get_main_counter())
 
     def get_graph_attributes(self, trial, graph_name):
-        return self.controller.get_graph_attributes(trial, graph_name)
+        return self.plot_view.get_attributes(graph_name)
 
     def visuzalize_trial(self, trial):
         snapshot = trial.snapshot()
@@ -329,12 +329,11 @@ class GraphWindow(wx.Frame):
 
     def on_regenerate(self, event):
         trial = self.trial
-        for iteration in self.trial.get_iterator():
-            from ..model.trials.trial import PSOTrial ## TODO -... you know what
-            Trial = PSOTrial
+        for iteration in self.trial.get_main_counter_iterator():
+            Trial = trial.configuration.trials_type
             vis_trial = Trial(trial.get_trial_no(), trial.get_name(), trial.get_fitness(),
                               trial.get_configuration(), trial.controller,
-                              trial.run_results_folder_path)
+                              trial.get_run_results_folder_path())
             vis_trial.load(iteration)
             self.visuzalize_trial(vis_trial)
         
@@ -410,13 +409,12 @@ class GraphWindow(wx.Frame):
         else:
             self.bmp.SetBitmap(wx.BitmapFromImage(image))   
 
-    
     def regenerate_graph(self, trial):
         logging.debug('current plot: {}'.format(self.current_plot))
         gd = trial.graph_dictionary  # Save graph_dictionary
         Trial = trial.configuration.trials_type
-        vis_trial = Trial(trial.trial_no, trial.name, trial.fitness,
-                          trial.configuration, trial.controller,
+        vis_trial = Trial(trial.get_trial_no(), trial.get_name(), trial.get_fitness(),
+                          trial.get_configuration(), trial.controller,
                           trial.run_results_folder_path)
         vis_trial.set_results_folder(trial.get_results_folder())
         vis_trial.load(generation)
@@ -497,12 +495,11 @@ class OptionsWindow(wx.Frame):
         option_sizer.Add(checkbox_sizer, 0, wx.GROW)
 
         ### Generate and add sizers for each attribute
-        attributes = self.trial.controller.get_graph_attributes(self.trial,
-                                                                'All')
+        attributes = self.get_graph_attributes(self.trial, 'All')
         graph_attributes_dictionary = {}
         for graph_name in self.graph_names:
             graph_attributes_dictionary[graph_name] = \
-                self.trial.controller.get_graph_attributes(self.trial, graph_name)
+                self.get_graph_attributes(self.trial, graph_name)
 
         for attribute in attributes:
             generate = False
@@ -564,9 +561,7 @@ class OptionsWindow(wx.Frame):
             trial_gd[graph_name]['generate'] = \
                 self.checkbox_dictionary[graph_name].IsChecked()
 
-            attributes = \
-                self.trial.controller.get_graph_attributes(self.trial,
-                                                           graph_name)
+            attributes = self.get_graph_attributes(self.trial, graph_name)
             for attribute in attributes:
                 trial_gd[graph_name][attribute] = \
                     self.tc_dictionary[attribute+graph_name].GetValue()
@@ -574,6 +569,9 @@ class OptionsWindow(wx.Frame):
         self.trial.get_graph_dictionary()['rerendering'] = True
         self.GetParent().regenerate_graph(self.trial)
         self.Close(True)
+        
+    def get_graph_attributes(self, trial, graph_name):
+        return self.GetParent().get_graph_attributes(trial, graph_name)
 
 
 class NewRunWindow(wx.Frame):

@@ -13,7 +13,6 @@ class Run(object):
 
     def __init__(self, name, fitness, configuration, controller):
         self.trials = []
-        
         self.fitness = fitness
         self.configuration = configuration
         self.controller = controller
@@ -31,13 +30,16 @@ class Run(object):
                 configuration_file_name = configuration_file_name[:-1]
         self.state_dictionary = {"fitness_file_name": fitness_file_name,
                                  "configuration_file_name" : configuration_file_name,
-                                 "name": name,
+                                 "name" : name,
+                                 "wait" : False,
+                                 "status" : "Running"
                                  }
                                  
         if configuration:
             self.set_no_of_trials(configuration.trials_count)
         
     def run(self):
+        self.controller.register_run(self)
         # Initialise results folder
         now = strftime('%Y-%m-%d_%H-%M-%S')
         self.results_folder_path = '{}/{}'.format(
@@ -63,25 +65,6 @@ class Run(object):
     def join(self):
         for trial in self.trials:
             trial.join(100000000)
-
-    def restart(self):
-        """
-        Restarting the Run after it crashed.
-        """
-        logging.debug('Restarting the Run')
-
-        try:
-            with open(self.get_run_file(), 'rb') as run_data:
-                self.results_folder_path = run_data.readline().rstrip('\n')
-        except:
-            logging.error('Error loading run_data.txt. Cannot restart without '
-                          'this file. Terminating...')
-            print sys.exc_info()[1]
-            sys.exit(1)
-
-        # Run trials
-        for trial in self.trials:
-            trial.start()
 
     def load(self):
         logging.info('Loading the Run')
@@ -125,10 +108,32 @@ class Run(object):
             logging.error(str(e))
             return False
                         
+    ## creates a snapshot dictionary representing the state of the trials within the run.. basically get snapshots from all the trials.
+    ## feel free to add anything extra you thing would be neccesary to generate views of a run
+    def snapshot(self):
+        snapshot_dict = {"trial_type" : self.get_trial_type(),
+                         "run_name" : self.get_name()
+                         }
+        for trial in self.trials:
+            snapshot_dict[tria.get_name()] = trial.snapshot()
+        return snapshot_dict
+        
     #############
     ## GET/SET ##
     #############
     
+    def get_status(self):
+        return self.state_dictionary["status"]
+
+    def set_status(self, status):
+        self.state_dictionary["status"] = status
+    
+    def get_wait(self):
+        return self.state_dictionary["wait"]
+    
+    def set_wait(self, wait):
+        self.state_dictionary["wait"] = True
+        
     def get_run_file(self):
         return self.results_folder_path + '/run_data.txt'
     
@@ -157,3 +162,5 @@ class Run(object):
     def get_trial_type(self):
         return self.Trial
         
+    def set_results_folder_path(self, folder):
+        self.results_folder_path = folder

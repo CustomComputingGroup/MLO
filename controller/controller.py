@@ -11,6 +11,7 @@ class Controller(object):
     def __init__(self, restart):
         self.restart = restart
         self.trials = {}
+        self.runs = {}
         max_training_process = 3
         self.training_sema = Semaphore(value=max_training_process)
 
@@ -22,10 +23,17 @@ class Controller(object):
             
         self.visualizer.daemon = True
             
+    ## gui methods
+            
+    def view_update(self, trial):
+        self.view.update(trial)
+            
     def take_over_control(self):
         self.visualizer.start()
         self.view.initialize(self)
         self.visualizer.join(10000000) ## check... gui ctr+c might not work, setting 100000000000 time might work :)
+        
+    ## Run class methods
         
     def start_run(self, name, fitness, configuration):
         if not name:
@@ -42,9 +50,48 @@ class Controller(object):
 
     def load_run(self, run_path):
         run = Run(None, None, None, self)
-        run.results_folder_path = run_path
+        run.set_results_folder_path(run_path)
         run.load()
 
+    def delete_run(self, name):
+        run = self.runs[name]
+        self.runs = {key: value for key, value
+                       in self.trials.items()
+                       if key != name}
+                       
+    def register_run(self, run):
+        self.runs[run.get_name()] = run
+
+    def get_run_status(self, name):
+        return self.runs[name].get_status()
+
+    def find_run(self, name):
+        return self.runs[name]
+
+    def delete_run_trials(self, name):
+        run = find_run(name)
+        runs_trials = run.get_trials()
+        for trial in runs_trials:
+            delete_trial(self, trial.get_name())
+                       
+    def pause_run(self, name):
+        run = self.runs[name]
+        run.set_wait(True)
+        run.set_status("Paused")
+        runs_trials = run.get_trials()
+        for trial in runs_trials:
+            pause_trial(self, trial.get_name())
+        
+    def resume_run(self, name):
+        run = self.runs[name]
+        run.set_wait(False)
+        run.set_status("Running")
+        runs_trials = run.get_trials()
+        for trial in runs_trials:
+            resume_trial(self, trial.get_name())
+        
+    ### trial managment methods
+        
     def register_trial(self, trial):
         self.trials[trial.get_name()] = trial
 
@@ -59,31 +106,29 @@ class Controller(object):
         self.trials = {key: value for key, value
                        in self.trials.items()
                        if key != name}
-
+                       
     def pause_trial(self, name):
         trial = self.trials[name]
-        trial.wait = True
-        trial.status = "Paused"
+        trial.set_wait(True)
+        trial.set_status("Paused")
         self.view_update(trial)
 
     def resume_trial(self, name):
         trial = self.trials[name]
-        trial.wait = False
-        trial.status = "Running"
+        trial.set_wait(False)
+        trial.set_status("Running")
         self.view_update(trial)
 
-    def get_graph_attributes(self, trial, name):
-        return self.plot_view.get_attributes(name)
+    ## visualizer methods
 
     def visualize(self, snapshot, render_function):
         self.visualizer.add_job(render_function, snapshot)
 
-    def view_update(self, trial):
-        self.view.update(trial)
-
     def kill_visualizer(self):
         self.visualizer.terminate()
 
+    ## training schemas for the regressors. neccesary as they are not thread safe. 
+        
     def acquire_training_sema(self):
         self.training_sema.acquire()
 

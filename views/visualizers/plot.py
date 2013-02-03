@@ -255,7 +255,6 @@ class MLOImageViewer(object):
                 data = d['meta_plot'][key]["data"]
                 plot.scatter(array([item[0] for item in data]),array([item[1] for item in data]), c="white",marker=d['meta_plot'][key]["marker"])
         
-        
     @staticmethod
     def get_attributes(name):
         attribute_dictionary = {
