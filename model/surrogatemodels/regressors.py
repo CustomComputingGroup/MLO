@@ -69,13 +69,12 @@ class Regressor(object):
     ###############
         
     def get_state_dictionary(self):
-        dict = {'training_set' : self.training_set,
-                'training_fitness': self.training_fitness}
-        return dict
+        raise NotImplementedError('Trial is an abstract class, '
+                                  'this should not be called.')
         
     def set_state_dictionary(self, dict):
-        self.training_set = dict['training_set']
-        self.training_fitness = dict['training_fitness']
+        raise NotImplementedError('Trial is an abstract class, '
+                                  'this should not be called.')
         
 class GaussianProcessRegressor(Regressor):
 
@@ -130,6 +129,11 @@ class GaussianProcessRegressor(Regressor):
 
     def predict(self, z):
         try:
+            # Scale inputs. it allows us to realod the regressor not retraining the model
+            self.input_scaler = preprocessing.Scaler().fit(self.training_set)
+            self.output_scaler = preprocessing.Scaler(with_std=False).fit(
+                self.training_fitness) 
+                
             #logging.debug(z)
             MU, S2 = self.regr.predict(self.input_scaler.transform(array(z)),
                                        eval_MSE=True)
@@ -145,8 +149,20 @@ class GaussianProcessRegressor(Regressor):
     def fit_data(self, gp, scaled_training_set, adjusted_training_fitness,
                  child_end):
         gp.fit(scaled_training_set, adjusted_training_fitness)
-        child_end.send(gp)
-
+        child_end.send(gp)    
+        
+    def get_state_dictionary(self):
+        dict = {'training_set' : self.training_set,
+                'training_fitness': self.training_fitness,
+                'gp': self.gp.get_params(deep)}
+        return dict
+        
+    def set_state_dictionary(self, dict):
+        self.training_set = dict['training_set']
+        self.training_fitness = dict['training_fitness']
+        self.gp = GaussianProcess()
+        self.gp.set_params(dict['gp'])
+        
         
 ## Different implementation of GPR regression
 class GaussianProcessRegressor2(Regressor):
@@ -201,7 +217,7 @@ class GaussianProcessRegressor2(Regressor):
                     except Exception,e:
                         pass
                 ## the gp with highest likelihood becomes the new hyperparameter set
-                self.gp = gp_best
+                self.set_gp(gp_best)
             except Exception,e:
                 ### will try to retarin till succesful
                 logging.info('Regressor training failed.. retraining.. {}'.format(e))
@@ -214,7 +230,17 @@ class GaussianProcessRegressor2(Regressor):
             
     def predict(self, z):
         try:
-            results = gpr.gp_pred(self.gp, self.covfunc, self.scaled_training_set, self.adjusted_training_fitness, self.input_scaler.transform(array(z))) # get predictions for unlabeled data ONLY
+            # Scale inputs. it allows us to realod the regressor not retraining the model
+            self.input_scaler = preprocessing.Scaler().fit(self.training_set)
+            self.output_scaler = preprocessing.Scaler(with_std=False).fit(
+                self.training_fitness) 
+            self.adjusted_training_fitness = self.output_scaler.transform(
+                self.training_fitness)
+            self.scaled_training_set = self.input_scaler.transform(
+                self.training_set)
+                
+            ## do predictions
+            results = gpr.gp_pred(self.get_gp(), self.covfunc, self.scaled_training_set, self.adjusted_training_fitness, self.input_scaler.transform(array(z))) # get predictions for unlabeled data ONLY
             MU = self.output_scaler.inverse_transform(results[0])
             S2 = results[1]
             ##get rid of negative variance... refer to some papers (there is a lot of it out there)
@@ -226,7 +252,25 @@ class GaussianProcessRegressor2(Regressor):
             logging.error('Prediction failed.. {}'.format(e))
             return None, None
     
+    def set_gp(self, gp):
+        self.gp = gp
     
+    def get_gp(self):
+        return self.gp
+        
+    def get_state_dictionary(self):
+        dict = {'training_set' : self.training_set,
+                'training_fitness': self.training_fitness,
+                'covfunc': self.covfunc,
+                'gp': self.gp}
+        return dict
+        
+    def set_state_dictionary(self, dict):
+        self.training_set = dict['training_set']
+        self.training_fitness = dict['training_fitness']
+        self.gp = dict['gp']
+        self.covfunc = dict['covfunc']
+        
     # def returnMaxS2(pop,resultsFolder,iterations,toolbox,npts=200,d1=0,d2=1,fitness=None,gp=None,hypercube=None):
     # global gpTrainingSet,gpTrainingFitness,clf
     

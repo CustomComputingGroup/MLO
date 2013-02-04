@@ -55,6 +55,7 @@ class Trial(Thread):
             'model_failed' : False,
             'run_results_folder_path' : run_results_folder_path,
             'run_name' : run_name,
+            'trial_type' : self.configuration.trials_type, 
             'trial_no' : trial_no,
             'name' : '{} Trial {}'.format(run_name, trial_no),
             'all_particles_in_invalid_area' : False,
@@ -290,6 +291,9 @@ class Trial(Thread):
     def get_images_folder(self):
         return self.get_results_folder() + "/images"
         
+    def get_trial_type(self):
+        return self.state_dictionary["trial_type"]
+        
 class PSOTrial(Trial):
 
     #######################
@@ -363,7 +367,11 @@ class PSOTrial(Trial):
         # Initialise termination check
         
         self.check = False
-
+        logging.info('Initial model training')
+        self.train_surrogate_model(self.get_population()) 
+        ## we do this not to retrain model twice during the first iteration. If we ommit
+        ## this bit of code the first view_update wont have a model aviable.
+        self.set_retrain_model(False) 
         while self.get_counter_dictionary('g') < self.get_configuration().max_iter + 1:
             logging.info('[{}] Generation {}'.format(
                 self.get_name(), self.get_counter_dictionary('g')))

@@ -2,10 +2,11 @@ import os
 import logging
 from imp import load_source
 import time
-
 import wx
 from wx.lib.newevent import NewEvent
+
 from ..visualizers.plot import MLOImageViewer
+from utils import get_trial_constructor
 
 UpdateEvent, EVT_UPDATE = NewEvent()
 RegenEvent, EVT_REGEN = NewEvent()
@@ -253,11 +254,11 @@ class RunWindow(wx.Frame):
         bar.SetValue(trial.get_main_counter())
 
     def get_graph_attributes(self, trial, graph_name):
-        return self.plot_view.get_attributes(graph_name)
+        return self.plot_view.get_attributes(graph_name)  ### TODO -- change this so that the plow_view is going to be selected based on the trial type
 
     def visuzalize_trial(self, trial):
         snapshot = trial.snapshot()
-        self.controller.visualize(snapshot, self.plot_view.render)
+        self.controller.visualize(snapshot, self.plot_view.render) ### TODO -- change this so that the plow_view is going to be selected based on the trial type
         
 class GraphWindow(wx.Frame):
 
@@ -330,7 +331,7 @@ class GraphWindow(wx.Frame):
     def on_regenerate(self, event):
         trial = self.trial
         for iteration in self.trial.get_main_counter_iterator():
-            Trial = trial.configuration.trials_type
+            Trial = get_trial_constructor(trial.get_trial_type())
             vis_trial = Trial(trial.get_trial_no(), trial.get_name(), trial.get_fitness(),
                               trial.get_configuration(), trial.controller,
                               trial.get_run_results_folder_path())
@@ -412,11 +413,10 @@ class GraphWindow(wx.Frame):
     def regenerate_graph(self, trial):
         logging.debug('current plot: {}'.format(self.current_plot))
         gd = trial.graph_dictionary  # Save graph_dictionary
-        Trial = trial.configuration.trials_type
+        Trial = get_trial_constructor(trial.get_trial_type())
         vis_trial = Trial(trial.get_trial_no(), trial.get_name(), trial.get_fitness(),
                           trial.get_configuration(), trial.controller,
                           trial.run_results_folder_path)
-        vis_trial.set_results_folder(trial.get_results_folder())
         vis_trial.load(generation)
         vis_trial.graph_dictionary = gd
         self.visuzalize_trial(trial)

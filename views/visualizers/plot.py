@@ -15,16 +15,39 @@ from mpl_toolkits.mplot3d import axes3d, Axes3D
 from numpy import array, linspace, meshgrid, reshape, argmin
 from scipy.interpolate import griddata
 
+### abstract class to define plot viewers
+class ImageViewer(object):
 
+    @staticmethod
+    def render(dictionary):
+        raise NotImplementedError('Trial is an abstract class, '
+                                  'this should not be called.')
+    @staticmethod
+    def save_fig(figure, filename, DPI):
+        raise NotImplementedError('Trial is an abstract class, '
+                                  'this should not be called.')
+        
+    @staticmethod
+    def get_attributes(name):
+        raise NotImplementedError('Trial is an abstract class, '
+                                  'this should not be called.')
+        
+    @staticmethod
+    def get_default_get_attributes():
+        raise NotImplementedError('Trial is an abstract class, '
+                                  'this should not be called.')
+                                  
 ## This class containts 
-class MLOImageViewer(object):
+class MLOImageViewer(ImageViewer):
 
     DPI = 400
     LABEL_FONT_SIZE = 10
     TITLE_FONT_SIZE = 10
 
     @staticmethod
-    def render(dictionary):
+    def render(input_dictionary):
+        dictionary = MLOImageViewer.get_default_get_attributes() ##this way the default view will be used if different one was not supplied
+        dictionary.update(input_dictionary)
         figure = mpl.pyplot.figure()
         figure.subplots_adjust(wspace=0.35, hspace=0.35)
         figure.suptitle(dictionary['graph_title'])
@@ -271,7 +294,46 @@ class MLOImageViewer(object):
                             'font size', 'colour map', 'position']
         }
         return attribute_dictionary.get(name, None)
+        
+    @staticmethod
+    def get_default_get_attributes():
+        # Default values for describing graph visualization
+        graph_title = 'Title'
+        graph_names = ['Progression', 'Fitness', 'Mean', 'DesignSpace']
 
+        graph_dict1 = {'subtitle': 'Currently Best Found Solution',
+                       'x-axis': 'Iteration',
+                       'y-axis': 'Fitness',
+                       'font size': '10',
+                       'position': '221'}
+        graph_dict2 = {'subtitle': 'Fitness Function',
+                       'x-axis': 'X',
+                       'y-axis': 'Y',
+                       'z-axis': 'Fitness',
+                       'font size': '10',
+                       'colour map': 'PuBu',
+                       'position': '222'}
+        graph_dict3 = {'subtitle': 'Regression Mean',
+                       'x-axis': 'X',
+                       'y-axis': 'Y',
+                       'z-axis': 'Fitness',
+                       'font size': '10',
+                       'colour map': 'PuBuGn',
+                       'position': '223'}
+        graph_dict4 = {'subtitle': 'Design Space',
+                       'x-axis': 'X',
+                       'y-axis': 'Y',
+                       'font size': '10',
+                       'colour map': 'PuBu',
+                       'x-colour': 'black',
+                       'o-colour': 'black',
+                       'position': '224'}
+        all_graph_dicts = {'Progression': graph_dict1,
+                           'Fitness': graph_dict2,
+                           'Mean': graph_dict3,
+                           'DesignSpace': graph_dict4}
+        return all_graph_dicts
+        
 ##This class returns a string 
 ##It should return either a string, a file reference or 
 class MLO_REPORT_VIEWER(object):

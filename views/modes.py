@@ -32,7 +32,7 @@ class TerminalView(View):
             logging.error('Benchmark and/or configuration script not '
                           'provided, terminating...')
             return
-
+            
         self.controller.start_run('Default run', self.controller.fitness, self.controller.configuration).join()
         self.controller.visualizer.terminate()
         

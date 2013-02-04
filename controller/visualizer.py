@@ -105,4 +105,3 @@ class SingleThreadVisualizer(Visualizer):
     def render_graph(self, function, snapshot, name):
         function(snapshot)
         logging.info('{} visualized'.format(name))
-        self.controller.find_trial(name).set_counter_plot(snapshot['counter'])

@@ -23,4 +23,27 @@ def numpy_array_index(multi_array, array):
                     return True, i
                     
     return False, 0
+
+##returns class constructor     
+
+def get_trial_dict():
+    from model.trials.trial import PSOTrial
+    return {"PSOTrial" : PSOTrial, 
+            "Blank" : None} 
+
+def get_trial_constructor(str_name):
+    return get_trial_dict()[str_name]
+
+def get_possible_trial_type():
+    return get_trial_dict().keys()
+    
+def get_trial_type_visualizer(trial_name):
+    from visualizers.plot import MLOImageViewer
+    return {"PSOTrial" : {"MLOImageViewer" : MLOImageViewer}, 
+            "Blank" : {"Blank" : None}} 
+
+    
+
+
+    
      
