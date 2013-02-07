@@ -17,20 +17,26 @@ class Run(object):
         self.configuration = configuration
         self.controller = controller
         fitness_file_name = None
+        fitness_folder_name = None
         configuration_file_name = None
+        configuration_folder_name = None
         trial_type = None
         if fitness:
             fitness_file_name = os.path.abspath(self.fitness.__file__)
             if fitness_file_name[-1] == 'c':  # .pyc
                 fitness_file_name = fitness_file_name[:-1]
+            fitness_folder_name = os.path.dirname(self.fitness.__file__)
         if configuration:
             configuration_file_name = os.path.abspath(
                 self.configuration.__file__)
             if configuration_file_name[-1] == 'c':  # .pyc
                 configuration_file_name = configuration_file_name[:-1]
+            configuration_folder_name = os.path.dirname(self.configuration.__file__)
             trial_type = configuration.trials_type
         self.state_dictionary = {"fitness_file_name": fitness_file_name,
+                                 "fitness_folder_name": fitness_folder_name,
                                  "configuration_file_name" : configuration_file_name,
+                                 "configuration_folder_name" : configuration_folder_name,
                                  "name" : name,
                                  "wait" : False,
                                  "status" : "Running",
@@ -167,3 +173,15 @@ class Run(object):
         
     def set_results_folder_path(self, folder):
         self.results_folder_path = folder
+        
+    def get_configuration_script_file(self):
+        return self.state_dictionary["configuration_file_name"].split("/")[-1]
+        
+    def get_fitness_script_file(self):
+        return self.state_dictionary["fitness_file_name"].split("/")[-1]
+        
+    def get_configuration_script_folder(self):
+        return "/".join(self.state_dictionary["configuration_file_name"].split("/")[:-1])
+        
+    def get_fitness_script_folder(self):
+        return "/".join(self.state_dictionary["fitness_file_name"].split("/")[:-1])

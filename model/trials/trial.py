@@ -29,15 +29,6 @@ class Trial(Thread):
         self.controller = controller
         # True if the user has selected to pause the trial
         
-        self.graph_dictionary = {
-            'rerendering': False,
-            'graph_title': configuration.graph_title,
-            'graph_names': configuration.graph_names,
-            'all_graph_dicts': configuration.all_graph_dicts,
-        }
-        for name in configuration.graph_names:
-            self.graph_dictionary['all_graph_dicts'][name]['generate'] = True
-        
         if configuration.surrogate_type == "dummy":
             self.surrogate_model = DummySurrogateModel(configuration,
                                                        self.controller)
@@ -63,14 +54,15 @@ class Trial(Thread):
             'generations_array' : [],
             'best_fitness_array' : [],
             'enable_traceback' : configuration.enable_traceback,
-            'graph_dictionary' : self.graph_dictionary,
             'counter_dictionary' : counter_dictionary,
             'best' : None,
+            'fresh_run' : False
             # True if the user has selected to pause the trial
         }
 
         self.controller.register_trial(self)
-        
+        self.state_dictionary['generate'] = False
+        self.view_update()
     ####################
     ## Helper Methods ##
     ####################
@@ -163,6 +155,7 @@ class Trial(Thread):
         with open(trial_file, 'rb') as outfile:
             dict = pickle.load(outfile)
         self.set_state_dictionary(dict)
+        self.state_dictionary["generate"] = False
         self.get_surrogate_model().set_state_dictionary(dict['surrogate_model_state_dict'])
         logging.info("Loaded Trial")
         return True
@@ -215,9 +208,6 @@ class Trial(Thread):
         
     def get_fitness(self):
         return self.fitness
-        
-    def get_graph_dictionary(self):
-        return self.graph_dictionary
         
     def get_best(self):
         return self.state_dictionary['best']
@@ -323,7 +313,7 @@ class PSOTrial(Trial):
             # Results folder could not be created
             logging.error('Results and images folders cound not be created, terminating.')
             return False
-
+        
         return True
         
     def run_initialize(self):
@@ -359,6 +349,7 @@ class PSOTrial(Trial):
         self.toolbox.register('evaluate', self.fitness_function)
         
     def run(self):
+        self.state_dictionary['generate'] = True
         self.set_start_time(datetime.now().strftime('%d-%m-%Y  %H:%M:%S'))
         
         logging.info('{} started'.format(self.get_name()))
@@ -367,19 +358,21 @@ class PSOTrial(Trial):
         # Initialise termination check
         
         self.check = False
-        logging.info('Initial model training')
-        self.train_surrogate_model(self.get_population()) 
         ## we do this not to retrain model twice during the first iteration. If we ommit
         ## this bit of code the first view_update wont have a model aviable.
-        self.set_retrain_model(False) 
+        
+        if self.state_dictionary["fresh_run"]: ## we need this as we only want to do it for initial generation
+            ## the problem is that we cannot
+            self.train_surrogate_model(self.get_population())
+            self.view_update()
+            self.state_dictionary["fresh_run"] = False
+            
         while self.get_counter_dictionary('g') < self.get_configuration().max_iter + 1:
             logging.info('[{}] Generation {}'.format(
                 self.get_name(), self.get_counter_dictionary('g')))
             logging.info('[{}] Fitness {}'.format(
                 self.get_name(), self.get_counter_dictionary('fit')))
-                
-            self.view_update()
-                
+
             # termination condition - we put it here so that when the trial is reloaded
             # it wont run if the run has terminated already
             if self.get_terminating_condition(): 
@@ -419,9 +412,12 @@ class PSOTrial(Trial):
             # Wait until the user unpauses the trial.
             while self.get_wait():
                 time.sleep(0)
-
+            
             self.increment_main_counter()
-                
+            self.state_dictionary["generate"] = True
+            self.view_update()
+
+            
         self.set_status('Finished')
         logging.info('{} finished'.format(self.get_name()))
         sys.exit(0)
@@ -445,9 +441,9 @@ class PSOTrial(Trial):
             'name': name,
             'classifier': self.get_surrogate_model().classifier,
             'regressor': self.get_surrogate_model().regressor,
-            'meta_plot': {"particles":{'marker':"o",'data':self.get_population()}}
+            'meta_plot': {"particles":{'marker':"o",'data':self.get_population()}},
+            'generate' : self.state_dictionary['generate'] 
         }
-        return_dictionary.update(copy(self.graph_dictionary))
         return return_dictionary
         
     ####################
@@ -470,6 +466,7 @@ class PSOTrial(Trial):
                     self.set_at_least_one_in_valid_region((part.code == 0) or self.get_at_least_one_in_valid_region())
             ## add one example till we find something that works
             self.get_configuration().F = 1
+        self.state_dictionary["fresh_run"] = True
         
     def meta_iterate(self):
         #TODO - reavluate one random particle... do it.. very important!

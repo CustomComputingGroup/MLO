@@ -19,6 +19,7 @@ presentation:
 	pdflatex -output-directory=Presentation Presentation/presentation.tex
 
 clean:
+	rm profile
 	find . -name "*.pyc" -delete
 	find . -name "*~" -delete
     

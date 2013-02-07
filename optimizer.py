@@ -1,7 +1,7 @@
 import logging
 import argparse
 import sys
-
+import os
 
 from views.modes import GUIView, TerminalView
 from controller.controller import Controller
@@ -30,7 +30,6 @@ def main():
         print 'Either run the program with --gui or provide a fitness and ' \
               'configuration scripts (with -f and -c)'
         sys.exit(1)
-
     gui = args.gui
     restart = args.restart
     fitness = None
@@ -58,7 +57,7 @@ def main():
     
     ## initialize controller
     controller = Controller(restart)
-    
+    controller.load_profile_dict(os.getcwd() + "/profile")
     ## start in gui mode
     if gui:
         logging.info('Will run with GUI')

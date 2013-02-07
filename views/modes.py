@@ -40,6 +40,8 @@ class TerminalView(View):
     def update(self, trial):
         if trial.get_main_counter() % trial.get_configuration().vis_every_X_steps == 0: ## TODO - its not ideal... rethink it... 
             snapshot = trial.snapshot()
+            graphdict = self.controller.get_trial_visualization_dict(trial.get_trial_type())
+            snapshot.update(graphdict)
             self.controller.visualize(snapshot, self.plot_view.render)
 
 class GUIView(View):

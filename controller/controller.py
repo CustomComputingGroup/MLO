@@ -2,9 +2,13 @@ import logging
 from copy import copy, deepcopy
 import platform
 from threading import Semaphore
+import pickle
+import io
+import os
 
 from model.run import Run
 from visualizer import ParallelisedVisualizer, SingleThreadVisualizer
+from utils import get_trial_type_visualizer
 
 class Controller(object):
 
@@ -42,6 +46,7 @@ class Controller(object):
         run.daemon = True
         # Special case when we are restarting a previously crashed run
         if self.restart:
+            self.register_run(run)
             run.restart()
             return run
 
@@ -61,6 +66,13 @@ class Controller(object):
                        
     def register_run(self, run):
         self.runs[run.get_name()] = run
+        self.last_run = run.get_name()
+        self.profile_dict["most_recent_fitness_script_file"] = run.get_fitness_script_file()
+        self.profile_dict["most_recent_fitness_script_folder"] = run.get_fitness_script_folder()
+        self.profile_dict["most_recent_configuration_script_file"] = run.get_configuration_script_file()
+        self.profile_dict["most_recent_configuration_script_folder"] = run.get_configuration_script_folder()
+        logging.info(str(self.profile_dict))
+        self.save_profile_dict()
 
     def get_run_status(self, name):
         return self.runs[name].get_status()
@@ -134,3 +146,71 @@ class Controller(object):
 
     def release_training_sema(self):
         self.training_sema.release()
+
+    def get_most_recent_fitness_script_folder(self):
+        try:
+            return self.profile_dict["most_recent_fitness_script_folder"]
+        except:
+            return os.getcwd()
+                
+    def get_most_recent_configuration_script_folder(self):
+        try:
+            return self.profile_dict["most_recent_configuration_script_folder"]
+        except:
+            return os.getcwd()
+            
+    def get_most_recent_fitness_script_file(self):
+        try:
+            return self.profile_dict["most_recent_fitness_script_file"]
+        except:
+            return ''
+                
+    def get_most_recent_configuration_script_file(self):
+        try:
+            return self.profile_dict["most_recent_configuration_script_file"]
+        except:
+            return ''
+                
+    def get_trial_visualization_dict(self, trial_type):
+        try:
+            return self.profile_dict["trial_visualization_dict"]["trial_type"]
+        except:
+            logging.info("You have never visualized this trial type, will update your profile using default configuration")
+            self.update_trial_visualization_dict(trial_type, get_trial_type_visualizer(trial_type)["default"].get_default_attributes())
+            return self.profile_dict["trial_visualization_dict"]["trial_type"]
+
+    def update_trial_visualization_dict(self, trial_type, dict):
+        self.profile_dict["trial_visualization_dict"]["trial_type"] = dict
+        self.save_profile_dict()
+    
+    def save_profile_dict(self):
+        try:
+            logging.info("Updated controller profile dictionary")
+            logging.info(str(self.profile_dict))
+            with io.open(self.profile_dict["dir"], 'wb') as outfile:
+                pickle.dump(self.profile_dict, outfile)            
+        except Exception, e:
+            logging.info("Problem with controller profile dictionary")
+            logging.error(str(e))
+            return False
+       
+    def load_profile_dict(self, dir):
+        try:
+            
+            with open(dir, 'rb') as outfile:
+                dict = pickle.load(outfile)
+            dict["dir"] = dir
+            self.profile_dict = dict
+            logging.info("Loaded controller profile dictionary")
+        except:
+            logging.info("A new controller profile dictionary is going to be created")
+            self.profile_dict = { "trial_visualization_dict" : {},
+                                  "last_run" : "",
+                                  "dir" : os.getcwd() + "/profile",
+                                  "most_recent_dir" : None,
+                                  "most_recent_fitness_script_file" : '',
+                                  "most_recent_fitness_script_folder" : os.getcwd(),
+                                  "most_recent_configuration_script_file" : '',
+                                  "most_recent_configuration_script_folder" : os.getcwd()
+                                }
+            self.save_profile_dict()

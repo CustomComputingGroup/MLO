@@ -47,46 +47,6 @@ vis_every_X_steps = 2 # How often to visualize
 counter = 'g'  # The counter that visualization uses as a 'step'
 max_counter = max_iter  # Maximum value of counter
 
-# Default values for describing graph visualization
-graph_title = 'Title'
-graph_names = ['Progression', 'Fitness', 'Mean', 'DesignSpace']
-
-graph_dict1 = {'subtitle': 'Currently Best Found Solution',
-               'x-axis': 'Iteration',
-               'y-axis': 'Fitness',
-               'font size': '10',
-               'position': '221'}
-graph_dict2 = {'subtitle': 'Fitness Function',
-               'x-axis': 'X',
-               'y-axis': 'Y',
-               'z-axis': 'Fitness',
-               'font size': '10',
-               'colour map': 'PuBu',
-               'position': '222'}
-graph_dict3 = {'subtitle': 'Regression Mean',
-               'x-axis': 'X',
-               'y-axis': 'Y',
-               'z-axis': 'Fitness',
-               'font size': '10',
-               'colour map': 'PuBuGn',
-               'position': '223'}
-graph_dict4 = {'subtitle': 'Design Space',
-               'x-axis': 'X',
-               'y-axis': 'Y',
-               'font size': '10',
-               'colour map': 'PuBu',
-               'x-colour': 'black',
-               'o-colour': 'black',
-               'position': '224'}
-
-all_graph_dicts = {'Progression': graph_dict1,
-                   'Fitness': graph_dict2,
-                   'Mean': graph_dict3,
-                   'DesignSpace': graph_dict4}
-
-plot_view = 'default'
-
-
 ### Regressor and classifier type
 regressor = 'GaussianProcess2'
 classifier = 'SupportVectorMachine'

@@ -152,7 +152,7 @@ class RunWindow(wx.Frame):
             pass
 
     def on_new(self, event):
-        self.childlist.append(NewRunWindow(self, 'New Run'))
+        self.childlist.append(NewRunWindow(self, 'New Run', self.controller))
         event.Skip()
 
     def on_load(self, event):
@@ -196,7 +196,8 @@ class RunWindow(wx.Frame):
         self.childlist.append(GraphWindow(self,
                                           'Graphs For ' +
                                           self.right_clicked_item,
-                                          trial))
+                                          trial,
+                                          self.controller))
         event.Skip()
 
     def on_exit(self, event):
@@ -258,16 +259,18 @@ class RunWindow(wx.Frame):
 
     def visuzalize_trial(self, trial):
         snapshot = trial.snapshot()
+        snapshot.update(self.controller.get_trial_visualization_dict(trial.get_trial_type()))
         self.controller.visualize(snapshot, self.plot_view.render) ### TODO -- change this so that the plow_view is going to be selected based on the trial type
         
 class GraphWindow(wx.Frame):
 
-    def __init__(self, parent, title, trial):
+    def __init__(self, parent, title, trial, controller):
         super(GraphWindow, self).__init__(parent, title=title,
                                           size=(1320, 650))
 
         ### Initialisation (take graph options from given trial)
         self.trial = trial
+        self.controller = controller
         self.images_folder = trial.get_images_folder()
         
         ### Set up display
@@ -368,7 +371,8 @@ class GraphWindow(wx.Frame):
         self.childlist.append(OptionsWindow(self,
                                             'Graphs Options For ' +
                                             self.trial.get_name(),
-                                            self.trial))
+                                            self.trial,
+                                            self.controller))
         event.Skip()
 
     def make_file_name(self, plot):
@@ -454,12 +458,13 @@ class GraphWindow(wx.Frame):
 
 class OptionsWindow(wx.Frame):
 
-    def __init__(self, parent, title, trial):
+    def __init__(self, parent, title, trial, controller):
         super(OptionsWindow, self).__init__(parent, title=title,
                                             size=(1000, 500))
 
         self.trial = trial
-        self.graph_names = trial.get_graph_dictionary()['graph_names']
+        self.controller = controller
+        self.graph_names = self.controller.get_trial_visualization_dict(self.trial.get_trial_type())['graph_names']
 
         ### Set up display
         self.panel = wx.ScrolledWindow(self)
@@ -475,7 +480,7 @@ class OptionsWindow(wx.Frame):
         title_sizer = wx.BoxSizer(wx.VERTICAL)
         self.tc_dictionary['title'] = wx.TextCtrl(
             self.panel,
-            value=self.trial.get_graph_dictionary()['graph_title'])
+            value=self.controller.get_trial_visualization_dict(self.trial.get_trial_type())['graph_title'])
         title_sizer.Add(wx.StaticText(self.panel, -1, 'Title:'), 0,
                         wx.TOP | wx.LEFT, 10)
         title_sizer.Add(self.tc_dictionary['title'], 1,
@@ -483,7 +488,7 @@ class OptionsWindow(wx.Frame):
         option_sizer.Add(title_sizer, 1, wx.GROW)
 
         ### Add the checkbox sizers
-        trial_gd = trial.get_graph_dictionary()['all_graph_dicts']
+        trial_gd = self.controller.get_trial_visualization_dict(self.trial.get_trial_type())['all_graph_dicts']
         checkbox_sizer = wx.BoxSizer(wx.HORIZONTAL)
         for graph_name in self.graph_names:
             self.checkbox_dictionary[graph_name] = wx.CheckBox(
@@ -516,20 +521,13 @@ class OptionsWindow(wx.Frame):
             if generate:
                 option_sizer.Add(attribute_sizer, 1, wx.GROW)
 
-        ### Add buttons, and display the window
-        regen_button = wx.Button(self.panel, label='Regenerate', size=(-1, -1))
-        regen_button.Bind(wx.EVT_BUTTON, self.on_regen)
-        button_sizer.Add(regen_button, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
-        
-        ### Add buttons, and display the window TODO.. overwrites old images
-        regen_all_button = wx.Button(self.panel, label='Regenerate all', size=(-1, -1))
-        regen_all_button.Bind(wx.EVT_BUTTON, self.on_regen)
-        button_sizer.Add(regen_all_button, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
         
         ### refresh view button TODO - 
-        refresh_button = wx.Button(self.panel, label='Refresh', size=(-1, -1))
-        button_sizer.Add(refresh_button, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
-
+        save_button = wx.Button(self.panel, label='Save', size=(-1, -1))
+        save_button.Bind(wx.EVT_BUTTON, self.save_visualization_dict)
+        button_sizer.Add(save_button, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
+        
+        
         main_sizer.Add(option_sizer, 0, wx.GROW)
         main_sizer.Add(button_sizer, 0, wx.ALIGN_RIGHT | wx.TOP, 10)
 
@@ -540,7 +538,7 @@ class OptionsWindow(wx.Frame):
     def make_sizer(self, name, dictionary_value, text):
         new_sizer = wx.BoxSizer(wx.VERTICAL)
         new_name = wx.StaticText(self.panel, -1, text)
-        trial_gd_name = self.trial.get_graph_dictionary()['all_graph_dicts'][name]
+        trial_gd_name = self.controller.get_trial_visualization_dict(self.trial.get_trial_type())['all_graph_dicts'][name]
         if dictionary_value in trial_gd_name:
             tc_value = trial_gd_name[dictionary_value]
         else:
@@ -550,12 +548,11 @@ class OptionsWindow(wx.Frame):
         new_sizer.Add(new_name, 0, wx.TOP | wx.LEFT, 10)
         new_sizer.Add(new_tc, 1, wx.GROW | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         return (new_sizer, new_tc)
-
-    def on_regen(self, event):
+        
+    def save_visualization_dict(self, event):
         ### Save all regeneration data
-        trial_gd = self.trial.get_graph_dictionary()['all_graph_dicts']
-
-        self.trial.get_graph_dictionary()['graph_title'] = \
+        trial_gd = self.controller.get_trial_visualization_dict(self.trial.get_trial_type())['all_graph_dicts']
+        self.controller.get_trial_visualization_dict(self.trial.get_trial_type())['graph_title'] = \
             self.tc_dictionary['title'].GetValue()
         for graph_name in self.graph_names:
             trial_gd[graph_name]['generate'] = \
@@ -565,9 +562,8 @@ class OptionsWindow(wx.Frame):
             for attribute in attributes:
                 trial_gd[graph_name][attribute] = \
                     self.tc_dictionary[attribute+graph_name].GetValue()
-
-        self.trial.get_graph_dictionary()['rerendering'] = True
-        self.GetParent().regenerate_graph(self.trial)
+        #self.controller.update_trial_visualization_dict(self.trial.get_trial_type(), trial_gd)
+        self.controller.save_profile_dict()
         self.Close(True)
         
     def get_graph_attributes(self, trial, graph_name):
@@ -576,16 +572,17 @@ class OptionsWindow(wx.Frame):
 
 class NewRunWindow(wx.Frame):
 
-    def __init__(self, parent, title):
+    def __init__(self, parent, title, controller):
         super(NewRunWindow, self).__init__(parent, title=title,
                                            size=(440, 305),
                                            style=wx.DEFAULT_FRAME_STYLE ^
                                            wx.RESIZE_BORDER)
 
-        self.currentDirectory = os.getcwd()
+        
         self.fitness_path = None
         self.config_path = None
-
+        self.controller = controller
+        #self.currentDirectory = self.controller.get_most_recent_dir()
         ### Set up display
         self.panel = wx.Panel(self)
         main_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -603,9 +600,17 @@ class NewRunWindow(wx.Frame):
                                    label='Select fitness script',
                                    size=(200, -1))
         fitness_button.name = 'fitness'
-        fitness_button.Bind(wx.EVT_BUTTON, self.on_open_file)
-        self.name_of_fitness = wx.StaticText(self.panel, -1,
+        fitness_button.Bind(wx.EVT_BUTTON, self.get_on_open_file(self.controller.get_most_recent_fitness_script_file(), self.controller.get_most_recent_configuration_script_folder()))
+        
+        self.fitness_path = self.controller.get_most_recent_fitness_script_file()
+        if self.fitness_path:
+            self.name_of_fitness = wx.StaticText(self.panel, -1,self.controller.get_most_recent_fitness_script_file())
+            self.fitness_path = self.controller.get_most_recent_fitness_script_folder() + "/" + self.controller.get_most_recent_fitness_script_file()
+            logging.info(self.fitness_path)
+        else:
+            self.name_of_fitness = wx.StaticText(self.panel, -1, 
                                              'Please select a file')
+                                                 
         fitness_sizer.Add(fitness_button, 0, wx.ALIGN_LEFT | wx.ALL, 10)
         fitness_sizer.Add(self.name_of_fitness, 1, wx.ALL, 15)
 
@@ -622,9 +627,19 @@ class NewRunWindow(wx.Frame):
                                   label='Select configuration script',
                                   size=(200, -1))
         config_button.name = 'config'
-        config_button.Bind(wx.EVT_BUTTON, self.on_open_file)
-        self.name_of_config = wx.StaticText(self.panel, -1,
-                                            'Please select a file')
+        
+        
+        config_button.Bind(wx.EVT_BUTTON, self.get_on_open_file(self.controller.get_most_recent_configuration_script_file(), self.controller.get_most_recent_configuration_script_folder()))
+        
+        if self.fitness_path:
+            self.name_of_config = wx.StaticText(self.panel, -1,self.controller.get_most_recent_configuration_script_file())
+            self.config_path = self.controller.get_most_recent_configuration_script_folder() + "/" + self.controller.get_most_recent_configuration_script_file()
+            logging.info(self.config_path)
+            logging.info(self.controller.get_most_recent_configuration_script_file())
+        else:
+            self.name_of_config = wx.StaticText(self.panel, -1,
+                                                'Please select a file')
+                                                
         config_sizer.Add(config_button, 0, wx.ALIGN_LEFT | wx.ALL, 10)
         config_sizer.Add(self.name_of_config, 1, wx.ALL, 15)
 
@@ -685,32 +700,36 @@ class NewRunWindow(wx.Frame):
     def on_cancel(self, event):
         self.Close(True)
 
-    def on_open_file(self, event):
-        wildcard = "Python source (*.py)|*.py|" \
-                   "All files (*.*)|*.*"
-        dlg = wx.FileDialog(
-            self, message='Choose a file',
-            defaultDir=self.currentDirectory,
-            defaultFile='',
-            wildcard=wildcard,
-            style=wx.OPEN | wx.CHANGE_DIR
-        )
+    def get_on_open_file(self, default_file, current_directory):
+        logging.info(str(current_directory))
+        logging.info(str(default_file))
+        def on_open_file(event):
+            logging.info(default_file)
+            wildcard = "Python source (*.py)|*.py|" \
+                       "All files (*.*)|*.*"
+            dlg = wx.FileDialog(
+                self, message='Choose a file',
+                defaultDir=current_directory,
+                defaultFile=default_file,
+                wildcard=wildcard,
+                style=wx.OPEN | wx.CHANGE_DIR
+            )
+            if dlg.ShowModal() == wx.ID_OK:
+                path = dlg.GetPaths()
 
-        if dlg.ShowModal() == wx.ID_OK:
-            path = dlg.GetPaths()
-
-            name = event.GetEventObject().name
-            if name == 'config':
-                self.config_path = dlg.GetPath()
-                self.name_of_config.SetLabel(dlg.GetFilename())
-                logging.info('config path:' + dlg.GetFilename())
-            elif name == 'fitness':
-                self.fitness_path = dlg.GetPath()
-                self.name_of_fitness.SetLabel(dlg.GetFilename())
-                logging.info('fitness path:' + dlg.GetFilename())
-            else:
-                logging.error('File Dialog incorrectly called')
-
+                name = event.GetEventObject().name
+                if name == 'config':
+                    self.config_path = dlg.GetPath()
+                    self.name_of_config.SetLabel(dlg.GetFilename())
+                    logging.info('config path:' + dlg.GetFilename())
+                elif name == 'fitness':
+                    self.fitness_path = dlg.GetPath()
+                    self.name_of_fitness.SetLabel(dlg.GetFilename())
+                    logging.info('fitness path:' + dlg.GetFilename())
+                else:
+                    logging.error('File Dialog incorrectly called')
+        return on_open_file
+    
 
 class loadRunWindow(wx.Frame):
 

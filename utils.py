@@ -38,9 +38,9 @@ def get_possible_trial_type():
     return get_trial_dict().keys()
     
 def get_trial_type_visualizer(trial_name):
-    from visualizers.plot import MLOImageViewer
-    return {"PSOTrial" : {"MLOImageViewer" : MLOImageViewer}, 
-            "Blank" : {"Blank" : None}} 
+    from views.visualizers.plot import MLOImageViewer
+    return {"PSOTrial" : {"MLOImageViewer" : MLOImageViewer, "default" : MLOImageViewer}, 
+            "Blank" : {"Blank" : None, "default" : None}}[trial_name] 
 
     
 
