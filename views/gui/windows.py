@@ -17,9 +17,9 @@ class RunWindow(wx.Frame):
     def __init__(self, controller):
         super(RunWindow, self).__init__(None,
                                         title='Machine Learning Optimizer',
-                                        size=(700, 500))
+                                        size=(1100, 500))
 
-        self.GetEventHandler().Bind(EVT_UPDATE, self.update_trial)
+        self.GetEventHandler().Bind(EVT_UPDATE, self.update_run)
         self.plot_view = MLOImageViewer
         self.controller = controller
 
@@ -43,14 +43,16 @@ class RunWindow(wx.Frame):
         menu_bar.Append(file_menu, '&File')
         self.SetMenuBar(menu_bar)
 
-        ### Create the list for displaying trials
+        ### Create the list for displaying runs
         self.list_ctrl = wx.ListCtrl(self.panel, size=(-1, -1),
                                      style=wx.LC_REPORT | wx.LC_SINGLE_SEL |
                                      wx.LC_VRULES | wx.BORDER_SUNKEN)
-        self.list_ctrl.InsertColumn(0, 'Trial Name', width=280)
+        self.list_ctrl.InsertColumn(0, 'Run Name', width=280)
         self.list_ctrl.InsertColumn(1, 'Status',     width=100)
         self.list_ctrl.InsertColumn(2, 'Progress',   width=100)
         self.list_ctrl.InsertColumn(3, 'Start Time', width=200)
+        self.list_ctrl.InsertColumn(4, 'Running Time', width=200)
+        self.list_ctrl.InsertColumn(5, 'Left Time', width=200)
         self.list_ctrl.Bind(wx.EVT_LIST_ITEM_RIGHT_CLICK,
                             self.on_right_click_list)
 
@@ -65,14 +67,14 @@ class RunWindow(wx.Frame):
         #self.list_ctrl.Bind(wx.EVT_SCROLL, self.on_paint)
         self.list_ctrl.Bind(wx.EVT_SIZE, self.on_paint)
 
-        ### Add the buttons used to make new trials
+        ### Add the buttons used to make new runs
         button_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        new_trial_button = wx.Button(self.panel, label='New Run From Scripts')
-        new_trial_button.Bind(wx.EVT_BUTTON, self.on_new)
-        button_sizer.Add(new_trial_button, 1, wx.GROW | wx.RIGHT, 10)
-        old_trial_button = wx.Button(self.panel, label='Load Run')
-        old_trial_button.Bind(wx.EVT_BUTTON, self.on_load)
-        button_sizer.Add(old_trial_button, 1, wx.GROW)
+        new_run_button = wx.Button(self.panel, label='New Run From Scripts')
+        new_run_button.Bind(wx.EVT_BUTTON, self.on_new)
+        button_sizer.Add(new_run_button, 1, wx.GROW | wx.RIGHT, 10)
+        old_run_button = wx.Button(self.panel, label='Load Run')
+        old_run_button.Bind(wx.EVT_BUTTON, self.on_load)
+        button_sizer.Add(old_run_button, 1, wx.GROW)
 
         main_sizer.Add(button_sizer, 0,
                        wx.GROW | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
@@ -82,6 +84,269 @@ class RunWindow(wx.Frame):
         self.childlist = []
         self.bars = {}
 
+        self.panel.SetSizer(main_sizer)
+        self.Show()
+
+    def on_paint(self, event=None):
+        total_items = self.list_ctrl.GetItemCount()
+        if total_items == 0:
+            if event:
+                event.Skip()
+            return
+
+        top_item = self.list_ctrl.GetTopItem()
+        visible_items = range(top_item,
+                              top_item +
+                              min(self.list_ctrl.GetCountPerPage()+1,
+                              total_items))
+
+        ### Initialise coordinates for creating the bars
+        rect = self.list_ctrl.GetItemRect(top_item)
+        size = (self.list_ctrl.GetColumnWidth(2)-4, rect[3]-4)
+        x = rect[0] + sum([self.list_ctrl.GetColumnWidth(j)
+                          for j in range(0, 2)]) + 13
+        y = rect[1] + 14
+        inc = rect[3]
+
+        ### Show and hide bars as necessary
+        for i in range(0, total_items):
+            run_name = self.list_ctrl.GetItem(i).GetText()
+            bar = self.bars[run_name]
+
+            if i in visible_items:
+                if bar.GetPosition() != (x, y):
+                    # Necessary on Windows?
+                    if wx.Platform != "__WXMSW__":
+                        bar.Hide()
+                    bar.SetPosition((x, y))
+                bar.SetSize(size)
+                bar.Show()
+                y += inc
+            else:
+                bar.Hide()
+
+        if event:
+            event.Skip()
+
+    def on_right_click_list(self, event):
+        self.right_clicked_item = event.GetText()
+        menu = wx.Menu()
+        try:
+            logging.info('click')
+            status = self.controller.get_run_status(self.right_clicked_item)
+            if status == 'Running':
+                pause = menu.Append(wx.ID_ANY, 'Pause')
+                self.Bind(wx.EVT_MENU, self.on_pause, pause)
+            elif status == 'Paused':
+                resume = menu.Append(wx.ID_ANY, 'Resume')
+                self.Bind(wx.EVT_MENU, self.on_resume, resume)
+            elif status == 'Finished':
+                pass
+
+            show_trials = menu.Append(wx.ID_ANY, 'Show Trials')
+            self.Bind(wx.EVT_MENU, self.on_show_trials, show_trials)
+                
+            show_graphs = menu.Append(wx.ID_ANY, 'Show Graphs')
+            self.Bind(wx.EVT_MENU, self.on_show_graphs, show_graphs)
+            delete = menu.Append(wx.ID_ANY, 'Delete')
+            self.Bind(wx.EVT_MENU, self.on_delete, delete)
+            self.PopupMenu(menu, event.GetPosition())
+            menu.Destroy()
+        except KeyError,e:
+            logging.info('No run selected')
+            pass
+
+    def on_new(self, event):
+        self.childlist.append(NewRunWindow(self, 'New Run', self.controller))
+        event.Skip()
+
+    def on_load(self, event):
+        self.childlist.append(loadRunWindow(self, 'load Run'))
+        event.Skip()
+
+    def on_pause(self, event):
+        ### Pause run in controller
+        logging.info('click')
+        item = self.list_ctrl.GetFocusedItem()
+        name = self.list_ctrl.GetItem(item).GetText()
+        self.controller.pause_run(name)
+
+    def on_resume(self, event):
+        logging.info('click')
+        ### Resume run in controller
+        item = self.list_ctrl.GetFocusedItem()
+        name = self.list_ctrl.GetItem(item).GetText()
+        self.controller.resume_run(name)
+
+    def on_delete(self, event):
+        logging.info('click')
+        dlg = wx.MessageDialog(self, 'Delete this run?', '',
+                               wx.OK | wx.CANCEL | wx.ICON_QUESTION)
+        result = dlg.ShowModal()
+        if result == wx.ID_OK:
+            ### Stop the run, and delete all references to it
+            item = self.list_ctrl.GetFocusedItem()
+            name = self.list_ctrl.GetItem(item).GetText()
+            self.bars[name].Destroy()
+            del self.bars[name]
+            self.list_ctrl.DeleteItem(item)
+            self.controller.delete_run(name)
+            self.list_ctrl.Refresh()
+
+    def on_show_graphs(self, event):
+        logging.info('click')
+        run_name = self.list_ctrl.GetItem(
+            self.list_ctrl.GetFocusedItem()).GetText()
+        run = self.controller.find_run(run_name)
+        self.childlist.append(GraphWindow(self,
+                                          'Graphs For ' +
+                                          self.right_clicked_item,
+                                          run,
+                                          self.controller))
+        event.Skip()
+
+    def on_show_trials(self, event):
+        logging.info('click')
+        run_name = self.list_ctrl.GetItem(
+            self.list_ctrl.GetFocusedItem()).GetText()
+        run = self.controller.find_run(run_name)
+        self.childlist.append(TrialWindow('Trials For ' +
+                                          self.right_clicked_item,
+                                          run,
+                                          self.controller))
+        event.Skip()
+        
+    def on_exit(self, event):
+        logging.info('click')
+        self.controller.kill_visualizer()
+        self.Destroy()
+
+    def add_listctrl_run(self, run):
+        self.list_ctrl.Append((run.get_name(), run.get_status(), '',
+                              run.get_start_time()))
+
+    def add_progress_bar(self, run):
+        rect = self.list_ctrl.GetItemRect(0)
+        size = (self.list_ctrl.GetColumnWidth(2)-4, rect[3]-4)
+        bar = wx.Gauge(self.panel, range=run.get_configuration().trials_count, size=size)
+        bar.SetValue(run.get_main_counter())
+        self.bars[run.get_name()] = bar
+
+    def start_run(self, name, fitness, configuration):
+        self.controller.start_run(name, fitness, configuration)
+
+    def load_run(self, folder_path):
+        self.controller.load_run(folder_path)
+
+    def update_run(self, event):
+        ### Called to update display to represent run's changed state
+        run = event.run
+        
+        if not (event.trial is None): ## case when we only want to update run state (possible)
+            trial = event.trial
+            if (trial.get_main_counter() % trial.get_configuration().vis_every_X_steps) == 0: ### TODO - it should really be done a bit differently...
+                 self.visuzalize_trial(trial)
+             
+        drawn = run.get_name() in self.bars
+        if drawn:
+            index = self.list_ctrl.FindItem(0, run.get_name())
+            self.list_ctrl.SetStringItem(index, 1, run.get_status())
+            self.update_bar(run)
+        else:
+            self.add_listctrl_run(run)
+            self.add_progress_bar(run)
+            self.on_paint()
+
+    def update_run_graph(self, run):
+        ### May update the displayed graph in all graph windows for run
+        run_ref = run
+        for child in self.childlist:
+            try:
+                if child.run == run_ref:
+                    child.update_run()
+            except (wx.PyDeadObjectError, AttributeError):
+                pass
+            
+    def update_bar(self, run):
+        bar = self.bars[run.get_name()]
+        bar.SetValue(run.get_main_counter())
+
+    def get_graph_attributes(self, run, graph_name):
+        return self.plot_view.get_attributes(graph_name)  ### TODO -- change this so that the plow_view is going to be selected based on the run type
+
+    def visuzalize_run(self, run):
+        snapshot = run.snapshot()
+        snapshot.update(self.controller.get_run_visualization_dict(run.get_run_type()))
+        self.controller.visualize(snapshot, self.plot_view.render) ### TODO -- change this so that the plow_view is going to be selected based on the run type
+        
+    def visuzalize_trial(self, trial):
+        snapshot = trial.snapshot()
+        snapshot.update(self.controller.get_trial_visualization_dict(trial.get_trial_type()))
+        self.controller.visualize(snapshot, self.plot_view.render) ### TODO -- change this so that the plow_view is going to be selected based on the trial type
+        
+class TrialWindow(wx.Frame):
+
+    def __init__(self, window_title, run, controller):
+        super(TrialWindow, self).__init__(None,
+                                        title=window_title,
+                                        size=(1100, 500))
+
+        self.GetEventHandler().Bind(EVT_UPDATE, self.update_trial)
+        self.plot_view = MLOImageViewer
+        self.controller = controller
+        self.run = run
+        ### Set up display
+        self.panel = wx.Panel(self, wx.ID_ANY)
+        main_sizer = wx.BoxSizer(wx.VERTICAL)
+
+        ### Create and set the Menu bar
+        menu_bar = wx.MenuBar()
+        file_menu = wx.Menu()
+        menu_exit = file_menu.Append(wx.ID_EXIT, 'E&xit',
+                                     ' Quit')
+        self.Bind(wx.EVT_MENU, self.on_exit, menu_exit)
+
+        menu_bar.Append(file_menu, '&File')
+        self.SetMenuBar(menu_bar)
+
+        ### Create the list for displaying trials
+        self.list_ctrl = wx.ListCtrl(self.panel, size=(-1, -1),
+                                     style=wx.LC_REPORT | wx.LC_SINGLE_SEL |
+                                     wx.LC_VRULES | wx.BORDER_SUNKEN)
+        self.list_ctrl.InsertColumn(0, 'Trial Name', width=280)
+        self.list_ctrl.InsertColumn(1, 'Status',     width=100)
+        self.list_ctrl.InsertColumn(2, 'Progress',   width=100)
+        self.list_ctrl.InsertColumn(3, 'Start Time', width=200)
+        self.list_ctrl.InsertColumn(4, 'Running Time', width=200)
+        self.list_ctrl.InsertColumn(5, 'Left Time', width=200)
+        self.list_ctrl.Bind(wx.EVT_LIST_ITEM_RIGHT_CLICK,
+                            self.on_right_click_list)
+
+        main_sizer.Add(self.list_ctrl, 1, wx.GROW | wx.ALL, 10)
+
+        ### Events to catch for repainting the progress bars
+        self.list_ctrl.Bind(wx.EVT_PAINT, self.on_paint)
+        self.list_ctrl.Bind(wx.EVT_LIST_COL_DRAGGING, self.on_paint)
+        self.list_ctrl.Bind(wx.EVT_LIST_COL_END_DRAG, self.on_paint)
+        # TODO: EVT_SCROLL not currently supported for ListCtrls, progress bars
+        #       will not be displayed correctly in an over-full window
+        #self.list_ctrl.Bind(wx.EVT_SCROLL, self.on_paint)
+        self.list_ctrl.Bind(wx.EVT_SIZE, self.on_paint)
+
+        #main_sizer.Add(button_sizer, 0,
+        #               wx.GROW | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
+        ### Set the sizer and other variables, and display the window
+        self.right_clicked_item = None
+        self.childlist = []
+        self.bars = {}
+
+        ### add all the runs trials
+        for trial in self.run.trials:
+            self.add_listctrl_trial(trial)
+            self.add_progress_bar(trial)
+            self.on_paint()
+            
         self.panel.SetSizer(main_sizer)
         self.Show()
 
@@ -151,14 +416,6 @@ class RunWindow(wx.Frame):
             logging.info('No trial selected')
             pass
 
-    def on_new(self, event):
-        self.childlist.append(NewRunWindow(self, 'New Run', self.controller))
-        event.Skip()
-
-    def on_load(self, event):
-        self.childlist.append(loadRunWindow(self, 'load Run'))
-        event.Skip()
-
     def on_pause(self, event):
         ### Pause trial in controller
         logging.info('click')
@@ -173,6 +430,8 @@ class RunWindow(wx.Frame):
         name = self.list_ctrl.GetItem(item).GetText()
         self.controller.resume_trial(name)
 
+        
+    ## TODO - not sure if not to disable this...
     def on_delete(self, event):
         logging.info('click')
         dlg = wx.MessageDialog(self, 'Delete this trial?', '',
@@ -202,7 +461,6 @@ class RunWindow(wx.Frame):
 
     def on_exit(self, event):
         logging.info('click')
-        self.controller.kill_visualizer()
         self.Destroy()
 
     def add_listctrl_trial(self, trial):
@@ -216,29 +474,17 @@ class RunWindow(wx.Frame):
         bar.SetValue(trial.get_main_counter())
         self.bars[trial.get_name()] = bar
 
-    def start_run(self, name, fitness, configuration):
-        self.controller.start_run(name, fitness, configuration)
-
-    def load_run(self, folder_path):
-        self.controller.load_run(folder_path)
-
     def update_trial(self, event):
         ### Called to update display to represent trial's changed state
         trial = event.trial
-        if (trial.get_main_counter() % trial.get_configuration().vis_every_X_steps) == 0: ### TODO - it should really be done a bit differently...
-             self.visuzalize_trial(trial)
-             
-        drawn = trial.get_name() in self.bars
-        if drawn:
+        run = event.run
+        
+        if self.run == run:
+            drawn = trial.get_name() in self.bars
             index = self.list_ctrl.FindItem(0, trial.get_name())
             self.list_ctrl.SetStringItem(index, 1, trial.get_status())
             self.update_bar(trial)
-            ##self.update_trial_graph(trial)
-        else:
-            self.add_listctrl_trial(trial)
-            self.add_progress_bar(trial)
-            ##self.update_trial_graph(trial)
-            self.on_paint()
+
 
     def update_trial_graph(self, trial):
         ### May update the displayed graph in all graph windows for trial
@@ -258,9 +504,7 @@ class RunWindow(wx.Frame):
         return self.plot_view.get_attributes(graph_name)  ### TODO -- change this so that the plow_view is going to be selected based on the trial type
 
     def visuzalize_trial(self, trial):
-        snapshot = trial.snapshot()
-        snapshot.update(self.controller.get_trial_visualization_dict(trial.get_trial_type()))
-        self.controller.visualize(snapshot, self.plot_view.render) ### TODO -- change this so that the plow_view is going to be selected based on the trial type
+        self.GetParent().visuzalize_trial(trial)
         
 class GraphWindow(wx.Frame):
 

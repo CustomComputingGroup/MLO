@@ -29,8 +29,8 @@ class Controller(object):
             
     ## gui methods
             
-    def view_update(self, trial):
-        self.view.update(trial)
+    def view_update(self, trial=None, run=None):
+        self.view.update(trial=trial, run=run)
             
     def take_over_control(self):
         self.visualizer.start()
@@ -49,7 +49,6 @@ class Controller(object):
             self.register_run(run)
             run.restart()
             return run
-
         run.run()
         return run
 
@@ -63,6 +62,7 @@ class Controller(object):
         self.runs = {key: value for key, value
                        in self.trials.items()
                        if key != name}
+        self.delete_run_trials(name)
                        
     def register_run(self, run):
         self.runs[run.get_name()] = run
@@ -81,7 +81,7 @@ class Controller(object):
         return self.runs[name]
 
     def delete_run_trials(self, name):
-        run = find_run(name)
+        run = self.find_run(name)
         runs_trials = run.get_trials()
         for trial in runs_trials:
             delete_trial(self, trial.get_name())
@@ -93,7 +93,7 @@ class Controller(object):
         runs_trials = run.get_trials()
         for trial in runs_trials:
             pause_trial(self, trial.get_name())
-        
+            
     def resume_run(self, name):
         run = self.runs[name]
         run.set_wait(False)
@@ -101,7 +101,7 @@ class Controller(object):
         runs_trials = run.get_trials()
         for trial in runs_trials:
             resume_trial(self, trial.get_name())
-        
+            
     ### trial managment methods
         
     def register_trial(self, trial):

@@ -22,7 +22,7 @@ from deap import base, creator, tools
 
 class Trial(Thread):
 
-    def __init__(self, trial_no, run_name, fitness, configuration, controller,
+    def __init__(self, trial_no, my_run, fitness, configuration, controller,
                  run_results_folder_path):
         Thread.__init__(self)
         self.fitness = fitness
@@ -40,6 +40,10 @@ class Trial(Thread):
         counter_dictionary = {}
         counter_dictionary['fit'] = 0 ## we always want to record fitness of the best configurations
         self.configuration = configuration
+        
+        self.my_run = my_run
+        run_name = self.my_run.get_name()
+        
         self.state_dictionary = {
             'status' : 'Running',
             'retrain_model' : False,
@@ -113,7 +117,7 @@ class Trial(Thread):
    
     ## indicator for the controller and viewer that the state has changed. 
     def view_update(self):
-        self.controller.view_update(self)
+        self.controller.view_update(trial=self, run=self.my_run)
 
     def increment_counter(self, counter):
         self.set_counter_dictionary(counter, self.get_counter_dictionary(counter) + 1)

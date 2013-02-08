@@ -37,7 +37,7 @@ class TerminalView(View):
         self.controller.visualizer.terminate()
         
     ## Print out run statistics, define a new stats printer
-    def update(self, trial):
+    def update(self, trial=None, run=None):
         if trial.get_main_counter() % trial.get_configuration().vis_every_X_steps == 0: ## TODO - its not ideal... rethink it... 
             snapshot = trial.snapshot()
             graphdict = self.controller.get_trial_visualization_dict(trial.get_trial_type())
@@ -55,5 +55,5 @@ class GUIView(View):
         self.window = RunWindow(controller)
         self.app.MainLoop()
 
-    def update(self, trial):
-        wx.PostEvent(self.window.GetEventHandler(), UpdateEvent(trial=trial))
+    def update(self, trial=None, run=None):
+        wx.PostEvent(self.window.GetEventHandler(), UpdateEvent(trial=trial, run=run))

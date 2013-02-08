@@ -5,6 +5,9 @@ from threading import Thread
 from time import strftime
 import io
 import pickle 
+import time
+from time import strftime
+from datetime import datetime
 
 from utils import load_script, get_trial_constructor
 
@@ -52,24 +55,25 @@ class Run(object):
         now = strftime('%Y-%m-%d_%H-%M-%S')
         self.results_folder_path = '{}/{}'.format(
             self.configuration.results_folder_path, now)
+            
+        self.set_start_time(datetime.now().strftime('%d-%m-%Y  %H:%M:%S'))
         
         # Initialise trials
         for trial_no in range(0, self.get_no_of_trials()):
-            trial = self.get_trial_type_constructor()(trial_no, self.get_name(), self.fitness,
+            trial = self.get_trial_type_constructor()(trial_no, self, self.fitness,
                           self.configuration, self.controller,
                           self.results_folder_path)
             if trial.initialise():
                 self.trials.append(trial)
             
         self.save()
-
+        self.view_update()
         # Run trials
         for trial in self.trials:
             trial.daemon = True
             trial.start()
 
-    ## TODO - this has to be changed... its just that ctrl+c wont be propagated otherwise...
-    
+    ## TODO - this has to be changed... its just that ctrl+c wont be propagated otherwise...    
     def join(self):
         for trial in self.trials:
             trial.join(100000000)
@@ -90,9 +94,12 @@ class Run(object):
             sys.exit(1)
         
         self.set_state_dictionary(dict)
+        self.set_start_time(datetime.now().strftime('%d-%m-%Y  %H:%M:%S'))
+        
+        self.view_update()
         
         for trial_no in range(0, self.get_no_of_trials()): ###
-            trial = self.get_trial_type_constructor()(trial_no, self.get_name(), self.fitness,  self.configuration, self.controller, self.results_folder_path)
+            trial = self.get_trial_type_constructor()(trial_no, self, self.fitness,  self.configuration, self.controller, self.results_folder_path)
             trial.run_initialize()
             if not trial.load():
                 logging.error('Failed loading a trial no.'.format(
@@ -125,9 +132,24 @@ class Run(object):
             snapshot_dict[tria.get_name()] = trial.snapshot()
         return snapshot_dict
         
+    def view_update(self):
+        self.controller.view_update(run=self)
+        
     #############
     ## GET/SET ##
     #############
+    
+    def get_configuration(self):
+        return self.configuration
+    
+    def get_start_time(self):
+        return self.state_dictionary['start_time']
+        
+    def set_start_time(self, start_time):
+        self.state_dictionary['start_time'] = start_time
+        
+    def get_main_counter(self): ## TODO - 
+        return 1
     
     def get_status(self):
         return self.state_dictionary["status"]
