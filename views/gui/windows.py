@@ -4,13 +4,13 @@ from imp import load_source
 import time
 import wx
 from wx.lib.newevent import NewEvent
+from datetime import datetime
 
 from ..visualizers.plot import MLOImageViewer
 from utils import get_trial_constructor
 
 UpdateEvent, EVT_UPDATE = NewEvent()
-RegenEvent, EVT_REGEN = NewEvent()
-
+UpdateEvent2, EVT_UPDATE2 = NewEvent()
 
 class RunWindow(wx.Frame):
 
@@ -39,7 +39,7 @@ class RunWindow(wx.Frame):
         self.Bind(wx.EVT_MENU, self.on_new, menu_new)
         self.Bind(wx.EVT_MENU, self.on_load, menu_load)
         self.Bind(wx.EVT_MENU, self.on_exit, menu_exit)
-
+        self.Bind(wx.EVT_CLOSE, self.on_exit)
         menu_bar.Append(file_menu, '&File')
         self.SetMenuBar(menu_bar)
 
@@ -52,7 +52,7 @@ class RunWindow(wx.Frame):
         self.list_ctrl.InsertColumn(2, 'Progress',   width=100)
         self.list_ctrl.InsertColumn(3, 'Start Time', width=200)
         self.list_ctrl.InsertColumn(4, 'Running Time', width=200)
-        self.list_ctrl.InsertColumn(5, 'Left Time', width=200)
+        self.list_ctrl.InsertColumn(5, 'Trials Finished', width=200)
         self.list_ctrl.Bind(wx.EVT_LIST_ITEM_RIGHT_CLICK,
                             self.on_right_click_list)
 
@@ -82,6 +82,9 @@ class RunWindow(wx.Frame):
         ### Set the sizer and other variables, and display the window
         self.right_clicked_item = None
         self.childlist = []
+        self.graph_windows={}
+        self.trial_windows={}
+        
         self.bars = {}
 
         self.panel.SetSizer(main_sizer)
@@ -187,33 +190,48 @@ class RunWindow(wx.Frame):
             ### Stop the run, and delete all references to it
             item = self.list_ctrl.GetFocusedItem()
             name = self.list_ctrl.GetItem(item).GetText()
+            if self.graph_windows.has_key(name):
+                self.graph_windows[name].on_exit(None)
+            if self.trial_windows.has_key(name):
+                self.trial_windows[name].on_exit(None)
             self.bars[name].Destroy()
             del self.bars[name]
             self.list_ctrl.DeleteItem(item)
             self.controller.delete_run(name)
             self.list_ctrl.Refresh()
-
+        
     def on_show_graphs(self, event):
         logging.info('click')
         run_name = self.list_ctrl.GetItem(
-            self.list_ctrl.GetFocusedItem()).GetText()
-        run = self.controller.find_run(run_name)
-        self.childlist.append(GraphWindow(self,
-                                          'Graphs For ' +
-                                          self.right_clicked_item,
-                                          run,
-                                          self.controller))
+                self.list_ctrl.GetFocusedItem()).GetText()
+        if self.graph_windows.has_key(run_name):
+            logging.info('Graph window already exists for this Run')
+        else:
+            run = self.controller.find_run(run_name)
+            graph_window = GraphWindow(self,
+                                              'Graphs For ' +
+                                              self.right_clicked_item,
+                                              run,
+                                              self.controller)
+            self.childlist.append(graph_window)
+            self.graph_windows[run_name] = graph_window
         event.Skip()
 
     def on_show_trials(self, event):
         logging.info('click')
         run_name = self.list_ctrl.GetItem(
             self.list_ctrl.GetFocusedItem()).GetText()
-        run = self.controller.find_run(run_name)
-        self.childlist.append(TrialWindow('Trials For ' +
-                                          self.right_clicked_item,
-                                          run,
-                                          self.controller))
+        if self.trial_windows.has_key(run_name):
+            logging.info('Trial window already exists for this Run')
+        else:
+            run = self.controller.find_run(run_name)
+            trial_window = TrialWindow(self,
+                                              'Trials For ' +
+                                              self.right_clicked_item,
+                                              run,
+                                              self.controller)
+            self.childlist.append(trial_window)
+            self.trial_windows[run_name] = trial_window
         event.Skip()
         
     def on_exit(self, event):
@@ -223,13 +241,13 @@ class RunWindow(wx.Frame):
 
     def add_listctrl_run(self, run):
         self.list_ctrl.Append((run.get_name(), run.get_status(), '',
-                              run.get_start_time()))
+                              run.get_start_time(), str(run.get_running_time()), str(run.get_trials_finished()) + "/" + str(run.get_no_of_trials())))
 
     def add_progress_bar(self, run):
         rect = self.list_ctrl.GetItemRect(0)
         size = (self.list_ctrl.GetColumnWidth(2)-4, rect[3]-4)
-        bar = wx.Gauge(self.panel, range=run.get_configuration().trials_count, size=size)
-        bar.SetValue(run.get_main_counter())
+        bar = wx.Gauge(self.panel, range=run.get_no_of_trials(), size=size)
+        bar.SetValue(run.get_trials_finished())
         self.bars[run.get_name()] = bar
 
     def start_run(self, name, fitness, configuration):
@@ -239,38 +257,40 @@ class RunWindow(wx.Frame):
         self.controller.load_run(folder_path)
 
     def update_run(self, event):
-        ### Called to update display to represent run's changed state
-        run = event.run
+        try:
+            if not (event.trial is None):
+                trial = event.trial
+                visualize = event.visualize
+                if visualize: ## case when we only want to update run state (possible)
+                        if (trial.get_main_counter() % trial.get_configuration().vis_every_X_steps) == 0: ### TODO - it should really be done a bit differently...
+                             self.visuzalize_trial(trial)
+        except (wx.PyDeadObjectError, AttributeError):
+            pass
+    
+        try:
+            if not (event.run is None): 
+                run = event.run
+                drawn = run.get_name() in self.bars
+                if self.controller.run_exists(run.get_name()):
+                    if drawn:
+                        index = self.list_ctrl.FindItem(0, run.get_name())
+                        self.list_ctrl.SetStringItem(index, 1, run.get_status())
+                        self.list_ctrl.SetStringItem(index, 4, str(run.get_running_time()))
+                        self.list_ctrl.SetStringItem(index, 5, str(run.get_trials_finished()) + "/" + str(run.get_no_of_trials()))
+                        self.update_bar(run)
+                    else:
+                        self.add_listctrl_run(run)
+                        self.add_progress_bar(run)
+                        self.on_paint()
+        except (wx.PyDeadObjectError, AttributeError):
+            pass
+        event.Skip()
         
-        if not (event.trial is None): ## case when we only want to update run state (possible)
-            trial = event.trial
-            if (trial.get_main_counter() % trial.get_configuration().vis_every_X_steps) == 0: ### TODO - it should really be done a bit differently...
-                 self.visuzalize_trial(trial)
-             
-        drawn = run.get_name() in self.bars
-        if drawn:
-            index = self.list_ctrl.FindItem(0, run.get_name())
-            self.list_ctrl.SetStringItem(index, 1, run.get_status())
-            self.update_bar(run)
-        else:
-            self.add_listctrl_run(run)
-            self.add_progress_bar(run)
-            self.on_paint()
-
-    def update_run_graph(self, run):
-        ### May update the displayed graph in all graph windows for run
-        run_ref = run
-        for child in self.childlist:
-            try:
-                if child.run == run_ref:
-                    child.update_run()
-            except (wx.PyDeadObjectError, AttributeError):
-                pass
-            
     def update_bar(self, run):
         bar = self.bars[run.get_name()]
-        bar.SetValue(run.get_main_counter())
-
+        bar.SetValue(run.get_trials_finished())
+                
+                
     def get_graph_attributes(self, run, graph_name):
         return self.plot_view.get_attributes(graph_name)  ### TODO -- change this so that the plow_view is going to be selected based on the run type
 
@@ -286,12 +306,12 @@ class RunWindow(wx.Frame):
         
 class TrialWindow(wx.Frame):
 
-    def __init__(self, window_title, run, controller):
-        super(TrialWindow, self).__init__(None,
+    def __init__(self, parent, window_title, run, controller):
+        super(TrialWindow, self).__init__(parent,
                                         title=window_title,
-                                        size=(1100, 500))
+                                        size=(1300, 500))
 
-        self.GetEventHandler().Bind(EVT_UPDATE, self.update_trial)
+        parent.GetEventHandler().Bind(EVT_UPDATE, self.update_trial)
         self.plot_view = MLOImageViewer
         self.controller = controller
         self.run = run
@@ -305,6 +325,7 @@ class TrialWindow(wx.Frame):
         menu_exit = file_menu.Append(wx.ID_EXIT, 'E&xit',
                                      ' Quit')
         self.Bind(wx.EVT_MENU, self.on_exit, menu_exit)
+        self.Bind(wx.EVT_CLOSE, self.on_exit)
 
         menu_bar.Append(file_menu, '&File')
         self.SetMenuBar(menu_bar)
@@ -318,7 +339,8 @@ class TrialWindow(wx.Frame):
         self.list_ctrl.InsertColumn(2, 'Progress',   width=100)
         self.list_ctrl.InsertColumn(3, 'Start Time', width=200)
         self.list_ctrl.InsertColumn(4, 'Running Time', width=200)
-        self.list_ctrl.InsertColumn(5, 'Left Time', width=200)
+        self.list_ctrl.InsertColumn(5, 'Model Prediction Time', width=200)
+        self.list_ctrl.InsertColumn(6, 'Model Training Time', width=200)
         self.list_ctrl.Bind(wx.EVT_LIST_ITEM_RIGHT_CLICK,
                             self.on_right_click_list)
 
@@ -408,8 +430,6 @@ class TrialWindow(wx.Frame):
 
             show_graphs = menu.Append(wx.ID_ANY, 'Show Graphs')
             self.Bind(wx.EVT_MENU, self.on_show_graphs, show_graphs)
-            delete = menu.Append(wx.ID_ANY, 'Delete')
-            self.Bind(wx.EVT_MENU, self.on_delete, delete)
             self.PopupMenu(menu, event.GetPosition())
             menu.Destroy()
         except KeyError,e:
@@ -429,24 +449,23 @@ class TrialWindow(wx.Frame):
         item = self.list_ctrl.GetFocusedItem()
         name = self.list_ctrl.GetItem(item).GetText()
         self.controller.resume_trial(name)
-
         
     ## TODO - not sure if not to disable this...
-    def on_delete(self, event):
-        logging.info('click')
-        dlg = wx.MessageDialog(self, 'Delete this trial?', '',
-                               wx.OK | wx.CANCEL | wx.ICON_QUESTION)
-        result = dlg.ShowModal()
-        if result == wx.ID_OK:
-            ### Stop the trial, and delete all references to it
-            item = self.list_ctrl.GetFocusedItem()
-            name = self.list_ctrl.GetItem(item).GetText()
-            self.bars[name].Destroy()
-            del self.bars[name]
-            self.list_ctrl.DeleteItem(item)
-            self.controller.delete_trial(name)
-            self.list_ctrl.Refresh()
-
+    # def on_delete(self, event):
+        # logging.info('click')
+        # dlg = wx.MessageDialog(self, 'Delete this trial?', '',
+                               # wx.OK | wx.CANCEL | wx.ICON_QUESTION)
+        # result = dlg.ShowModal()
+        # if result == wx.ID_OK:
+            ## Stop the trial, and delete all references to it
+            # item = self.list_ctrl.GetFocusedItem()
+            # name = self.list_ctrl.GetItem(item).GetText()
+            # self.bars[name].Destroy()
+            # del self.bars[name]
+            # self.list_ctrl.DeleteItem(item)
+            # self.controller.delete_trial(name)
+            # self.list_ctrl.Refresh()
+                    
     def on_show_graphs(self, event):
         logging.info('click')
         trial_name = self.list_ctrl.GetItem(
@@ -461,11 +480,13 @@ class TrialWindow(wx.Frame):
 
     def on_exit(self, event):
         logging.info('click')
+        self.GetParent().GetEventHandler().Unbind(EVT_UPDATE, handler=self.update_trial)
+        del self.GetParent().trial_windows[self.run.get_name()]
         self.Destroy()
 
     def add_listctrl_trial(self, trial):
         self.list_ctrl.Append((trial.get_name(), trial.get_status(), '',
-                              trial.get_start_time()))
+                              trial.get_start_time(), str(trial.get_running_time()), str(trial.get_predict_surrogate_model_time()), str(trial.get_train_surrogate_model_time())))
 
     def add_progress_bar(self, trial):
         rect = self.list_ctrl.GetItemRect(0)
@@ -475,27 +496,23 @@ class TrialWindow(wx.Frame):
         self.bars[trial.get_name()] = bar
 
     def update_trial(self, event):
-        ### Called to update display to represent trial's changed state
-        trial = event.trial
-        run = event.run
+        try:
+            if not (event.run is None):
+                run = event.run
+                if self.run == run:
+                    for i in range(0,self.list_ctrl.GetItemCount()): # a bit awkward
+                        trial_name = self.list_ctrl.GetItem(i).GetText()
+                        trial = self.controller.find_trial(trial_name)
+                        index = self.list_ctrl.FindItem(0, trial_name)
+                        self.list_ctrl.SetStringItem(index, 1, trial.get_status())
+                        self.list_ctrl.SetStringItem(index, 4, str(trial.get_running_time()))
+                        self.list_ctrl.SetStringItem(index, 5, str(trial.get_predict_surrogate_model_time()))
+                        self.list_ctrl.SetStringItem(index, 6, str(trial.get_train_surrogate_model_time()))
+                        self.update_bar(trial)
+        except (wx.PyDeadObjectError, AttributeError):
+            pass
+        event.Skip()
         
-        if self.run == run:
-            drawn = trial.get_name() in self.bars
-            index = self.list_ctrl.FindItem(0, trial.get_name())
-            self.list_ctrl.SetStringItem(index, 1, trial.get_status())
-            self.update_bar(trial)
-
-
-    def update_trial_graph(self, trial):
-        ### May update the displayed graph in all graph windows for trial
-        trial_ref = trial
-        for child in self.childlist:
-            try:
-                if child.trial == trial_ref:
-                    child.update_trial()
-            except (wx.PyDeadObjectError, AttributeError):
-                pass
-            
     def update_bar(self, trial):
         bar = self.bars[trial.get_name()]
         bar.SetValue(trial.get_main_counter())
@@ -937,7 +954,7 @@ class NewRunWindow(wx.Frame):
         name = self.tc.GetValue()
         fitness = load_source('fitness', self.fitness_path)
         configuration = load_source('configuration', self.config_path)
-
+        self.controller.save_profile_dict()
         self.GetParent().start_run(name, fitness, configuration)
         self.Close(True)
 

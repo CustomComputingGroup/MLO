@@ -11,8 +11,6 @@ class SurrogateModel(object):
 
     def __init__(self, configuration, controller):
         self.configuration = configuration
-        self.classifier = Classifier()
-        self.regressor = Regressor(controller)        
         self.was_trained = False
         
     def train(self, pop):

@@ -56,8 +56,8 @@ def main():
         logging.info('Will restart optimisation')
     
     ## initialize controller
+    restart = True
     controller = Controller(restart)
-    controller.load_profile_dict(os.getcwd() + "/profile")
     ## start in gui mode
     if gui:
         logging.info('Will run with GUI')
@@ -65,7 +65,7 @@ def main():
     ## start in terminal mode
     else:
         controller.view = TerminalView()
-    
+        
     if not gui:
         controller.fitness = fitness
         controller.configuration = configuration

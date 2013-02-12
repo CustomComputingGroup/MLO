@@ -351,6 +351,147 @@ class MLOImageViewer(ImageViewer):
                           
         return graph_dictionary
         
+## This class returns a pdf containing a summary of the runs
+## 
+class MLORunReportViewer(ImageViewer):
+
+    DPI = 400
+    LABEL_FONT_SIZE = 10
+    TITLE_FONT_SIZE = 10
+
+    @staticmethod
+    def render(input_dictionary):
+        if input_dictionary["generate"]:
+            dictionary = MLOImageViewer.get_default_attributes() ##this way the default view will be used if different one was not supplied
+            dictionary.update(input_dictionary)
+            figure = mpl.pyplot.figure()
+            figure.subplots_adjust(wspace=0.35, hspace=0.35)
+            figure.suptitle(dictionary['graph_title'])
+
+            rerender = True ## pointless... remove
+            designSpace = dictionary['fitness'].designSpace
+            npts = 100
+
+            ### Initialize some graph points
+            x = linspace(designSpace[0]['min'], designSpace[0]['max'], npts)
+            y = linspace(designSpace[1]['min'], designSpace[1]['max'], npts)
+            x, y = meshgrid(x, y)
+            dictionary['x'] = reshape(x, -1)
+            dictionary['y'] = reshape(y, -1)
+            dictionary['z'] = array([[a, b] for (a, b) in zip(dictionary['x'],
+                                                              dictionary['y'])])
+
+            ### Define grid
+            dictionary['xi'] = linspace(designSpace[0]['min'] - 0.01,
+                                        designSpace[0]['max'] + 0.01, npts)
+            dictionary['yi'] = linspace(designSpace[1]['min'] - 0.01,
+                                        designSpace[1]['max'] + 0.01, npts)
+            dictionary['X'], dictionary['Y'] = meshgrid(dictionary['xi'],
+                                                        dictionary['yi'])
+
+            ### Generate the graphs according to the user's selection
+            if dictionary['all_graph_dicts']['Mean']['generate']:
+                MLOImageViewer.plot_MU(figure, dictionary)
+            if dictionary['all_graph_dicts']['Fitness']['generate']:
+                MLOImageViewer.plot_fitness_function(figure, dictionary)
+            if dictionary['all_graph_dicts']['Progression']['generate']:
+                MLOImageViewer.plot_fitness_progression(figure, dictionary)
+            if dictionary['all_graph_dicts']['DesignSpace']['generate']:
+                MLOImageViewer.plot_design_space(figure, dictionary)
+
+            ### Save and exit
+            filename = '{}/plot{:03d}.png'.format(dictionary['images_folder'],
+                                                  dictionary['counter'])
+            if rerender and os.path.isfile(filename):
+                os.remove(filename)
+            try:
+                #P = Process(target=Plot_View.save_fig, args=(figure, filename,
+                #                                             Plot_View.DPI))
+                MLOImageViewer.save_fig(figure, filename, MLOImageViewer.DPI)
+            except:
+                logging.error(
+                    'MLOImageViewer could not render a plot for {}'.format(name),
+                    exc_info=sys.exc_info())
+            mpl.pyplot.close(figure)
+            #sys.exit(0) ## I let it as a reminder... do NOT uncomment this! will get the applciation to get stuck
+        else: ## do not regenerate
+            pass
+        
+    @staticmethod
+    def save_fig(figure, filename, Format):
+        logging.info('Save fig {}'.format(filename))
+        figure.savefig(filename, dpi=DPI)
+        
+    @staticmethod
+    def get_attributes(name):
+    
+        attribute_dictionary = {
+            'All':         ['subtitle', 'x-axis', 'y-axis', 'z-axis',
+                            'font size', 'colour map', 'x-colour', 'o-colour',
+                            'position'],
+            'DesignSpace':         ['subtitle', 'x-axis', 'y-axis', 'font size',
+                            'colour map', 'x-colour', 'o-colour', 'position'],
+            'Mean':        ['subtitle', 'x-axis', 'y-axis', 'z-axis',
+                            'font size', 'colour map', 'position'],
+            'Progression': ['subtitle', 'x-axis', 'y-axis', 'font size',
+                            'position'],
+            'Fitness':     ['subtitle', 'x-axis', 'y-axis', 'z-axis',
+                            'font size', 'colour map', 'position']
+        }
+        return attribute_dictionary.get(name, None)
+        
+    @staticmethod
+    def get_default_attributes():
+        # Default values for describing graph visualization
+        graph_title = 'Title'
+        graph_names = ['Progression', 'Fitness', 'Mean', 'DesignSpace']
+
+        graph_dict1 = {'subtitle': 'Currently Best Found Solution',
+                       'x-axis': 'Iteration',
+                       'y-axis': 'Fitness',
+                       'font size': '10',
+                       'position': '221'}
+        graph_dict2 = {'subtitle': 'Fitness Function',
+                       'x-axis': 'X',
+                       'y-axis': 'Y',
+                       'z-axis': 'Fitness',
+                       'font size': '10',
+                       'colour map': 'PuBu',
+                       'position': '222'}
+        graph_dict3 = {'subtitle': 'Regression Mean',
+                       'x-axis': 'X',
+                       'y-axis': 'Y',
+                       'z-axis': 'Fitness',
+                       'font size': '10',
+                       'colour map': 'PuBuGn',
+                       'position': '223'}
+        graph_dict4 = {'subtitle': 'Design Space',
+                       'x-axis': 'X',
+                       'y-axis': 'Y',
+                       'font size': '10',
+                       'colour map': 'PuBu',
+                       'x-colour': 'black',
+                       'o-colour': 'black',
+                       'position': '224'}
+        all_graph_dicts = {'Progression': graph_dict1,
+                           'Fitness': graph_dict2,
+                           'Mean': graph_dict3,
+                           'DesignSpace': graph_dict4}
+                           
+        
+            
+        graph_dictionary = {
+            'rerendering': False,
+            'graph_title': graph_title,
+            'graph_names': graph_names,
+            'all_graph_dicts': all_graph_dicts
+        }
+        
+        for name in graph_names:
+            graph_dictionary['all_graph_dicts'][name]['generate'] = True
+                          
+        return graph_dictionary
+        
 ##This class returns a string 
 ##It should return either a string, a file reference or 
 class MLO_REPORT_VIEWER(object):

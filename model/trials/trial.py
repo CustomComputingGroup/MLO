@@ -4,21 +4,21 @@ import sys
 from threading import Thread
 import time
 from time import strftime
-from datetime import datetime
+from datetime import datetime, timedelta
 from copy import copy, deepcopy
 import io
 import pickle
 import re
 import wx
-from numpy import multiply, array
+from numpy import multiply, array, ceil, floor, maximum, minimum
 from numpy.random import uniform, rand
+import operator
 
+from deap import base, creator, tools
+toolbox = base.Toolbox()
 ##TODO - clean it up... only should be loaded when needed... 
 
 from ..surrogatemodels.surrogatemodel import DummySurrogateModel, ProperSurrogateModel
-from particles import *
-
-from deap import base, creator, tools
 
 class Trial(Thread):
 
@@ -52,7 +52,7 @@ class Trial(Thread):
             'run_name' : run_name,
             'trial_type' : self.configuration.trials_type, 
             'trial_no' : trial_no,
-            'name' : '{} Trial {}'.format(run_name, trial_no),
+            'name' : '{}_{}'.format(run_name, trial_no),
             'all_particles_in_invalid_area' : False,
             'wait' : False,
             'generations_array' : [],
@@ -60,23 +60,49 @@ class Trial(Thread):
             'enable_traceback' : configuration.enable_traceback,
             'counter_dictionary' : counter_dictionary,
             'best' : None,
-            'fresh_run' : False
+            'total_time' : 0,
+            'fresh_run' : False,
+            'predict_surrogate_model_time' : 0,
+            'train_surrogate_model_time' : 0
             # True if the user has selected to pause the trial
         }
-
+        self.kill = False
+        self.total_time = timedelta(seconds=0)
+        self.previous_time = datetime.now()
         self.controller.register_trial(self)
-        self.state_dictionary['generate'] = False
-        self.view_update()
+        self.view_update(visualize = False)
     ####################
     ## Helper Methods ##
     ####################
     
     def train_surrogate_model(self, population):
         logging.info('Training model')
+        start = datetime.now()
         self.get_surrogate_model().train(population)
-    
+        diff = datetime.now() - start
+        self.add_train_surrogate_model_time(diff)
+        
     def predict_surrogate_model(self, population):
-        return self.get_surrogate_model().predict(population)
+        start = datetime.now()
+        prediction = self.get_surrogate_model().predict(population)
+        diff = datetime.now() - start
+        self.add_predict_surrogate_model_time(diff)
+        return prediction
+        
+    def set_kill(self, kill):
+        self.kill = kill
+        
+    def add_train_surrogate_model_time(self, diff):
+        self.state_dictionary["train_surrogate_model_time"] = self.state_dictionary["train_surrogate_model_time"] + diff.seconds
+        
+    def add_predict_surrogate_model_time(self, diff):
+        self.state_dictionary["predict_surrogate_model_time"] = self.state_dictionary["predict_surrogate_model_time"] + diff.seconds
+        
+    def get_train_surrogate_model_time(self):
+        return timedelta(seconds = self.state_dictionary["train_surrogate_model_time"])
+        
+    def get_predict_surrogate_model_time(self):
+        return timedelta(seconds = self.state_dictionary["predict_surrogate_model_time"])
         
     def create_results_folder(self):
         """
@@ -116,13 +142,18 @@ class Trial(Thread):
             return array([self.fitness.worst_value]), code
    
     ## indicator for the controller and viewer that the state has changed. 
-    def view_update(self):
-        self.controller.view_update(trial=self, run=self.my_run)
+    def view_update(self, visualize=False):
+        self.controller.view_update(trial=self, run=self.my_run, visualize=visualize)
 
     def increment_counter(self, counter):
         self.set_counter_dictionary(counter, self.get_counter_dictionary(counter) + 1)
                 
     def save(self):
+        self.current_time = datetime.now()
+        diff = self.current_time - self.previous_time
+        self.previous_time = self.current_time
+        self.total_time = self.total_time + diff
+        self.state_dictionary['total_time'] = self.total_time.seconds
         try:
             trial_file = ('{}/{:0' + str(10) +
                   'd}.txt').format(self.get_results_folder(),
@@ -131,41 +162,52 @@ class Trial(Thread):
             surrogate_model_state_dict = self.get_surrogate_model().get_state_dictionary()
             dict['surrogate_model_state_dict'] = surrogate_model_state_dict
             with io.open(trial_file, 'wb') as outfile:
-                pickle.dump(dict, outfile)            
+                pickle.dump(dict, outfile)  
+                if self.kill:
+                    sys.exit(0)
         except Exception, e:
             logging.error(str(e))
+            if self.kill:
+                sys.exit(0)
             return False
             
     ## by default find the latest generation
     def load(self, generation = None):
-        #try:
-        if generation is None:
-            # Figure out what the last generation before crash was
-            found = False
-            for filename in reversed(os.listdir(self.get_results_folder())):
-                match = re.search(r'^(\d+)\.txt', filename)
-                if match:
-                    # Found the last generation
-                    generation = int(match.group(1))
-                    found = True
-                    break
+        try:
+            if generation is None:
+                # Figure out what the last generation before crash was
+                found = False
+                for filename in reversed(os.listdir(self.get_results_folder())):
+                    match = re.search(r'^(\d+)\.txt', filename)
+                    if match:
+                        # Found the last generation
+                        generation = int(match.group(1))
+                        found = True
+                        break
 
-            if not found:
-                return False
-                
-        generation_file = ('{:0' + str(10) +
-                           'd}').format(generation)
-        trial_file = '{}/{}.txt'.format(self.get_results_folder(), generation_file)
-        with open(trial_file, 'rb') as outfile:
-            dict = pickle.load(outfile)
-        self.set_state_dictionary(dict)
-        self.state_dictionary["generate"] = False
-        self.get_surrogate_model().set_state_dictionary(dict['surrogate_model_state_dict'])
-        logging.info("Loaded Trial")
-        return True
-        #except Exception, e:
-        #    logging.error("Loading error" + str(e))
-        #    return False
+                if not found:
+                    return False
+                    
+            generation_file = ('{:0' + str(10) +
+                               'd}').format(generation)
+            trial_file = '{}/{}.txt'.format(self.get_results_folder(), generation_file)
+            with open(trial_file, 'rb') as outfile:
+                dict = pickle.load(outfile)
+            self.set_state_dictionary(dict)
+            self.state_dictionary["generate"] = False
+            self.kill = False
+            self.get_surrogate_model().set_state_dictionary(dict['surrogate_model_state_dict'])
+            logging.info("Loaded Trial")
+            return True
+        except Exception, e:
+            logging.error("Loading error" + str(e))
+            return False
+        
+    def exit(self):
+        self.set_status('Finished')
+        self.my_run.trial_notify(self)
+        self.view_update(visualize = False)
+        sys.exit(0)
         
     #######################
     ## Abstract Methods  ##
@@ -187,10 +229,16 @@ class Trial(Thread):
     def snapshot(self):
         raise NotImplementedError('Trial is an abstract class, '
                                   'this should not be called.')
-        
+                                  
+    def get_predicted_time(self):
+        raise NotImplementedError('Trial is an abstract class, '
+                                  'this should not be called.')
     #######################
     ### GET/SET METHODS ###
     #######################
+        
+    def get_running_time(self):
+        return timedelta(seconds=self.state_dictionary['total_time'])
     
     def get_main_counter_iterator(self):
         return range(0, self.get_counter_dictionary(self.get_main_counter_name()) + 1)
@@ -209,6 +257,7 @@ class Trial(Thread):
     
     def set_state_dictionary(self, new_dictionary):
         self.state_dictionary = new_dictionary 
+        self.total_time = timedelta(seconds = self.state_dictionary['total_time'])
         
     def get_fitness(self):
         return self.fitness
@@ -225,6 +274,8 @@ class Trial(Thread):
     def set_counter_dictionary(self, counter, value):
         self.state_dictionary['counter_dictionary'][counter] = value
         
+    ## should really be deep copy or something...
+    ## we dont want it to be mutable outside
     def get_configuration(self):
         return self.configuration
         
@@ -240,6 +291,9 @@ class Trial(Thread):
     def set_surrogate_model(self, new_model):
         self.surrogate_model = new_model
         
+    def set_wait(self, new_wait): 
+        self.state_dictionary["wait"] = new_wait
+        
     def get_wait(self):
         return self.state_dictionary["wait"]
 
@@ -248,6 +302,7 @@ class Trial(Thread):
         
     def set_status(self, status):
         self.state_dictionary["status"] = status
+        self.view_update()
         
     def set_retrain_model(self, status):
         self.state_dictionary["retrain_model"] = status
@@ -274,7 +329,7 @@ class Trial(Thread):
         self.state_dictionary["terminating_condition"] = self.fitness.termCond(fitness[0])
         
     def get_name(self):
-        return self.name
+        return self.state_dictionary["name"]
         
     def get_results_folder(self):
         return '{}/trial-{}'.format(self.get_run_results_folder_path(), self.get_trial_no()) #self.state_dictionary['results_folder']
@@ -322,7 +377,7 @@ class PSOTrial(Trial):
         
     def run_initialize(self):
         design_space = self.fitness.designSpace
-
+        self.toolbox = copy(base.Toolbox())
         self.smin = [-1.0 * self.get_configuration().max_speed *
                 (dimSetting['max'] - dimSetting['min'])
                 for dimSetting in design_space]
@@ -330,24 +385,30 @@ class PSOTrial(Trial):
                 (dimSetting['max'] - dimSetting['min'])
                 for dimSetting in design_space]
 
-        creator.create('FitnessMax', base.Fitness, weights=(1.0,))
-        creator.create('Particle', list, fitness=creator.FitnessMax,
-                       smin=self.smin, smax=self.smax,
-                       speed=[uniform(smi, sma) for sma, smi in zip(self.smax,
-                                                                    self.smin)],
-                       pmin=[dimSetting['max'] for dimSetting in design_space],
-                       pmax=[dimSetting['min'] for dimSetting in design_space],
-                       model=False, best=None, code=None)
+        try:
+            eval('creator.Particle' + self.my_run.get_name())
+            logging.info("Particle class for this run already exists")
+        except AttributeError:
+            creator.create('FitnessMax', base.Fitness, weights=(1.0,))
+            ### we got to add specific names, otherwise the classes are going to be visible for all
+            ### modules which use deap...
+            
+            creator.create(str('Particle' + self.my_run.get_name()), list, fitness=creator.FitnessMax,
+                           smin=self.smin, smax=self.smax,
+                           speed=[uniform(smi, sma) for sma, smi in zip(self.smax,
+                                                                        self.smin)],
+                           pmin=[dimSetting['max'] for dimSetting in design_space],
+                           pmax=[dimSetting['min'] for dimSetting in design_space],
+                           model=False, best=None, code=None)
 
-        self.toolbox = base.Toolbox()
-        self.toolbox.register('particle', generate, designSpace=design_space)
-        self.toolbox.register('filter_particles', filterParticles,
+        self.toolbox.register('particle', self.generate, designSpace=design_space)
+        self.toolbox.register('filter_particles', self.filterParticles,
                               designSpace=design_space)
-        self.toolbox.register('filter_particle', filterParticle,
+        self.toolbox.register('filter_particle', self.filterParticle,
                               designSpace=design_space)
         self.toolbox.register('population', tools.initRepeat,
                               list, self.toolbox.particle)
-        self.toolbox.register('update', updateParticle, trial=self,
+        self.toolbox.register('update', self.updateParticle, trial=self,
                               conf=self.get_configuration(),
                               designSpace=design_space)
         self.toolbox.register('evaluate', self.fitness_function)
@@ -357,8 +418,8 @@ class PSOTrial(Trial):
         self.set_start_time(datetime.now().strftime('%d-%m-%Y  %H:%M:%S'))
         
         logging.info('{} started'.format(self.get_name()))
-
-        logging.info('Run prepared... executing')
+        logging.info('Trial prepared... executing')
+        self.save() ## training might take a bit...
         # Initialise termination check
         
         self.check = False
@@ -368,10 +429,12 @@ class PSOTrial(Trial):
         if self.state_dictionary["fresh_run"]: ## we need this as we only want to do it for initial generation
             ## the problem is that we cannot
             self.train_surrogate_model(self.get_population())
-            self.view_update()
+            self.view_update(visualize = True)
             self.state_dictionary["fresh_run"] = False
+            self.save()
             
         while self.get_counter_dictionary('g') < self.get_configuration().max_iter + 1:
+            
             logging.info('[{}] Generation {}'.format(
                 self.get_name(), self.get_counter_dictionary('g')))
             logging.info('[{}] Fitness {}'.format(
@@ -418,13 +481,9 @@ class PSOTrial(Trial):
                 time.sleep(0)
             
             self.increment_main_counter()
-            self.state_dictionary["generate"] = True
-            self.view_update()
+            self.view_update(visualize = True)
 
-            
-        self.set_status('Finished')
-        logging.info('{} finished'.format(self.get_name()))
-        sys.exit(0)
+        self.exit()
         
     ### returns a snapshot of the trial state
     def snapshot(self):
@@ -453,23 +512,130 @@ class PSOTrial(Trial):
     ####################
     ## Helper Methods ##
     ####################
+    
+    def create_particle(self, particle):
+        return eval('creator.Particle' + self.my_run.get_name())(particle)
+        
+    
+    def createUniformSpace(self, particles, designSpace):
+        pointPerDimensions = 5
+        valueGrid = mgrid[designSpace[0]['min']:designSpace[0]['max']:
+                          complex(0, pointPerDimensions),
+                          designSpace[1]['min']:designSpace[1]['max']:
+                          complex(0, pointPerDimensions)]
+
+        for i in [0, 1]:
+            for j, part in enumerate(particles):
+                part[i] = valueGrid[i].reshape(1, -1)[0][j]
+
+    def filterParticles(self,  particles, designSpace):
+        for particle in particles:
+            self.filterParticle(particle, designSpace)
+            
+    def filterParticle(self, p, designSpace):
+        p.pmin = [dimSetting['min'] for dimSetting in designSpace]
+        p.pmax = [dimSetting['max'] for dimSetting in designSpace]
+
+        for i, val in enumerate(p):
+            #dithering
+            if designSpace[i]['type'] == 'discrete':
+                if uniform(0.0, 1.0) < (p[i] - floor(p[i])):
+                    p[i] = ceil(p[i])  # + designSpace[i]['step']
+                else:
+                    p[i] = floor(p[i])
+
+            #dont allow particles to take the same value
+            p[i] = minimum(p.pmax[i], p[i])
+            p[i] = maximum(p.pmin[i], p[i])
+
+    def generate(self,  designSpace):
+        particle = [uniform(dimSetting['min'], dimSetting['max'])
+                    for dimSetting
+                    in designSpace]
+        particle = self.create_particle(particle)
+        return particle
+
+    def updateParticle(self,  part, generation, trial, conf, designSpace):
+        if conf.admode == 'fitness':
+            fraction = trial.fitness_counter / conf.max_fitness
+        elif conf.admode == 'iter':
+            fraction = generation / conf.max_iter
+        else:
+            raise('[updateParticle]: adjustment mode unknown.. ')
+
+        random1 = uniform(0, conf.phi1)
+        random2 = uniform(0, conf.phi2)
+        u1 = [uniform(0, conf.phi1)] * len(part)
+        u2 = [uniform(0, conf.phi2)] * len(part)
+        v_u1 = map(operator.mul, u1, map(operator.sub, part.best, part))
+        v_u2 = map(operator.mul, u2, map(operator.sub, trial.get_best(), part))
+
+        weight = 1.0
+        if conf.weight_mode == 'linear':
+            weight = conf.max_weight - (conf.max_weight -
+                                        conf.min_weight) * fraction
+        elif conf.weight_mode == 'norm':
+            weight = conf.weight
+        else:
+            raise('[updateParticle]: weight mode unknown.. ')
+        weightVector = [weight] * len(part.speed)
+        part.speed = map(operator.add,
+                         map(operator.mul, part.speed, weightVector),
+                         map(operator.add, v_u1, v_u2))
+
+        if conf.applyK is True:
+            phi = array(u1) + array(u1)
+
+            XVector = (2.0 * conf.KK) / abs(2.0 - phi -
+                                            sqrt(pow(phi, 2.0) - 4.0 * phi))
+            part.speed = map(operator.mul, part.speed, XVector)
+
+        if conf.mode == 'vp':
+            for i, speed in enumerate(part.speed):
+                speedCoeff = (conf.K - pow(fraction, conf.p)) * part.smax[i]
+                if speed < -speedCoeff:
+                    part.speed[i] = -speedCoeff
+                elif speed > speedCoeff:
+                    part.speed[i] = speedCoeff
+                else:
+                    part.speed[i] = speed
+        elif conf.mode == 'norm':
+            for i, speed in enumerate(part.speed):
+                if speed < part.smin[i]:
+                    part.speed[i] = part.smin[i]
+                elif speed > part.smax[i]:
+                    part.speed[i] = part.smax[i]
+        elif conf.mode == 'exp':
+            for i, speed in enumerate(part.speed):
+                maxVel = (1 - pow(fraction, conf.exp)) * part.smax[i]
+                if speed < -maxVel:
+                    part.speed[i] = -maxVel
+                elif speed > maxVel:
+                    part.speed[i] = maxVel
+        elif conf.mode == 'no':
+            pass
+        else:
+            raise('[updateParticle]: mode unknown.. ')
+        part[:] = map(operator.add, part, part.speed)
+
         
     def initialize_population(self):
         ## the while loop exists, as meta-heuristic makes no sense till we find at least one particle that is within valid region...
         
         self.set_at_least_one_in_valid_region(False)
+        F = copy(self.get_configuration().F)
         while (not self.get_at_least_one_in_valid_region()):
             self.set_population(self.toolbox.population(self.get_configuration().population_size))
             self.toolbox.filter_particles(self.get_population())
             if self.get_configuration().eval_correct:
-                self.get_population()[0] = creator.Particle(
+                self.get_population()[0] = self.create_particle(
                     self.fitness.alwaysCorrect())  # This will break
             for i, part in enumerate(self.get_population()):
-                if i < self.get_configuration().F:
+                if i < F:
                     part.fitness.values, part.code = self.toolbox.evaluate(part)
                     self.set_at_least_one_in_valid_region((part.code == 0) or self.get_at_least_one_in_valid_region())
             ## add one example till we find something that works
-            self.get_configuration().F = 1
+            F = 1
         self.state_dictionary["fresh_run"] = True
         
     def meta_iterate(self):
@@ -480,10 +646,10 @@ class PSOTrial(Trial):
         #Update Bests
         for part in self.get_population():
             if not part.best or self.fitness.is_better(part.fitness, part.best.fitness):
-                part.best = creator.Particle(part)
+                part.best = self.create_particle(part)
                 part.best.fitness.values = part.fitness.values
             if not self.get_best() or self.fitness.is_better(part.fitness, self.get_best().fitness):
-                self.set_best(creator.Particle(part))
+                self.set_best(self.create_particle(part))
                 self.get_best().fitness.values = part.fitness.values
                 self.new_best = True
                 logging.info('New global best found' + str(self.get_best()) + ' fitness:'+ str(part.fitness.values))                
@@ -502,7 +668,7 @@ class PSOTrial(Trial):
             ## TODO - clean it up...  messy
             logging.info('Best was already evalauted.. adding perturbation')
             perturbation = self.perturbation()                        
-            perturbed_particle = creator.Particle(self.get_best())
+            perturbed_particle = self.create_particle(self.get_best())
             for i,val in enumerate(perturbation):
                 perturbed_particle[i] = perturbed_particle[i] + val       
             self.toolbox.filter_particle(perturbed_particle)
@@ -527,7 +693,7 @@ class PSOTrial(Trial):
         if particle is None:
             logging.info('Evaluating a perturbation of a random particle')
             particle = self.toolbox.particle()
-        perturbedParticle = creator.Particle(particle)
+        perturbedParticle = self.create_particle(particle)
         for i,val in enumerate(perturbation):
             perturbedParticle[i] = perturbedParticle[i] + val       
         self.toolbox.filter_particle(perturbedParticle)
@@ -629,6 +795,10 @@ class PSOTrial(Trial):
     #######################
     ### GET/SET METHODS ###
     #######################
+    
+    def get_predicted_time(self):
+        predicted_time = self.state_dictionary['total_time'] * self.get_configuration().max_iter / (self.get_counter_dictionary('g') + 1.0)
+        return str(timedelta(seconds=predicted_time))
     
     def set_population(self, population):
         self.state_dictionary["population"] = population

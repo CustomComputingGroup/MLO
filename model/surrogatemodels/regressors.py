@@ -78,7 +78,7 @@ class Regressor(object):
         
 class GaussianProcessRegressor(Regressor):
 
-    def _init_(self, controller):
+    def __init__(self, controller):
         super(GaussianProcessRegressor, self).__init__(controller)
         self.input_scaler = None
         self.output_scaler = None
@@ -167,13 +167,14 @@ class GaussianProcessRegressor(Regressor):
 ## Different implementation of GPR regression
 class GaussianProcessRegressor2(Regressor):
 
-    def _init_(self, controller):
+    def __init__(self, controller):
         super(GaussianProcessRegressor2, self).__init__(controller)
         self.input_scaler = None
         self.output_scaler = None
         self.scaled_training_set = None
         self.adjusted_training_fitness = None
         self.covfunc = None
+        self.gp=None
             
     def train(self, pop, conf, dimensions):
         try:
@@ -270,6 +271,7 @@ class GaussianProcessRegressor2(Regressor):
         self.training_fitness = dict['training_fitness']
         self.gp = dict['gp']
         self.covfunc = dict['covfunc']
+        
         
     # def returnMaxS2(pop,resultsFolder,iterations,toolbox,npts=200,d1=0,d2=1,fitness=None,gp=None,hypercube=None):
     # global gpTrainingSet,gpTrainingFitness,clf
