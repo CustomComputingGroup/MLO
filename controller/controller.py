@@ -8,7 +8,7 @@ import os
 
 from model.run import Run
 from visualizer import ParallelisedVisualizer, SingleThreadVisualizer
-from utils import get_trial_type_visualizer
+from utils import get_trial_type_visualizer, get_run_type_visualizer
 
 class Controller(object):
 
@@ -18,7 +18,6 @@ class Controller(object):
         self.runs = {}
         max_training_process = 3
         self.training_sema = Semaphore(value=max_training_process)
-
         # Use different visualizer on OS X
         if platform.system() == 'Darwin':
             self.visualizer = SingleThreadVisualizer(self)
@@ -26,11 +25,15 @@ class Controller(object):
             self.visualizer = ParallelisedVisualizer(self)
             
         self.visualizer.daemon = True
-            
+             
     ## gui methods
             
-    def view_update(self, trial=None, run=None):
-        self.view.update(trial=trial, run=run)
+    def view_update(self, trial=None, run=None, visualize=False):
+        if self.view: ## might not have been initialized yet
+            try:
+                self.view.update(trial=trial, run=run, visualize=visualize)
+            except:
+                pass
             
     def take_over_control(self):
         self.visualizer.start()
@@ -39,40 +42,71 @@ class Controller(object):
         
     ## Run class methods
         
+    def remove_run_name_jobs(self, run_name):
+        self.visualizer.remove_run_name_jobs(run_name)
+        
     def start_run(self, name, fitness, configuration):
         if not name:
             name = 'Default Run'
         run = Run(name, fitness, configuration, self)
         run.daemon = True
         # Special case when we are restarting a previously crashed run
-        if self.restart:
-            self.register_run(run)
-            run.restart()
-            return run
         run.run()
         return run
 
     def load_run(self, run_path):
+        logging.info(run_path) 
         run = Run(None, None, None, self)
         run.set_results_folder_path(run_path)
-        run.load()
-
+        return run.load()
+        
     def delete_run(self, name):
-        run = self.runs[name]
-        self.runs = {key: value for key, value
+        try:
+            self.delete_run_trials(name)
+        except Exception, e:
+            pass
+        try:
+            self.remove_run_path(name)
+        except Exception, e:
+            pass
+        try:
+            self.remove_run_name_jobs(name)
+        except Exception, e:
+            pass
+        try:
+            run = self.runs[name]
+            self.runs = {key: value for key, value
                        in self.trials.items()
                        if key != name}
-        self.delete_run_trials(name)
+        except Exception, e:
+            pass
+            
+    def get_run_visualization_dict(self, trial_type):
+        try:
+            return self.profile_dict["run_visualization_dict"]["trial_type"]
+        except:
+            logging.info("You have never visualized runs of this trial type, will update your profile using default configuration")
+            self.update_run_visualization_dict(trial_type, get_run_type_visualizer(trial_type)["default"].get_default_attributes())
+            return self.profile_dict["run_visualization_dict"]["trial_type"]
+       
+    def update_run_visualization_dict(self, trial_type, dict):
+        self.profile_dict["run_visualization_dict"]["trial_type"] = dict
+        self.save_profile_dict()
+     
                        
     def register_run(self, run):
-        self.runs[run.get_name()] = run
-        self.last_run = run.get_name()
-        self.profile_dict["most_recent_fitness_script_file"] = run.get_fitness_script_file()
-        self.profile_dict["most_recent_fitness_script_folder"] = run.get_fitness_script_folder()
-        self.profile_dict["most_recent_configuration_script_file"] = run.get_configuration_script_file()
-        self.profile_dict["most_recent_configuration_script_folder"] = run.get_configuration_script_folder()
-        logging.info(str(self.profile_dict))
-        self.save_profile_dict()
+        if self.runs.has_key(run.get_name()):
+            logging.info("Run name already exists, please select a different name or remove the conflicting run: " + run.get_name())
+            raise
+        else:
+            self.runs[run.get_name()] = run
+            self.last_run = run.get_name()
+            self.profile_dict["most_recent_fitness_script_file"] = run.get_fitness_script_file()
+            self.profile_dict["most_recent_fitness_script_folder"] = run.get_fitness_script_folder()
+            self.profile_dict["most_recent_configuration_script_file"] = run.get_configuration_script_file()
+            self.profile_dict["most_recent_configuration_script_folder"] = run.get_configuration_script_folder()
+            self.profile_dict["run_paths"][run.get_name()] = run.get_results_folder_path()
+            self.save_profile_dict()
 
     def get_run_status(self, name):
         return self.runs[name].get_status()
@@ -80,27 +114,28 @@ class Controller(object):
     def find_run(self, name):
         return self.runs[name]
 
+    def run_exists(self, name):
+        try:
+            self.find_run(name)
+            return True
+        except:
+            return False
+        
     def delete_run_trials(self, name):
         run = self.find_run(name)
         runs_trials = run.get_trials()
         for trial in runs_trials:
-            delete_trial(self, trial.get_name())
-                       
+            self.delete_trial(trial.get_name())
+                               
     def pause_run(self, name):
         run = self.runs[name]
         run.set_wait(True)
         run.set_status("Paused")
-        runs_trials = run.get_trials()
-        for trial in runs_trials:
-            pause_trial(self, trial.get_name())
             
     def resume_run(self, name):
         run = self.runs[name]
         run.set_wait(False)
         run.set_status("Running")
-        runs_trials = run.get_trials()
-        for trial in runs_trials:
-            resume_trial(self, trial.get_name())
             
     ### trial managment methods
         
@@ -115,6 +150,7 @@ class Controller(object):
 
     def delete_trial(self, name):
         trial = self.trials[name]
+        trial.set_kill(True)
         self.trials = {key: value for key, value
                        in self.trials.items()
                        if key != name}
@@ -123,13 +159,11 @@ class Controller(object):
         trial = self.trials[name]
         trial.set_wait(True)
         trial.set_status("Paused")
-        self.view_update(trial)
 
     def resume_trial(self, name):
         trial = self.trials[name]
         trial.set_wait(False)
         trial.set_status("Running")
-        self.view_update(trial)
 
     ## visualizer methods
 
@@ -194,23 +228,49 @@ class Controller(object):
             logging.error(str(e))
             return False
        
-    def load_profile_dict(self, dir):
+    def remove_run_path(self, name):
+        del self.profile_dict["run_paths"][name]
+        logging.info(self.profile_dict["run_paths"])
+        self.save_profile_dict()
+       
+    def load_profile_dict(self):
+        dir = os.getcwd() + "/profile"
         try:
-            
             with open(dir, 'rb') as outfile:
                 dict = pickle.load(outfile)
             dict["dir"] = dir
             self.profile_dict = dict
-            logging.info("Loaded controller profile dictionary")
-        except:
+            logging.info("Loaded profile dictionary")
+            if self.restart:
+                logging.info("Restarting previous runs..")
+                delete_runs = []
+                
+                for run_name, run_path in self.profile_dict["run_paths"].items():
+                    logging.info("Restarted run " + run_name)
+                    success = self.load_run(run_path)
+                    logging.info(str(success))
+                    if success: 
+                        self.pause_run(run_name)
+                    else:
+                        logging.info("Restarting run " + run_name + " failed")
+                        logging.info("Conflicting run will be removed from the profile")
+                        ## delete whatever was loaded for the run
+                        delete_runs.append(run_name)
+                for run_name in delete_runs: ## this is neccesary as you cannot delete elements from an iterator while
+                                            ## iterating over it
+                    self.delete_run(run_name)
+        except Exception, e:
             logging.info("A new controller profile dictionary is going to be created")
+            logging.info("The new profile was saved as backup, verify error: " + str(e))
             self.profile_dict = { "trial_visualization_dict" : {},
+                                  "run_visualization_dict" : {},
                                   "last_run" : "",
                                   "dir" : os.getcwd() + "/profile",
                                   "most_recent_dir" : None,
                                   "most_recent_fitness_script_file" : '',
                                   "most_recent_fitness_script_folder" : os.getcwd(),
                                   "most_recent_configuration_script_file" : '',
-                                  "most_recent_configuration_script_folder" : os.getcwd()
+                                  "most_recent_configuration_script_folder" : os.getcwd(),
+                                  "run_paths": {}
                                 }
             self.save_profile_dict()

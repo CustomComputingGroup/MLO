@@ -1,7 +1,7 @@
 import wx
 
 from views.gui.windows import RunWindow, UpdateEvent, UpdateEvent2
-from visualizers.plot import MLOImageViewer
+from visualizers.plot import MLOImageViewer, MLORunReportViewer
 
 
 
@@ -28,13 +28,17 @@ class TerminalView(View):
     def initialize(self, controller):
         self.controller = controller       
         self.plot_view = MLOImageViewer
+        self.run_view = MLORunReportViewer
         
         if not self.controller.restart and not (self.controller.fitness and  self.controller.configuration):
             logging.error('Benchmark and/or configuration script not '
                           'provided, terminating...')
             return
-        controller.load_profile_dict()
-        self.controller.start_run('Default run', self.controller.fitness, self.controller.configuration).join()
+        controller.load_profile_dict()            
+        if False:
+            pass ## TODO implement restart over here
+        else:
+            self.controller.start_run('Default_run', self.controller.fitness, self.controller.configuration).join()
         self.controller.visualizer.terminate()
         
     ## Print out run statistics, define a new stats printer

@@ -10,6 +10,14 @@ run_example2:
 run_example3:
 	./run_mlo.sh -f examples/reconfigurable_radio/fitness_script.py -c examples/reconfigurable_radio/configuration_script.py
     
+install:
+	easy_install numpy
+	easy_install scipy
+	easy_install scikit-learn
+	east_install matplotlib
+	easy_install pisa
+	east_install pypdf
+    
 pep:
 	pep8 --statistic --exclude=pyXGPR,Old_Files .
 

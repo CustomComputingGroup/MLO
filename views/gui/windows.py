@@ -2,11 +2,11 @@ import os
 import logging
 from imp import load_source
 import time
-import wx
+import wx, wx.html
 from wx.lib.newevent import NewEvent
 from datetime import datetime
 
-from ..visualizers.plot import MLOImageViewer
+from ..visualizers.plot import MLOImageViewer, MLORunReportViewer
 from utils import get_trial_constructor
 
 UpdateEvent, EVT_UPDATE = NewEvent()
@@ -21,6 +21,7 @@ class RunWindow(wx.Frame):
 
         self.GetEventHandler().Bind(EVT_UPDATE, self.update_run)
         self.plot_view = MLOImageViewer
+        self.run_view = MLORunReportViewer
         self.controller = controller
 
         ### Set up display
@@ -191,9 +192,15 @@ class RunWindow(wx.Frame):
             item = self.list_ctrl.GetFocusedItem()
             name = self.list_ctrl.GetItem(item).GetText()
             if self.graph_windows.has_key(name):
-                self.graph_windows[name].on_exit(None)
+                try:
+                    self.graph_windows[name].on_exit(None)
+                except (wx.PyDeadObjectError, AttributeError):
+                    pass
             if self.trial_windows.has_key(name):
-                self.trial_windows[name].on_exit(None)
+                try:
+                    self.trial_windows[name].on_exit(None)
+                except (wx.PyDeadObjectError, AttributeError):
+                    pass
             self.bars[name].Destroy()
             del self.bars[name]
             self.list_ctrl.DeleteItem(item)
@@ -208,7 +215,7 @@ class RunWindow(wx.Frame):
             logging.info('Graph window already exists for this Run')
         else:
             run = self.controller.find_run(run_name)
-            graph_window = GraphWindow(self,
+            graph_window = RunGraphWindow(self,
                                               'Graphs For ' +
                                               self.right_clicked_item,
                                               run,
@@ -282,6 +289,8 @@ class RunWindow(wx.Frame):
                         self.add_listctrl_run(run)
                         self.add_progress_bar(run)
                         self.on_paint()
+                    if event.visualize:
+                        self.visuzalize_run(run)
         except (wx.PyDeadObjectError, AttributeError):
             pass
         event.Skip()
@@ -297,7 +306,7 @@ class RunWindow(wx.Frame):
     def visuzalize_run(self, run):
         snapshot = run.snapshot()
         snapshot.update(self.controller.get_run_visualization_dict(run.get_run_type()))
-        self.controller.visualize(snapshot, self.plot_view.render) ### TODO -- change this so that the plow_view is going to be selected based on the run type
+        self.controller.visualize(snapshot, self.run_view.render) ### TODO -- change this so that the plow_view is going to be selected based on the run type
         
     def visuzalize_trial(self, trial):
         snapshot = trial.snapshot()
@@ -312,8 +321,8 @@ class TrialWindow(wx.Frame):
                                         size=(1300, 500))
 
         parent.GetEventHandler().Bind(EVT_UPDATE, self.update_trial)
-        self.plot_view = MLOImageViewer
         self.controller = controller
+        self.plot_view = MLOImageViewer
         self.run = run
         ### Set up display
         self.panel = wx.Panel(self, wx.ID_ANY)
@@ -480,7 +489,6 @@ class TrialWindow(wx.Frame):
 
     def on_exit(self, event):
         logging.info('click')
-        self.GetParent().GetEventHandler().Unbind(EVT_UPDATE, handler=self.update_trial)
         del self.GetParent().trial_windows[self.run.get_name()]
         self.Destroy()
 
@@ -830,7 +838,6 @@ class OptionsWindow(wx.Frame):
     def get_graph_attributes(self, trial, graph_name):
         return self.GetParent().get_graph_attributes(trial, graph_name)
 
-
 class NewRunWindow(wx.Frame):
 
     def __init__(self, parent, title, controller):
@@ -991,7 +998,6 @@ class NewRunWindow(wx.Frame):
                     logging.error('File Dialog incorrectly called')
         return on_open_file
     
-
 class loadRunWindow(wx.Frame):
 
     def __init__(self, parent, title):
@@ -1067,3 +1073,218 @@ class loadRunWindow(wx.Frame):
             self.folder_path = dlg.GetPath()
             self.selected_folder_name.SetLabel(self.folder_path)
             logging.info('Selected folder path:' + self.folder_path)
+
+class RunGraphWindow(wx.Frame):
+
+    def __init__(self, parent, title, run, controller):
+        super(RunGraphWindow, self).__init__(parent, title=title,
+                                          size=(1320, 650))
+
+                
+        ### Initialisation (take graph options from given run)
+        self.run = run
+        self.results_folder = self.run.get_results_folder_path()
+        self.controller = controller
+        
+        ## Set up display
+        html = wx.html.HtmlWindow(self)
+        if "gtk2" in wx.PlatformInfo:
+            html.SetStandardFonts()
+        html.LoadPage(self.results_folder + "/run_raport.html")
+        self.panel2 = wx.Panel(self,-1, style=wx.SUNKEN_BORDER)
+        box = wx.BoxSizer(wx.VERTICAL)
+        box.Add(html, 1, wx.EXPAND)
+        
+        option_sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        #Initialise options button
+        self.Bind(wx.EVT_CLOSE, self.on_exit)
+        options_button = wx.Button(self.panel2, label='Options', size=(400, -1))
+        options_button.Bind(wx.EVT_BUTTON, self.on_options)
+                       
+        refresh_button = wx.Button(self.panel2, label='Refresh', size=(60, -1))
+        refresh_button.Bind(wx.EVT_BUTTON, self.on_refresh)
+
+        regenerate_button = wx.Button(self.panel2, label='Regenerate', size=(120, -1))
+        regenerate_button.Bind(wx.EVT_BUTTON, self.on_regenerate)
+
+        option_sizer.Add(refresh_button, 0, wx.ALL, 10)
+        option_sizer.Add(regenerate_button, 0, wx.ALL, 10)
+        option_sizer.AddStretchSpacer(1)
+        option_sizer.Add(options_button, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
+        self.panel2.SetSizer(option_sizer)
+        box.Add(self.panel2, 0, wx.EXPAND)
+        #box.Add(self.panel2, 1, wx.GROW)
+        
+
+        # self.childlist = []
+
+        self.SetSizer(box)
+        # self.Centre()
+        self.Show()
+
+    def on_exit(self, event):
+        del self.GetParent().graph_windows[self.run.get_name()]
+        self.Destroy()
+        
+    ## TODO
+    def on_refresh(self, event):
+        pass
+        
+    ## TODO
+    def on_regenerate(self, event):
+        pass
+        
+    def on_options(self, event):
+        logging.info('click')
+        self.childlist.append(RunOptionsWindow(self,
+                                            'Graphs Options For ' +
+                                            self.run.get_name(),
+                                            self.run,
+                                            self.controller))
+        event.Skip()
+
+    def update_run(self):
+        self.update_image()
+        try:
+            self.current_plot = self.all_plots[self.plot_index]
+            self.file_name = self.make_file_name(self.current_plot)
+            image = wx.Image(self.file_name, wx.BITMAP_TYPE_PNG)
+        except Exception,e:
+            current_wd = os.getcwd()
+            os.chdir(os.path.dirname(os.path.realpath(__file__)))
+            self.file_name = 'img/nothing.jpg'
+            logging.info('No images found or error happened {}'.format(e))
+            self.plot_index = 0
+            self.file_name
+            image = wx.Image(self.file_name, wx.BITMAP_TYPE_JPEG)
+            os.chdir(current_wd)
+        image = image.Scale(1060, 580, wx.IMAGE_QUALITY_HIGH)
+        if self.bmp is None:
+            self.bmp = wx.StaticBitmap(self.panel, wx.ID_ANY,
+                           wx.BitmapFromImage(image),
+                           size=(image.GetWidth(), image.GetHeight()))
+        else:
+            self.bmp.SetBitmap(wx.BitmapFromImage(image))   
+
+    def regenerate_graph(self, run): # TODO
+        logging.debug('current plot: {}'.format(self.current_plot))
+        pass
+        
+    def visuzalize_run(self, run):
+        self.GetParent().visuzalize_run(run)
+        
+    def get_graph_attributes(self, run, graph_name):
+        return self.GetParent().get_graph_attributes(run, graph_name)
+       
+class RunOptionsWindow(wx.Frame):
+
+    def __init__(self, parent, title, run, controller):
+        super(OptionsWindow, self).__init__(parent, title=title,
+                                            size=(1000, 500))
+
+        self.run = run
+        self.controller = controller
+        self.graph_names = self.controller.get_run_visualization_dict(self.run.get_run_type())['graph_names']
+
+        ### Set up display
+        self.panel = wx.ScrolledWindow(self)
+        self.panel.SetScrollRate(4, 16)
+        self.tc_dictionary = {}
+        self.checkbox_dictionary = {}
+
+        main_sizer = wx.BoxSizer(wx.VERTICAL)
+        option_sizer = wx.BoxSizer(wx.VERTICAL)
+        button_sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        ### Add the title option
+        title_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.tc_dictionary['title'] = wx.TextCtrl(
+            self.panel,
+            value=self.controller.get_run_visualization_dict(self.run.get_run_type())['graph_title'])
+        title_sizer.Add(wx.StaticText(self.panel, -1, 'Title:'), 0,
+                        wx.TOP | wx.LEFT, 10)
+        title_sizer.Add(self.tc_dictionary['title'], 1,
+                        wx.GROW | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+        option_sizer.Add(title_sizer, 1, wx.GROW)
+
+        ### Add the checkbox sizers
+        run_gd = self.controller.get_run_visualization_dict(self.run.get_run_type())['all_graph_dicts']
+        checkbox_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        for graph_name in self.graph_names:
+            self.checkbox_dictionary[graph_name] = wx.CheckBox(
+                self.panel, label='Regenerate '+graph_name+' Graph?')
+            self.checkbox_dictionary[graph_name].SetValue(
+                run_gd[graph_name]['generate'])
+            checkbox_sizer.Add(self.checkbox_dictionary[graph_name],
+                               1, wx.GROW)
+        option_sizer.Add(checkbox_sizer, 0, wx.GROW)
+
+        ### Generate and add sizers for each attribute
+        attributes = self.get_graph_attributes(self.run, 'All')
+        graph_attributes_dictionary = {}
+        for graph_name in self.graph_names:
+            graph_attributes_dictionary[graph_name] = \
+                self.get_graph_attributes(self.run, graph_name)
+
+        for attribute in attributes:
+            generate = False
+            attribute_sizer = wx.BoxSizer(wx.HORIZONTAL)
+            for graph_name in self.graph_names:
+                if attribute in graph_attributes_dictionary[graph_name]:
+                    temp_sizer, self.tc_dictionary[attribute+graph_name] = \
+                        self.make_sizer(graph_name, attribute,
+                                        'Plot '+graph_name+' '+attribute+':')
+                    attribute_sizer.Add(temp_sizer, 1, wx.GROW)
+                    generate = True
+                else:
+                    attribute_sizer.AddStretchSpacer(1)
+            if generate:
+                option_sizer.Add(attribute_sizer, 1, wx.GROW)
+
+        
+        ### refresh view button TODO - 
+        save_button = wx.Button(self.panel, label='Save', size=(-1, -1))
+        save_button.Bind(wx.EVT_BUTTON, self.save_visualization_dict)
+        button_sizer.Add(save_button, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
+        
+        
+        main_sizer.Add(option_sizer, 0, wx.GROW)
+        main_sizer.Add(button_sizer, 0, wx.ALIGN_RIGHT | wx.TOP, 10)
+
+        self.panel.SetSizer(main_sizer)
+        self.Centre()
+        self.Show()
+
+    def make_sizer(self, name, dictionary_value, text):
+        new_sizer = wx.BoxSizer(wx.VERTICAL)
+        new_name = wx.StaticText(self.panel, -1, text)
+        run_gd_name = self.controller.get_run_visualization_dict(self.run.get_run_type())['all_graph_dicts'][name]
+        if dictionary_value in run_gd_name:
+            tc_value = run_gd_name[dictionary_value]
+        else:
+            tc_value = ''
+        new_tc = wx.TextCtrl(self.panel, value=tc_value)
+
+        new_sizer.Add(new_name, 0, wx.TOP | wx.LEFT, 10)
+        new_sizer.Add(new_tc, 1, wx.GROW | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+        return (new_sizer, new_tc)
+        
+    def save_visualization_dict(self, event):
+        ### Save all regeneration data
+        run_gd = self.controller.get_run_visualization_dict(self.run.get_run_type())['all_graph_dicts']
+        self.controller.get_run_visualization_dict(self.run.get_run_type())['graph_title'] = \
+            self.tc_dictionary['title'].GetValue()
+        for graph_name in self.graph_names:
+            run_gd[graph_name]['generate'] = \
+                self.checkbox_dictionary[graph_name].IsChecked()
+
+            attributes = self.get_graph_attributes(self.run, graph_name)
+            for attribute in attributes:
+                run_gd[graph_name][attribute] = \
+                    self.tc_dictionary[attribute+graph_name].GetValue()
+        self.controller.save_profile_dict()
+        self.Close(True)
+        
+    def get_graph_attributes(self, run, graph_name):
+        return self.GetParent().get_graph_attributes(run, graph_name)

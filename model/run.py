@@ -140,10 +140,12 @@ class Run(object):
     ## feel free to add anything extra you thing would be neccesary to generate views of a run
     def snapshot(self):
         snapshot_dict = {"trial_type" : self.get_trial_type(),
-                         "run_name" : self.get_name()
+                         "name" : 'run_' + self.get_name(),
+                         "status": self.get_status(),
+                         "generate" : True,
+                         "results_folder_path" : self.results_folder_path,
+                         "trials_snapshots" : [trial.snapshot() for trial in self.trials]
                          }
-        for trial in self.trials:
-            snapshot_dict[tria.get_name()] = trial.snapshot()
         return snapshot_dict
         
     def view_update(self, visualize=False):
@@ -162,12 +164,18 @@ class Run(object):
                 self.set_status("Finished")
                 self.view_update(visualize=True)
             self.save()
-        self.view_update(visualize=False)
+        self.view_update(visualize=True)
         
         
     #############
     ## GET/SET ##
     #############
+    def get_results_folder(self):
+        return self.results_folder_path
+    
+    def get_run_type(self):
+        return  self.state_dictionary["trial_type"]
+    
     def get_trials_finished(self):
         return self.state_dictionary["trials_finished"]
         

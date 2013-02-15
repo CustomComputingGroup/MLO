@@ -75,7 +75,7 @@ def gp_train(loghyper, covfunc, X, y, R=None, w=None):
 
     
 def gp_pred(logtheta, covfunc, X, y, Xstar, R=None, w=None, Rstar=None):
-    n = X.shape[0]
+    
     #else:
     #    print '        xgp_pred()'
         
@@ -87,7 +87,11 @@ def gp_pred(logtheta, covfunc, X, y, Xstar, R=None, w=None, Rstar=None):
     else:
         K = feval(covfunc, logtheta, X, R, w)               # training covariances
         [Kss, Kstar] = feval(covfunc, logtheta, X, R, w, Xstar, Rstar)   # test covariances
-    K = K + identity(n)*e #numerical stability 
+    try:
+        n = X.shape[0]
+        K = K + identity(n)*e #numerical stability 
+    except:
+         pass
     if(lu):#lu factorization of the covariance - sometimes this shit doesnt work... rausmessen [page 19
       LUP =  scipy.linalg.lu_factor(K)     # lower triangular matrix
       U = scipy.linalg.lu(K,permute_l=False)[0]
@@ -116,13 +120,16 @@ def solve_lu(A,B):
 
 
 def nlml(loghyper, covfunc, X, y, R=None, w=None):
-    n = X.shape[0]
+    
     # compute training set covariance matrix
     if R==None:
         K = feval(covfunc, loghyper, X)
     else:
         K = feval(covfunc, loghyper, X, R, w)     
+    
+    n = X.shape[0]
     K = K + identity(n)*e #numerical stability shit
+
     if(lu):#lu factorization of the covariance - sometimes this shit doesnt work... rausmessen [page 19
       LUP =  scipy.linalg.lu_factor(K)     # lower triangular matrix
       U = scipy.linalg.lu(K,permute_l=False)[0]
@@ -160,12 +167,16 @@ def dnlml(loghyper, covfunc, X, y, R=None, w=None):
         
 def get_W(loghyper, covfunc, X, y, R=None, w=None):
     '''Precompute W for convenience.'''
-    n = X.shape[0]
+    
     # compute training set covariance matrix
     if R==None:
         K = feval(covfunc, loghyper, X)
     else:
         K = feval(covfunc, loghyper, X, R, w)
+    n = X.shape[0]
+    #print K.shape
+    #print (identity(n)*e).shape
+    
     K = K + identity(n)*e #numerical stability shit
     if(lu):
       LUP =  scipy.linalg.lu_factor(K)     # lower triangular matrix

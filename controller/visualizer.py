@@ -15,6 +15,7 @@ class Visualizer(Thread):
         self.job_backlog = Queue()
         self.controller = controller
         self.stop = False
+        self.remove_run_name = []
 
     def run(self):
         raise NotImplementedError('Visualizer is an abstract class, this '
@@ -27,6 +28,10 @@ class Visualizer(Thread):
         logging.info('{} job added to visualizer'.format(run_name))
         self.job_backlog.put((run_name, function, snapshot))
 
+    def remove_run_name_jobs(self, run_name):
+        logging.info('Jobs for the run {} will be removed from the visualizer'.format(run_name))
+        self.remove_run_name.append(run_name)
+        
     def terminate(self):
         self.stop = True
 
@@ -60,12 +65,12 @@ class ParallelisedVisualizer(Visualizer):
                 time.sleep(1)
             elif process_count < max_process:
                 process_count += 1
-
                 run_name, function, snapshot = self.job_backlog.get_nowait()
-                logging.info('Visualizing {}'.format(run_name))
-                p = Process(target=self.render_graph,
-                            args=(function, snapshot, run_name, child_end))
-                p.start()
+                if not (run_name in self.remove_run_name):
+                    logging.info('Visualizing {}'.format(run_name))
+                    p = Process(target=self.render_graph,
+                                args=(function, snapshot, run_name, child_end))
+                    p.start()
                 
         logging.info('Visualizer Finished')
 

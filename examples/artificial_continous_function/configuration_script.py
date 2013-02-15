@@ -8,7 +8,7 @@ eval_correct = False
 
 ### Basic setup
 
-trials_count = 1
+trials_count = 3
 population_size = 20
 
 max_fitness = 50.0
