@@ -131,8 +131,8 @@ class Trial(Thread):
         ##this bit traverses the particle set and checks if it has already been evaluated. 
         if self.get_surrogate_model().contains_training_instance(part):
             code, fitness = self.get_surrogate_model().get_training_instance(part)
-            if fitness is None:
-                fitness = self.get
+            if (fitness is None) or (code is None):
+                fitness = self.get_fitness().worst_value
             return code, fitness
         self.increment_counter('fit')
         results = self.fitness.fitnessFunc(part)
