@@ -132,8 +132,8 @@ class Trial(Thread):
         if self.get_surrogate_model().contains_training_instance(part):
             code, fitness = self.get_surrogate_model().get_training_instance(part)
             if (fitness is None) or (code is None):
-                fitness = self.get_fitness().worst_value
-            return code, fitness
+                fitness = array([self.fitness.worst_value])
+            return fitness, code
         self.increment_counter('fit')
         results = self.fitness.fitnessFunc(part)
         
