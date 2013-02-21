@@ -102,10 +102,11 @@ class SingleThreadVisualizer(Visualizer):
                 time.sleep(1)
                 continue
             else:
-                function, snapshot, trial = self.job_backlog.get_nowait()
-                logging.info('Visualizing {}'.format(trial.get_name()))
-                self.render_graph(function, snapshot, trial.get_name())
-                self.job_backlog.task_done()
+                run_name, function, snapshot = self.job_backlog.get_nowait()
+                if not (run_name in self.remove_run_name):
+                    logging.info('Visualizing {}'.format(run_name))
+                    self.render_graph(function, snapshot, run_name)
+                    self.job_backlog.task_done()
 
     def render_graph(self, function, snapshot, name):
         function(snapshot)
