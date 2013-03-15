@@ -2,6 +2,7 @@ import logging
 import sys
 import copy
 import os
+from time import gmtime, strftime,asctime
 from multiprocessing import Process
 import matplotlib as mpl
 # Force matplotlib to not use any Xwindows backend.
@@ -9,12 +10,13 @@ mpl.use('Agg')
 from matplotlib import pyplot
 from matplotlib.ticker import LinearLocator, FormatStrFormatter, MaxNLocator
 from mpl_toolkits.mplot3d import axes3d, Axes3D
-from numpy import array, linspace, meshgrid, reshape, argmin
+from numpy import array, linspace, meshgrid, reshape, argmin, min, max,abs
 from scipy.interpolate import griddata
 
 import HTML
 import StringIO
 import ho.pisa as pisa
+import git
 
 ### abstract class to define plot viewers
 class ImageViewer(object):
@@ -219,7 +221,7 @@ class MLOImageViewer(ImageViewer):
         except ValueError, e:
             ##passing here will automatically set the limits ( not great)
             pass 
-            
+           
         ### Data
         plot.plot(d['generations_array'], d['best_fitness_array'],
                   c='red', marker='x')
@@ -506,6 +508,9 @@ class MLORunReportViewer(object):
         timer_headers = []
         trial_snapshots = dictionary["trials_snapshots"]
         first_trial_snapshot = trial_snapshots[0]
+        
+        run_name = str(first_trial_snapshot["name"])
+        run_name = run_name[0:run_name.find('_')]
         ## get counter names
         counters = first_trial_snapshot['counter_dict'].keys()
         for counter in counters: ## list of names of Counters
@@ -516,59 +521,152 @@ class MLORunReportViewer(object):
         for timer in timers: ## list of names of Counters
             header.append(timer)
             timer_headers.append(timer)
-            
+        
+        header.append('Error Code')
         htmlcode = HTML.Table(header_row=header)
-        
-        statistics = ["mean","std","max","min",]
         data = []
-        
+        bestfit= 1
+        failurecount=0
+        failure_trial=[]
         for trial_snapshot in trial_snapshots:
+        	tem=trial_snapshot['best_fitness_array']
+        	for i in range(len(tem)):
+        		if abs(tem[i])<bestfit:
+        			bestfit=abs(tem[i])
+        for trial_snapshot in trial_snapshots:
+            ErrorC = [0]
             ## Display trial timers
             trial_name = [trial_snapshot["name"]]
             trial_no = [1]
             trial_counters = [trial_snapshot['counter_dict'][counter_header] for counter_header in counter_headers] 
             trial_timers = [trial_snapshot['timer_dict'][timer_header] for timer_header in timer_headers] 
             data.append(trial_counters + trial_timers)
-            row = [HTML.TableCell(cell, bgcolor='Lime') for cell in trial_name + trial_no + trial_counters + trial_timers]
-            htmlcode.rows.append(row)
-            ## Display trial counters
-        htmlcode = str(htmlcode)    
+            color='lime'
+            
+            '''
+            # converge??
+            tem=array(trial_snapshot['best_fitness_array'])
+            for i in range(len(tem)-1):
+            	if abs(tem[i+1]-tem[i])<0.000001:
+            		color='lime'
+            	else:
+            		color='red'
+            localbest=1
+	    for i in range(len(tem)):
+        	if abs(tem[i])<localbest:
+        		localbest=abs(tem[i])
+            '''
+            if trial_snapshot['counter_dict']['fit']>50:
+            	color = 'red'
+            	ErrorC = [1]
+            	
+            if trial_snapshot['counter_dict']['g']>5000: 
+            	color = 'red'
+            	ErrorC = [2]
+            	
+            if trial_snapshot['generate'] != True:
+            	color = 'red'
+            	ErrorC = [3]
+            	
+            if color == 'red':
+            	failure_trial.append(trial_name)
+            	failurecount = failurecount + 1
+            	
+            row = [HTML.TableCell( cell, bgcolor = color) for cell in trial_name + trial_no + trial_counters + trial_timers + ErrorC]
+            htmlcode.rows.append( row )
+            
+        ## Display trial counters
+        htmlcode = str(htmlcode)
+    
+        ## statistics
+        header = ['Statistics', 'Total Trials']  
+        ## get counter names
+        counters = first_trial_snapshot['counter_dict'].keys()
+        for counter in counters: ## list of names of Counters
+            header.append('Counter "' + counter + '"')
+        ## get timing names
+        timers = first_trial_snapshot['timer_dict'].keys()
+        for timer in timers: ## list of names of Counters
+            header.append(timer)
+            
         
+        statistics = ["mean","std","max","min"]
         data = array(data)
         htmlcode2 = HTML.Table(header_row=header)
-        statistic_no = 0
+	total_trials=len(trial_snapshots)
+	
         for statistic in statistics:
             statistic_name = statistic
             result = [str(elem) for elem in eval("data." + statistic + "(axis=0)")]
-            row = [HTML.TableCell(cell, bgcolor='Lime') for cell in [statistic_name] + [str(statistic_no)] + result]
-            statistic_no = statistic_no + 1
+            row = [HTML.TableCell(cell) for cell in [statistic_name] + [str(total_trials)] + result]
             htmlcode2.rows.append(row)
             ## append to list used to calculate statistical data
         htmlcode2 = str(htmlcode2)
+    
         ### Save and exit
-        filename = dictionary["results_folder_path"] + "/run_raport.pdf"
-        filename2 = dictionary["results_folder_path"] + "/run_raport.html"
+        filename = dictionary["results_folder_path"] + "/run_report.pdf"
+        filename2 = dictionary["results_folder_path"] + "/run_report.html"
+        filename3 = os.getcwd() + "/data/report_all.html"
+    	logfile = os.getcwd() + "/data/runlog"
+    	
+        #create the test report
+        headlist = []
+        time=strftime("<hr><hgroup> <h3>Repo Time: %d/%b/%Y %H:%M:%S</h3></hgroup>", gmtime())
+        headlist.append(time)
+        repo = git.Repo( os.getcwd() )
+        headcommit = repo.head.commit
+	headlist.append("Git Committer :  " + str(headcommit.committer))
+	headlist.append("Commit Date : " + asctime(gmtime(headcommit.committed_date)))
+	headlist.append("Run Name: "+ run_name)
+	reg = str(trial_snapshots[0]['regressor'])
+	cla = str(trial_snapshots[0]['classifier'])
+	headlist.append("Regressor:     " + reg[34:reg.find("object")])
+	headlist.append("Classifier:     " + cla[35:cla.find("object")])
+	headlist.append( "Total Trials :  " + str(len(trial_snapshots)) )
+	headlist.append( "Total Fails : " + str(failurecount))
+	if failurecount>0:
+		headlist.append("Fail trials: " + str(failure_trial))
+	html_list = HTML.list(headlist)
+	htmlcode3 = str ( html_list )
+        
         
         if os.path.isfile(filename):
             os.remove(filename)
         try:
-            f = file(filename, 'wb')
+            f = file(filename, 'w')
             pdf = pisa.CreatePDF(htmlcode + htmlcode2,f)
             if not pdf.err:
                 pisa.startViewer(f)
             f.close()
         except Exception, e:
             logging.error('could not create a report for {}'.format(str(e)))
-            
+        
+        repocontent = '<center>Trial information: '+'<br>' + htmlcode + '</center><br>' + '<center>Statistics: ' + htmlcode2 + '</center><br>'
         if os.path.isfile(filename2):
             os.remove(filename2)
         try:
-            f = file(filename2, 'wb')
-            f.write(htmlcode + htmlcode2)
+            f = file(filename2, 'w')
+            f.writelines(htmlcode3+repocontent)
             f.close()
+
         except Exception, e:
             logging.error('could not create a report for {}'.format(str(e)))
-            
+        
+        loglist=os.listdir(os.getcwd() + "/data/log")
+        print loglist
+        reportfile=[]
+	for i in range(1,len(loglist)):
+		reportfile.append(os.getcwd()+"/data/log/"+loglist[i]+"/run_report.html")
+	f = file(filename3, 'w' )
+	f.write("<hgroup> <center> <h2> MLO Report </h2> </center> </hgroup>")
+	f.write("<center> (Error Code:  0 - No Error; 1 - Exceed Max Fitness, 2 - Exceed Max Generation, 3- Generate is Not True) </center>")
+	for e in reportfile:
+		if os.path.exists(e):
+			fr = file(e,'r')
+			temp = fr.readlines()
+			f.writelines(temp)
+			fr.close()
+	f.close()
 
     @staticmethod
     def get_attributes(name):
