@@ -1,1 +1,1 @@
-__all__ = ['surrogatemodel']
+__all__ = ['surrogatemodel','costmodel']

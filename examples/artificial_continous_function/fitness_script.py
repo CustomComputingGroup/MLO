@@ -19,14 +19,14 @@ def is_better(a, b):
 
 worst_value = maxVal
 
+cost_maxVal = 1.0
+cost_minVal = 0.0
 
 # Example fitness function for surrogate model testing
 def fitnessFunc(part):
     code = 0 if is_valid(part) else 1
-    return benchmarks.sphere(part), array([code]), array([0])
+    return benchmarks.rosenbrock(part), array([code]), array([0]), 1.0 ## cost always 1
     
-
-
 # Example function to define if a design is valid or invalid
 def is_valid(part):
     return True#part[0] ** int(part[1]) / part[1] < e
@@ -34,7 +34,7 @@ def is_valid(part):
 
 # Example Termination condition
 def termCond(best):
-    return best < 0.001
+    return best < 0.00001
 
 
 # Name of the benchmark

@@ -8,10 +8,10 @@ eval_correct = False
 
 ### Basic setup
 
-trials_count = 3
+trials_count = 1
 population_size = 20
 
-max_fitness = 50.0
+max_fitness = 100.0
 max_iter = 5000
 max_speed = 0.01
 max_stdv = 0.05
@@ -34,7 +34,7 @@ min_weight = 0.4
 weight = 1.0
 
 mode = 'exp'
-exp = 2.0
+exp = 1.5
 admode = 'iter'  # Advancement mode, can be fitness
 
 applyK = False
@@ -43,7 +43,7 @@ KK = 0.73
 
 ### Visualisation
 
-vis_every_X_steps = 10 # How often to visualize
+vis_every_X_steps = 1000000 # How often to visualize
 counter = 'g'  # The counter that visualization uses as a 'step'
 max_counter = max_iter  # Maximum value of counter
 
@@ -62,4 +62,4 @@ theta0 = 0.01
 thetaL = 0.0001
 thetaU = 3.0
 nugget = 3
-random_start = 200
+random_start = 100

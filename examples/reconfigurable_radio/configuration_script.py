@@ -48,7 +48,7 @@ counter = 'g'  # The counter that visualization uses as a 'step'
 max_counter = max_iter  # Maximum value of counter
 
 ### Regressor and classifier type
-regressor = 'GaussianProcess2'
+regressor = 'KMeansGaussianProcessRegressor'
 classifier = 'SupportVectorMachine'
 
 ### GPR Regression settings

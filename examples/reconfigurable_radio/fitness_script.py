@@ -10,7 +10,8 @@ from numpy import *
 from copy import deepcopy 
 from numpy.random import uniform, seed,rand
 
-
+cost_maxVal = 1.0
+cost_minVal = 0.0
 
 initMin = -1
 initMax = 1
@@ -96,12 +97,12 @@ def fitnessFunc(particle):
     minimal_app_throughput = 4.93 ## ms
     
     #print "p ",p," frequency ",frequency," reconfiguration_time ",reconfiguration_time," t_total ",t_total," proccesing_time ",( n * (steps * proccesing_time) / p)
-    
+    cost = 0.5
     if frequency > maxfreq:
-        return (array([maxvalue]),array([1]),array([1]))
+        return (array([maxvalue]),array([1]),array([1]),array([cost]))
         
     if slices > max_slices:
-        return (array([maxvalue]),array([2]),array([1]))
+        return (array([maxvalue]),array([2]),array([1]),array([cost]))
     
     t_total = ( n * (steps * proccesing_time) / p) + reconfiguration_time
     
@@ -109,13 +110,13 @@ def fitnessFunc(particle):
     #    return array([10.0])
         
     if functionType == "execution_time":
-        return (array([t_total]),array([0]),array([0]))
+        return (array([t_total]),array([0]),array([0]),array([cost]))
 
     elif functionType == "aecc":
     
         apcc = p / steps * frequency
         aecc = ( n * (steps * proccesing_time) / p) * apcc
-        return (array([aecc]),array([0]),array([0]))
+        return (array([aecc]),array([0]),array([0]),array([cost]))
         
 def changeParams(params):
     global designSpace,reconfiguration_time_set,maxvalue,maxVal,minVal

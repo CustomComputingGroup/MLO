@@ -8,6 +8,7 @@ import pickle
 import time
 from time import strftime
 from datetime import datetime, timedelta
+from Queue import Queue
 
 from utils import load_script, get_trial_constructor
 
@@ -23,7 +24,9 @@ class Run(object):
         fitness_folder_name = None
         configuration_file_name = None
         configuration_folder_name = None
+        self.running_trial = None
         trial_type = None
+        self.job_backlog = Queue()
         if fitness:
             fitness_file_name = os.path.abspath(self.fitness.__file__)
             if fitness_file_name[-1] == 'c':  # .pyc
@@ -52,13 +55,12 @@ class Run(object):
         
     def run(self):
         now = strftime('%Y-%m-%d_%H-%M-%S')
-        self.results_folder_path = '{}/{}'.format(
-            self.configuration.results_folder_path, now)
+        self.results_folder_path = str(self.configuration.results_folder_path) + '/' + str(now)
         try:
             self.controller.register_run(self)
         except:
             return
-            
+        
         # Initialise results folder
             
         self.set_start_time(datetime.now().strftime('%d-%m-%Y  %H:%M:%S'))
@@ -74,10 +76,17 @@ class Run(object):
         self.save()
         self.view_update()
         # Run trials
+        self.run_loop()
+                
+    def run_loop(self):
         for trial in self.trials:
             trial.daemon = True
-            trial.start()
-
+            trial.set_waiting()
+            self.job_backlog.put(trial)
+        self.running_trial = self.job_backlog.get_nowait()
+        self.running_trial.set_running()
+        self.running_trial.start()
+            
     ## TODO - this has to be changed... its just that ctrl+c wont be propagated otherwise...    
     def join(self):
         for trial in self.trials:
@@ -118,13 +127,7 @@ class Run(object):
         except Exception, e:
             logging.error('Failed loading/initializing trials: {}'.format(str(e)))
             return False
-            
-        # Run trials
-        # we do not catch it, it should be handeled elsewhere
-        for trial in self.trials:
-            trial.daemon = True
-            trial.start()
-        logging.info("in..")
+        self.run_loop()
         return True
         
     def save(self):
@@ -140,7 +143,8 @@ class Run(object):
     ## feel free to add anything extra you thing would be neccesary to generate views of a run
     def snapshot(self):
         snapshot_dict = {"trial_type" : self.get_trial_type(),
-                         "name" : 'run_' + self.get_name(),
+                         "run_name" : self.get_name(),
+                         "name" : "run_" + self.get_name(),
                          "status": self.get_status(),
                          "generate" : True,
                          "results_folder_path" : self.results_folder_path,
@@ -153,7 +157,10 @@ class Run(object):
         
     def trial_notify(self, trial):
         if self.get_status() == "Finished":
-            pass
+            if not self.job_backlog.empty(): ## start next trial
+                self.running_trial = self.job_backlog.get_nowait()
+                self.running_trial.start()
+                self.running_trial.set_running()
         else:
             self.set_running_time((trial.get_running_time() + self.get_running_time()).seconds)
             self.state_dictionary["trials_finished"] = self.state_dictionary["trials_finished"] + 1
@@ -202,6 +209,19 @@ class Run(object):
         
     def get_main_counter(self): ## TODO - 
         return 1
+    
+    def set_paused(self):
+        self.set_status("Paused")
+        self.set_wait(True)
+    
+    def set_running(self):
+        if not (self.state_dictionary["status"] == "Finished"):
+            self.state_dictionary["status"] = "Running"
+            self.view_update(visualize=False)
+            for trial in self.trials:
+                trial.set_waiting()
+        self.running_trial.set_running()
+        self.set_wait(False)
     
     def get_status(self):
         return self.state_dictionary["status"]

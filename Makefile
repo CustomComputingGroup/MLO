@@ -10,13 +10,32 @@ run_example2:
 run_example3:
 	./run_mlo.sh -f examples/reconfigurable_radio/fitness_script.py -c examples/reconfigurable_radio/configuration_script.py
     
-install:
+install_gui:
 	easy_install numpy
 	easy_install scipy
 	easy_install scikit-learn
 	east_install matplotlib
 	easy_install pisa
-	east_install pypdf
+	easy_install pypdf
+	easy_install wxPython pyt
+	easy_install deap
+	easy_install html5lib
+	easy_isntall reportlab
+
+    
+install_terminal: 
+	easy_install numpy
+	easy_install scipy
+	easy_install scikit-learn
+	easy_install matplotlib
+	easy_install pisa
+	easy_install pypdf
+	easy_install deap
+	easy_install html5lib
+	easy_isntall reportlab
+
+restart:
+	./run_mlo.sh --restart
     
 pep:
 	pep8 --statistic --exclude=pyXGPR,Old_Files .

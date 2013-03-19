@@ -1,7 +1,7 @@
 import logging
 
 from classifiers import Classifier, SupportVectorMachineClassifier
-from regressors import Regressor, GaussianProcessRegressor, GaussianProcessRegressor2
+from regressors import Regressor, GaussianProcessRegressor, GaussianProcessRegressor2, KMeansGaussianProcessRegressor, DPGMMGaussianProcessRegressor
 
 from utils import numpy_array_index
 from scipy.interpolate import griddata
@@ -13,16 +13,16 @@ class SurrogateModel(object):
         self.configuration = configuration
         self.was_trained = False
         
-    def train(self, pop):
+    def train(self):
         raise NotImplementedError('SurrogateModel is an abstract class, this '
                                   'should not be called.')
     def trained(self):
         return self.was_trained
                                   
     def predict(self, particles):
-        MU, S2 = self.regressor.predict(particles)
-        return self.classifier.predict(particles), MU, S2
-
+        raise NotImplementedError('SurrogateModel is an abstract class, this '
+                                  'should not be called.')
+                                  
     def add_training_instance(self, part, code, fitness):
         pass
         
@@ -32,12 +32,12 @@ class SurrogateModel(object):
     def get_training_instance(self, part):
         pass
 
-    def __getstate__(self):
-        # Don't pickle fitness and configuration
-        d = dict(self.__dict__)
-        del d['configuration']
-        del d['fitness']
-        return d
+    # def __getstate__(self):
+       # Don't pickle fitness and configuration
+        # d = dict(self.__dict__)
+        # del d['configuration']
+        # del d['fitness']
+        # return d
 
     def contains_particle(self, part):
         pass
@@ -52,15 +52,20 @@ class SurrogateModel(object):
         pass
 
     def get_state_dictionary(self):
-        return {"regressor_state_dict" : self.regressor.get_state_dictionary(), "classifier_state_dicts" : self.classifier.get_state_dictionary()}
+        raise NotImplementedError('Trial is an abstract class, '
+                                  'this should not be called.')
         
     def set_state_dictionary(self, dict):
-        self.regressor.set_state_dictionary(dict["regressor_state_dict"])
-        self.classifier.set_state_dictionary(dict["classifier_state_dicts"])
+        raise NotImplementedError('Trial is an abstract class, '
+                                  'this should not be called.')
         
 class DummySurrogateModel(SurrogateModel):
 
-    def train(self, pop):
+    def predict(self, particles):
+        MU, S2 = self.regressor.predict(particles)
+        return self.classifier.predict(particles), MU, S2
+
+    def train(self):
         self.was_trained = True
         return True
 
@@ -72,6 +77,13 @@ class DummySurrogateModel(SurrogateModel):
 
     def model_failed(self, part):
         return False
+        
+    def get_state_dictionary(self):
+        return {"regressor_state_dict" : self.regressor.get_state_dictionary(), "classifier_state_dicts" : self.classifier.get_state_dictionary()}
+        
+    def set_state_dictionary(self, dict):
+        self.regressor.set_state_dictionary(dict["regressor_state_dict"])
+        self.classifier.set_state_dictionary(dict["classifier_state_dicts"])
         
 class ProperSurrogateModel(SurrogateModel):
 
@@ -86,18 +98,24 @@ class ProperSurrogateModel(SurrogateModel):
                 configuration.classifier))
 
         if configuration.regressor == 'GaussianProcess':
-            self.regressor = GaussianProcessRegressor(controller)
+            self.regressor = GaussianProcessRegressor(controller, configuration)
         elif configuration.regressor == 'GaussianProcess2':
-            self.regressor = GaussianProcessRegressor2(controller)
+            self.regressor = GaussianProcessRegressor2(controller, configuration)        
+        elif configuration.regressor == 'KMeansGaussianProcessRegressor':
+            self.regressor = KMeansGaussianProcessRegressor(controller, configuration)        
+        elif configuration.regressor == 'DPGMMGaussianProcessRegressor':
+            self.regressor = DPGMMGaussianProcessRegressor(controller, configuration)
         else:
             logging.error('Regressor type {} not found'.format(
                 configuration.regressor))
-
-    def train(self, pop):
-        dimensions = len(pop[0])
+                
+    def predict(self, particles):
+        MU, S2 = self.regressor.predict(particles)
+        return self.classifier.predict(particles), MU, S2
+                
+    def train(self):
         self.was_trained = True
-        return self.classifier.train(pop) and self.regressor.train(
-            pop, self.configuration, dimensions)
+        return self.classifier.train() and self.regressor.train()
         
     def add_training_instance(self, part, code, fitness, addReturn):
         self.classifier.add_training_instance(part, code)
@@ -150,3 +168,10 @@ class ProperSurrogateModel(SurrogateModel):
         except Exception,e:
             logging.error("Finding max S2 failed: {}".format(e))
             return None
+            
+    def get_state_dictionary(self):
+        return {"regressor_state_dict" : self.regressor.get_state_dictionary(), "classifier_state_dicts" : self.classifier.get_state_dictionary()}
+        
+    def set_state_dictionary(self, dict):
+        self.regressor.set_state_dictionary(dict["regressor_state_dict"])
+        self.classifier.set_state_dictionary(dict["classifier_state_dicts"])

@@ -1,9 +1,7 @@
-import wx
-
-from views.gui.windows import RunWindow, UpdateEvent, UpdateEvent2
 from visualizers.plot import MLOImageViewer, MLORunReportViewer
 
-
+import logging
+import os
 
 class View(object):
     """
@@ -34,10 +32,12 @@ class TerminalView(View):
             logging.error('Benchmark and/or configuration script not '
                           'provided, terminating...')
             return
-        controller.load_profile_dict()            
-        if False:
-            pass ## TODO implement restart over here
+        controller.load_profile_dict() ## TODO - implement this later.. for the moment 
+        if self.controller.restart:
+            logging.info("Restarting Most Recent Run")
+            self.controller.start_run(self.controller.get_most_recent_run_name(), self.controller.fitness, self.controller.configuration).join()
         else:
+            logging.info("Starting Run")
             self.controller.start_run('Default_run', self.controller.fitness, self.controller.configuration).join()
         self.controller.visualizer.terminate()
         
@@ -56,11 +56,14 @@ class GUIView(View):
     """
 
     def initialize(self, controller):
-        
+        import wx
+        from views.gui.windows import RunWindow
         self.app = wx.App()
         self.window = RunWindow(controller)
         controller.load_profile_dict()
         self.app.MainLoop()
 
     def update(self, trial=None, run=None, visualize=False):
+        import wx
+        from views.gui.windows import UpdateEvent
         wx.PostEvent(self.window.GetEventHandler(), UpdateEvent(trial=trial, run=run, visualize=visualize))

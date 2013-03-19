@@ -24,8 +24,9 @@ class Visualizer(Thread):
     #function is the printer
     #snapshot contains the state of the visualizer which is going to be fed into the printer. It contains a dictionary of ALL the relevant data. 
     def add_job(self, function, snapshot):
-        run_name = snapshot['name']
-        logging.info('{} job added to visualizer'.format(run_name))
+        name = snapshot['name']
+        run_name = snapshot['run_name']
+        logging.info('{} job added to visualizer'.format(name))
         self.job_backlog.put((run_name, function, snapshot))
 
     def remove_run_name_jobs(self, run_name):
@@ -67,7 +68,8 @@ class ParallelisedVisualizer(Visualizer):
                 process_count += 1
                 run_name, function, snapshot = self.job_backlog.get_nowait()
                 if not (run_name in self.remove_run_name):
-                    logging.info('Visualizing {}'.format(run_name))
+                    logging.info('Added job to visuzalizer Que: {} '.format(run_name))
+                    logging.info('No. of jobs in Que: {} '.format(process_count))
                     p = Process(target=self.render_graph,
                                 args=(function, snapshot, run_name, child_end))
                     p.start()
@@ -75,14 +77,14 @@ class ParallelisedVisualizer(Visualizer):
         logging.info('Visualizer Finished')
 
     def render_graph(self, function, snapshot, name, child_end):
-       ## try:
-        function(snapshot)
-        logging.info('{} visualized'.format(name))
-        child_end.send(True)
-        ##except Exception,e:
-         ##   logging.info('Exception {}'.format(e)) 
-          ##  child_end.send(False)
-        sys.exit(0)
+        try:
+            logging.info('Visualizing {}'.format(name))
+            function(snapshot)
+            logging.info('{} visualized'.format(name))
+            child_end.send(True)
+        except Exception,e:
+            logging.info('Exception {}'.format(e)) 
+            child_end.send(False)
     
     def max_process(self, integer):
         self.max_process = integer
@@ -102,9 +104,10 @@ class SingleThreadVisualizer(Visualizer):
                 time.sleep(1)
                 continue
             else:
-                function, snapshot, trial = self.job_backlog.get_nowait()
-                logging.info('Visualizing {}'.format(trial.get_name()))
-                self.render_graph(function, snapshot, trial.get_name())
+                run_name, function, snapshot = self.job_backlog.get_nowait()
+                if not (run_name in self.remove_run_name):
+                    logging.info('Visualizing {}'.format(run_name))
+                self.render_graph(function, snapshot, run_name)
                 self.job_backlog.task_done()
 
     def render_graph(self, function, snapshot, name):

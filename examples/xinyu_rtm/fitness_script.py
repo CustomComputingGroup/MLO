@@ -68,60 +68,47 @@ maxVal = 300.0
 worst_value = 0.0
 optVal = {0.1:75.37,0.01:1.44,0.05:11.1,0.001:0.469 }[maxError]
 
-if doCores:
-    designSpace.append({"min":1.0,"max":16.0,"step":1.0,"type":"discrete","smin":-1.0,"smax":1.0, "set":"h"})
-## always do mw
-designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"})
 
-if doDf:
-    designSpace.append( {"min":4.0,"max":32.0,"step":1.0,"type":"discrete","smin":-2.0,"smax":2.0, "set":"s"})
-              
+## always do mw
+designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #a
+designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #b 
+designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #B
+designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #T
+if doFrequency:
+    designSpace.append({"min":1.0,"max":16.0,"step":1.0,"type":"discrete","smin":-1.0,"smax":1.0, "set":"h"})
+designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #Ob
+designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #Ot
+if doParallelism:
+    designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #Pdp
+    designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #Pknl
+    designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #Ptl
+designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #Bs
+designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #Ds
+designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #Ls
+designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #Fs
+
 maxvalue = 0.0
-## if  [ 14.  11.   4.]   0.000275081632653
 
 error_labels = {0:'Valid',1:'Overmap',3:'Inaccuracy'}
-#error_labels = {0:'Valid',3:'Inaccuracy'}
-
-def get_z_axis_name():
-    return "Throughput ($\phi_{int}$)"
-    
-def get_x_axis_name():
-    if doCores:
-        return "Cores"
-    else:
-        return "$m_w$"
-        
-def get_y_axis_name():
-    if doDf:
-        return "$d_f$"
-    else:
-        return "$m_w$"
 
 def termCond(best):
     global optVal
     return best > optVal
 
 def name():
-    return "anson_" + str(maxError) + "_doCores" + str(doCores) + "_doDf" + str(doDf) + "_errorCorrection" + str(errorCorrection) 
-    
-def alwaysCorrect():
-    if doCores:
-        return array([1.0,53.0,32.0])
-    else :
-        return array([53.0,32.0]) 
+    return "rtm_" + str(maxError) + "_doCores" + str(doCores) + "_doDf" + str(doDf) + "_errorCorrection" + str(errorCorrection) 
     
 def fitnessFunc(particle, state):
-    allData = getAllData()
     # Dimensions dynamically rescalled
     ############Dimensions
-    if doCores:
+    if doFrequency:
         cores = int(particle[0])
         mw = int(particle[1])
     else:
         cores = 1.0
         mw = int(particle[0])
                 
-    if doDf:
+    if doParallelism:
         df = int(particle[-1])
         if not doCores:
             cores = allData[11][mw][df][0]
@@ -211,124 +198,6 @@ def calcMaxs():
     for maxError in [0.001]:
         print "maxError: ",maxError
         calcMax()
-        
-def changeParams(params):
-    global designSpace,optVal,errorCorrection,maxError,doCores,maxVal
-    try:
-        doCores = params["doCores"]
-    except Exception,e:
-        print "[changeParams] ",e
-        pass
-    
-    try:
-        maxError = params["maxError"]
-    except Exception,e:
-        print "[changeParams] ",e
-        pass
-        
-    try:
-        errorCorrection = params["errorCorrection"]
-    except Exception,e:
-        print "[changeParams] ",e
-        pass
-
-    optVal = {0.1:75.37,0.01:1.44,0.05:11.1,0.001:0.469 }[maxError]
-    maxVal = {0.1:260.0,0.01:5.0,0.05:25.0,0.001:5.0 }[maxError]
-
-    designSpace=[]
-    if doCores:
-        designSpace.append({"min":1.0,"max":16.0,"step":1.0,"type":"discrete","smin":-1.0,"smax":1.0})
-    ## always do mw
-    designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0})
-
-    if doDf:
-        designSpace.append( {"min":4.0,"max":32.0,"step":1.0,"type":"discrete","smin":-2.0,"smax":2.0})
-                  
-def trialgen():
-    params = {}
-    global maxError,optVal,errorCorrection,doCores
-    for maxError in [0.1]:
-        for errorCorrection in [True]:
-            for doCores in [False]:
-                params["maxError"] = maxError
-                params["errorCorrection"] = errorCorrection
-                params["doCores"] = doCores
-                changeParams(params)
-                yield params
-               
-#python data dict creator
-#
-#AnsonExec.csv
-#text delimiter " field delimiter  ,
-#
-#to get number of cores
-#AnsonCores.csv
-
-
-global allData, costModel, costModelInputScaler, costModelOutputScaler
-allData=None
-costModel=None
-costModelInputScaler=None
-costModelOutputScaler=None
-def getAllData():
-    global allData, costModel, costModelInputScaler, costModelOutputScaler
-    if not allData or not costModel:
-        module_path = os.path.dirname(__file__)
-        ## COST MODEL
-        spamReader = csv.reader(open(module_path + '/time_results.csv', 'rb'), delimiter=';', quotechar='"')
-
-        x = []
-        y = []
-        for row in spamReader:
-            x.append([float(row[1]),float(row[2])])
-            y.append([float(row[3]) + random.random()])
-        x = array(x)
-        y = array(y)
-        input_scaler = preprocessing.StandardScaler().fit(x)
-        scaled_training_set = input_scaler.transform(x)
-
-                # Scale training data
-        output_scaler = preprocessing.StandardScaler(with_std=False).fit(y)
-        adjusted_training_fitness = output_scaler.transform(y)
-        
-        regr = GaussianProcess(corr='squared_exponential', theta0=1e-1,
-                         thetaL=1e-5, thetaU=3,
-                         random_start=400)
-        regr.fit(scaled_training_set, adjusted_training_fitness)
-        costModel = regr
-        costModelInputScaler = input_scaler
-        costModelOutputScaler = output_scaler
-        
-        ## cores, accuracy, exeuction time
-        spamReader = csv.reader(open(module_path + '/AnsonCores.csv', 'rb'), delimiter=',', quotechar='"')
-        cores = {11:{}}
-        for row in spamReader:
-            cores[11][int(row[1])] = int(row[0])
-
-        maxcores = cores
-        spamReader = csv.reader(open(module_path + '/AnsonExec.csv', 'rb'), delimiter=';', quotechar='"')
-
-        allData = {}
-        for row in spamReader:
-            row_0 = int(row[0])
-            row_1 = int(row[1])
-            row_2 = int(row[2])
-            row_3 = float(row[3])
-            row_4 = float(row[4])
-            data = [cores[row_0][row_1],row_3,row_4]
-            
-            try:
-                try:
-                    allData[row_0][row_1][row_2] = data
-                except:
-                    allData[row_0][row_1] = {row_2:data}
-            except:
-                allData[row_0] = {row_1:{row_2:data}}
-        #spamReader.close()
-    #print allData
-    return allData
-#print allData
-#print cores
     
 ##add state saving, we use p and thread id 
 def getCost(df, wF, cores, bit_stream_repo):

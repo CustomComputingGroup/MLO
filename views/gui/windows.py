@@ -428,6 +428,8 @@ class TrialWindow(wx.Frame):
         try:
             logging.info('click')
             status = self.controller.get_trial_status(self.right_clicked_item)
+            ## We leave trial managment to scheduler
+            '''
             if status == 'Running':
                 pause = menu.Append(wx.ID_ANY, 'Pause')
                 self.Bind(wx.EVT_MENU, self.on_pause, pause)
@@ -436,7 +438,7 @@ class TrialWindow(wx.Frame):
                 self.Bind(wx.EVT_MENU, self.on_resume, resume)
             elif status == 'Finished':
                 pass
-
+            '''
             show_graphs = menu.Append(wx.ID_ANY, 'Show Graphs')
             self.Bind(wx.EVT_MENU, self.on_show_graphs, show_graphs)
             self.PopupMenu(menu, event.GetPosition())
@@ -603,12 +605,16 @@ class GraphWindow(wx.Frame):
     def on_regenerate(self, event):
         trial = self.trial
         for iteration in self.trial.get_main_counter_iterator():
-            Trial = get_trial_constructor(trial.get_trial_type())
-            vis_trial = Trial(trial.get_trial_no(), trial.get_name(), trial.get_fitness(),
+            vis_trial = get_trial_constructor(trial.get_trial_type())(trial.get_trial_no(), trial.get_run(), trial.get_fitness(),
                               trial.get_configuration(), trial.controller,
                               trial.get_run_results_folder_path())
-            vis_trial.load(iteration)
-            self.visuzalize_trial(vis_trial)
+            vis_trial.run_initialize()
+            if not vis_trial.load(iteration):
+                    logging.error('Failed loading trial {} for revizualization'.format(iteration))
+                    return False
+            else:
+                logging.info('Revisualizing trial, iteration:' + str(iteration))
+                self.visuzalize_trial(vis_trial)
         
     def on_refresh(self, event):
         logging.info('click')
@@ -868,7 +874,7 @@ class NewRunWindow(wx.Frame):
                                    label='Select fitness script',
                                    size=(200, -1))
         fitness_button.name = 'fitness'
-        fitness_button.Bind(wx.EVT_BUTTON, self.get_on_open_file(self.controller.get_most_recent_fitness_script_file(), self.controller.get_most_recent_configuration_script_folder()))
+        fitness_button.Bind(wx.EVT_BUTTON, self.get_on_open_file(self.controller.get_most_recent_fitness_script_file(), self.controller.get_most_recent_fitness_script_folder()))
         
         self.fitness_path = self.controller.get_most_recent_fitness_script_file()
         if self.fitness_path:

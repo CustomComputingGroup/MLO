@@ -2,29 +2,34 @@ import logging
 from multiprocessing import Process, Pipe
 import traceback
 
-from numpy import unique, asarray, bincount, array, append, sqrt, log
+from numpy import unique, asarray, bincount, array, append, sqrt, log, sort
 from sklearn import preprocessing
 from sklearn.gaussian_process import GaussianProcess
 from sklearn.grid_search import GridSearchCV
+from sklearn.cluster import KMeans
+from sklearn import mixture
+from scipy.spatial.distance import euclidean
 from numpy.random import uniform
 
 from utils import numpy_array_index
+from copy import deepcopy
 
 from GPR import gpr
 
 #TODO - abstract class
 class Regressor(object):
 
-    def __init__(self, controller):
+    def __init__(self, controller, conf):
         self.training_set = None
         self.training_fitness = None
         self.regr = None
         self.controller = controller
+        self.conf = conf
 
-    def train(self, z):
+    def train(self):
         return True
 
-    def predict(self, z):
+    def predict(self):
         output = []
         for input_vector in z:
             output.append([0])
@@ -34,10 +39,10 @@ class Regressor(object):
         if self.training_set is None:
             self.training_set = array([part])
             self.training_fitness = array([fitness])
-        elif part not in self.training_set:
+        else:
             contains = self.contains_training_instance(self.training_set)
             if contains:
-                logging.info('A particle duplicate is being added.. check your code!!')
+                logging.debug('A particle duplicate is being added.. check your code!!')
             else:
                 self.training_set = append(self.training_set, [part], axis=0)
                 self.training_fitness = append(self.training_fitness, [fitness],
@@ -58,11 +63,16 @@ class Regressor(object):
             logging.error('cannot call get_training_instance if training_set does not contain the particle')
             return False
                                            
-    def __getstate__(self):
-        # Don't pickle controller
-        d = dict(self.__dict__)
-        del d['controller']
-        return d
+    def get_training_set(self):
+        return self.training_set
+    # def __getstate__(self):
+       # Don't pickle controller
+        # d = dict(self.__dict__)
+        # del d['controller']
+        # return d
+        
+    def training_set_empty(self):
+        return (self.training_set is None)
         
     ###############
     ### GET/SET ###
@@ -78,37 +88,47 @@ class Regressor(object):
         
 class GaussianProcessRegressor(Regressor):
 
-    def __init__(self, controller):
-        super(GaussianProcessRegressor, self).__init__(controller)
+    def __init__(self, controller, conf):
+        super(GaussianProcessRegressor, self).__init__(controller, conf)
         self.input_scaler = None
         self.output_scaler = None
-
-    def train(self, pop, conf, dimensions):
+        self.conf = conf
+        
+        self.gp = None
+        
+    def regressor_countructor(self):
+        conf = self.conf
+        dimensions = len(self.training_set[0])
+        if conf.nugget == 0:
+            gp = GaussianProcess(regr=conf.regr, corr=conf.corr2,
+                                 theta0=array([conf.theta0] * dimensions),
+                                 thetaL=array([conf.thetaL] * dimensions),
+                                 thetaU=array([conf.thetaU] * dimensions),
+                                 random_start=conf.random_start)
+        else:
+            gp = GaussianProcess(regr=conf.regr, corr=conf.corr2,
+                                 theta0=array([conf.theta0] * dimensions),
+                                 thetaL=array([conf.thetaL] * dimensions),
+                                 thetaU=array([conf.thetaU] * dimensions),
+                                 random_start=conf.random_start, nugget=conf.nugget)
+        return gp
+        
+    def train(self):
+        conf = self.conf
+        if len(self.training_set) == 0:
+            return True
         try:
             # Scale inputs and particles?
-            self.input_scaler = preprocessing.Scaler().fit(self.training_set)
+            self.input_scaler = preprocessing.StandardScaler().fit(self.training_set)
             scaled_training_set = self.input_scaler.transform(
                 self.training_set)
 
             # Scale training data
-            self.output_scaler = preprocessing.Scaler(with_std=False).fit(
+            self.output_scaler = preprocessing.StandardScaler(with_std=False).fit(
                 self.training_fitness)
             adjusted_training_fitness = self.output_scaler.transform(
                 self.training_fitness)
-
-            if conf.nugget == 0:
-                gp = GaussianProcess(regr=conf.regr, corr=conf.corr,
-                                     theta0=array([conf.theta0] * dimensions),
-                                     thetaL=array([conf.thetaL] * dimensions),
-                                     thetaU=array([conf.thetaU] * dimensions),
-                                     random_start=conf.random_start)
-            else:
-                gp = GaussianProcess(regr=conf.regr, corr=conf.corr,
-                                     theta0=array([conf.theta0] * dimensions),
-                                     thetaL=array([conf.thetaL] * dimensions),
-                                     thetaU=array([conf.thetaU] * dimensions),
-                                     random_start=conf.random_start, nugget=conf.nugget)
-
+            gp = self.regressor_countructor()
             # Start a new process to fit the data to the gp, because gp.fit is
             # not thread-safe
             parent_end, child_end = Pipe()
@@ -122,16 +142,19 @@ class GaussianProcessRegressor(Regressor):
             self.regr = parent_end.recv()
             logging.info('Regressor training successful')
             self.controller.release_training_sema()
+            self.gp = gp
             return True
         except Exception, e:
-            logging.error('Regressor training failed.. {}'.format(e))
+            logging.info('Regressor training failed.. retraining.. ' + str(e))
             return False
 
     def predict(self, z):
         try:
+            #logging.info("z " + str(z))
+            #logging.info("z.shape " + str(z.shape))
             # Scale inputs. it allows us to realod the regressor not retraining the model
-            self.input_scaler = preprocessing.Scaler().fit(self.training_set)
-            self.output_scaler = preprocessing.Scaler(with_std=False).fit(
+            self.input_scaler = preprocessing.StandardScaler().fit(self.training_set)
+            self.output_scaler = preprocessing.StandardScaler(with_std=False).fit(
                 self.training_fitness) 
                 
             #logging.debug(z)
@@ -143,7 +166,7 @@ class GaussianProcessRegressor(Regressor):
             S2 = sqrt(S2.reshape(-1, 1))
             return MU, S2
         except Exception, e:
-            logging.error('Prediction failed.. {}'.format(e))
+            logging.error('Prediction failed... ' + str(e))
             return None, None
 
     def fit_data(self, gp, scaled_training_set, adjusted_training_fitness,
@@ -152,44 +175,53 @@ class GaussianProcessRegressor(Regressor):
         child_end.send(gp)    
         
     def get_state_dictionary(self):
+        try:
+            theta_ = self.gp.theta_
+        except:
+            theta_ = None
+            
         dict = {'training_set' : self.training_set,
-                'training_fitness': self.training_fitness,
-                'gp': self.gp.get_params(deep)}
+                    'training_fitness': self.training_fitness,
+                    'gp_theta': theta_}
         return dict
         
     def set_state_dictionary(self, dict):
         self.training_set = dict['training_set']
         self.training_fitness = dict['training_fitness']
-        self.gp = GaussianProcess()
-        self.gp.set_params(dict['gp'])
+        self.gp = self.regressor_countructor()
+        if not (self.gp.theta_ is None):
+            self.gp.theta_ = dict['gp_theta']
         
         
 ## Different implementation of GPR regression
 class GaussianProcessRegressor2(Regressor):
 
-    def __init__(self, controller):
-        super(GaussianProcessRegressor2, self).__init__(controller)
+    def __init__(self, controller, conf):
+        super(GaussianProcessRegressor2, self).__init__(controller, conf)
         self.input_scaler = None
         self.output_scaler = None
         self.scaled_training_set = None
         self.adjusted_training_fitness = None
         self.covfunc = None
         self.gp=None
+        self.conf = conf
             
-    def train(self, pop, conf, dimensions):
+    def train(self):
         try:
-            MU_best=None
-            gp_best=None
-            S2_best=None
-            nml_best=None
-            self.gp=None
+            MU_best = None
+            gp_best = None
+            S2_best = None
+            nml_best = None
+            self.gp = None
+            conf = self.conf
+            dimensions = len(self.training_set[0])
              # Scale inputs and particles?
-            self.input_scaler = preprocessing.Scaler().fit(self.training_set)
+            self.input_scaler = preprocessing.StandardScaler().fit(self.training_set)
             self.scaled_training_set = self.input_scaler.transform(
                 self.training_set)
 
             # Scale training data
-            self.output_scaler = preprocessing.Scaler(with_std=False).fit(
+            self.output_scaler = preprocessing.StandardScaler(with_std=False).fit(
                 self.training_fitness)
             self.adjusted_training_fitness = self.output_scaler.transform(
                 self.training_fitness)
@@ -221,19 +253,20 @@ class GaussianProcessRegressor2(Regressor):
                 self.set_gp(gp_best)
             except Exception,e:
                 ### will try to retarin till succesful
-                logging.info('Regressor training failed.. retraining.. {}'.format(e))
-                self.train(pop, conf, dimensions)
+                logging.info('Regressor training failed.. retraining.. ' + str(e))
+                self.train()
             logging.info('Regressor training successful')
             return True
         except Exception, e:
-            logging.error('Regressor training failed.. {}'.format(e))
+            logging.info('Regressor training failed.. retraining.. ' + str(e))
             return False
             
     def predict(self, z):
+        import traceback
         try:
             # Scale inputs. it allows us to realod the regressor not retraining the model
-            self.input_scaler = preprocessing.Scaler().fit(self.training_set)
-            self.output_scaler = preprocessing.Scaler(with_std=False).fit(
+            self.input_scaler = preprocessing.StandardScaler().fit(self.training_set)
+            self.output_scaler = preprocessing.StandardScaler(with_std=False).fit(
                 self.training_fitness) 
             self.adjusted_training_fitness = self.output_scaler.transform(
                 self.training_fitness)
@@ -250,7 +283,7 @@ class GaussianProcessRegressor2(Regressor):
                     S2[s] = 0.0
             return MU, S2
         except Exception, e:
-            logging.error('Prediction failed.. {}'.format(e))
+            logging.error('Prediction failed... ' + str(e))
             return None, None
     
     def set_gp(self, gp):
@@ -272,59 +305,167 @@ class GaussianProcessRegressor2(Regressor):
         self.gp = dict['gp']
         self.covfunc = dict['covfunc']
         
-        
-    # def returnMaxS2(pop,resultsFolder,iterations,toolbox,npts=200,d1=0,d2=1,fitness=None,gp=None,hypercube=None):
-    # global gpTrainingSet,gpTrainingFitness,clf
-    
-    # designSpace = fitness.designSpace
-    # if len(designSpace)==2:
-        #make up data.
-        # if hypercube:
-            # print "[returnMaxS2]: using hypercube ",hypercube
-            # x = linspace(hypercube[1][0],hypercube[0][0],npts)
-            # y = linspace(hypercube[1][1],hypercube[0][1],npts) 
-        # else:
-            # x = linspace(designSpace[0]["min"],designSpace[0]["max"],npts)
-            # y = linspace(designSpace[1]["min"],designSpace[1]["max"],npts)
-        # x,y = meshgrid(x,y)
-        # x=reshape(x,-1)
-        # y=reshape(y,-1)
-        # z = array([[a,b] for (a,b) in zip(x,y)])
-    # else:
-        # x,y,v = mgrid[designSpace[0]["min"]:designSpace[0]["max"]:(int(designSpace[0]["max"]-designSpace[0]["min"])+1)*1.0j,designSpace[1]["min"]:designSpace[1]["max"]:(int(designSpace[1]["max"]-designSpace[1]["min"])+1)*1.0j , designSpace[2]["min"]:designSpace[2]["max"]:(int(designSpace[2]["max"]-designSpace[2]["min"])+1)*1.0j]
-        # x=reshape(x,-1)
-        # y=reshape(y,-1)
-        # v=reshape(v,-1)
-        # z = array([[a,b,c] for (a,b,c) in zip(x,y,v)])
+## Different implementation of GPR regression
+class KMeansGaussianProcessRegressor(Regressor):
 
-    # try:
-        # zClass = classifyUsingSvm(z)
-    # except Exception,e:
-        # print "[returnMaxS2]: classifying failed.. ",e
-        # pass
+    def __init__(self, controller, conf):
+        super(KMeansGaussianProcessRegressor, self).__init__(controller, conf)
+        self.controller = controller
+        self.state_dict = {}
+        self.no_of_clusters = 0
+        self.max_no_of_clusters = 3
+        self.reuse = 0.6
+        self.conf = conf
+        for i in range(0, self.max_no_of_clusters): 
+            self.state_dict[i] = self.regressor_countructor() 
+        self.kmeans = self.kmeans_constructor()
+            
+    def train(self):
+        self.no_of_clusters = min(self.max_no_of_clusters, len(self.training_set))
+        self.kmeans = self.kmeans_constructor()
+        self.kmeans.fit(self.training_set)
+        dtype = [('distance', 'float'), ('index', int)]
+        for i in range(0,self.no_of_clusters):  
+            
+            labels = self.kmeans.predict(self.training_set)
+            distances = [(euclidean(self.kmeans.cluster_centers_[i],sample), j) for j, sample in enumerate(self.training_set) if labels[j] != i ]
+            distance_array = array(distances, dtype=dtype) ## not most efficient but readable
+            cropped_distance_array = distance_array[0:int(len(self.training_set)/float(self.no_of_clusters))]
+            #logging.debug("cropped_distance_array" + str(len(cropped_distance_array)))
+            #logging.debug("distances " + str(len(distances)))
+            include_array = [index for distance, index in cropped_distance_array]
+            #labels = self.kmeans.predict(self.training_set )
+            self.state_dict[i] = self.regressor_countructor() ### need to reset the regressor
+            for j, sample in enumerate(self.training_set):
+                if labels[j] == i or j in include_array:
+                    self.state_dict[i].add_training_instance(sample,self.training_fitness[j])
+            logging.debug("i:" + str(i) + " " + str(len(self.state_dict[i].training_set)))
+            self.state_dict[i].train()
+            
+    def kmeans_constructor(self):
+        return KMeans(init='k-means++', n_clusters=self.no_of_clusters, n_init=10)
+            
+    def regressor_countructor(self):
+        return GaussianProcessRegressor2(self.controller, self.conf)
+            
+    def predict(self, z):
+        labels = self.kmeans.predict(z)
+        MU = [0]*len(z)
+        S2 = [0]*len(z)
+        for i in range(0,self.no_of_clusters):  
+            for j, sample in enumerate(z):
+                if labels[j] == i:
+                    mu, s2 = self.state_dict[i].predict([sample])
+                    MU[j] = mu[0]
+                    S2[j] = s2[0]
+        return array(MU), array(S2)
         
-    # try:     
-        # zReal = array([fitness.fitnessFunc(a)[0][0] for a in z])
-        # zRealClass = array([fitness.fitnessFunc(a)[1][0] for a in z])
-        # minn = argmin(zReal)
-        # filteredminn = []
-        # filteredZ=[]
-        # for i,zreal in enumerate(zReal):
-            # if zRealClass[i]==0.0:
-                # filteredminn.append(zreal)
-                # filteredZ.append(z[i])
-    
-        # (MU,S2,modelFailed,gp) = toolbox.trainModel(z,gpTrainingSet=gpTrainingSet,gpTrainingFitness=gpTrainingFitness,gp=gp)
-        # filteredS2=[]
-        # filteredZ=[]
-        # for i,s2 in enumerate(S2):
-            # if zClass[i]==0.0:
-                # filteredS2.append(s2)
-                # filteredZ.append(z[i])
-        # S2 = array(filteredS2) 
-        # return filteredZ[argmax(S2)]
-    # except Exception,e:
-        # if enableTracebacks:
-            # print traceback.print_exc()
-        # print "[returnMaxS2]: finding maximum S2 failed... ommiting",e
-        # return toolbox.particle()
+    def get_state_dictionary(self):
+        try:
+            state_dict = {  "no_of_clusters": self.no_of_clusters,
+                            'training_set' : self.training_set,
+                            'kmeans_cluster_centers_' : self.kmeans.cluster_centers_,
+                            'kmeans_labels_' : self.kmeans.labels_,
+                            'kmeans_inertia_' : self.kmeans.inertia_,
+                            'training_fitness': self.training_fitness}
+         ##   logging.info(str(self.kmeans.cluster_centers_))
+            for i in range(0,self.no_of_clusters):  
+                state_dict[i] = self.state_dict[i].get_state_dictionary()
+            return state_dict
+        except:
+            logging.info("Model sa not been initialized..")
+            return {}
+        
+    def set_state_dictionary(self, dict):
+        try:
+            self.training_set = dict['training_set']
+            self.training_fitness = dict['training_fitness']
+            self.no_of_clusters = dict['no_of_clusters']
+            self.kmeans = self.kmeans_constructor()
+            self.kmeans.cluster_centers_ = dict['kmeans_cluster_centers_']
+            self.kmeans.labels_ = dict['kmeans_labels_']
+            self.kmeans.inertia_ = dict['kmeans_inertia_']
+            for i in range(0,self.no_of_clusters): 
+                self.state_dict[i] = self.regressor_countructor()
+                self.state_dict[i].set_state_dictionary(dict[i])
+        except:
+            logging.info("Supplied Empty dictionary..")
+            
+## Different implementation of GPR regression
+class DPGMMGaussianProcessRegressor(Regressor):
+
+    def __init__(self, controller, conf):
+        super(DPGMMGaussianProcessRegressor, self).__init__(controller, conf)
+        self.controller = controller
+        self.state_dict = {}
+        self.no_of_clusters = 0
+        self.max_no_of_clusters = 2
+        self.radius = 0.1 ## TODO
+        self.conf = conf
+        for i in range(0, self.max_no_of_clusters): 
+            self.state_dict[i] = self.regressor_countructor() 
+        self.dpgmm = self.dpgmm_constructor()
+            
+    def train(self):
+        self.no_of_clusters = min(self.max_no_of_clusters, len(self.training_set))
+        self.dpgmm = self.dpgmm_constructor()
+        self.dpgmm.fit(self.training_set)
+        labels = self.dpgmm.predict(self.training_set)
+        ##proba = self.dpgmm.predict_proba(self.training_set)
+        for i in range(0,self.no_of_clusters):  
+            self.state_dict[i] = self.regressor_countructor() ### need to reset the regressor
+            for j, sample in enumerate(self.training_set):
+                if labels[j] == i:
+                    self.state_dict[i].add_training_instance(sample,self.training_fitness[j])
+            if (not self.state_dict[i].training_set_empty()):
+                self.state_dict[i].train()
+            
+    def dpgmm_constructor(self):
+        return mixture.DPGMM(n_components=self.no_of_clusters, covariance_type='diag', alpha=100.,n_iter=100)
+            
+    def regressor_countructor(self):
+        return GaussianProcessRegressor2(self.controller, self.conf)
+            
+    def predict(self, z):
+        try:
+            labels = self.dpgmm.predict(z)
+            logging.info(str(labels))
+            MU = [0]*len(z)
+            S2 = [0]*len(z)
+            for i in range(0,self.no_of_clusters):  
+                for j, sample in enumerate(z):
+                    if labels[j] == i:
+                        mu, s2 = self.state_dict[i].predict([sample])
+                        MU[j] = mu[0]
+                        S2[j] = s2[0]
+            return array(MU), array(S2)
+        except: 
+            traceback.print_tb
+        
+    def get_state_dictionary(self):
+        try:
+            state_dict = {  "no_of_clusters": self.no_of_clusters,
+                            'training_set' : self.training_set,
+                            'dpgmm' : deepcopy(self.dpgmm),
+                            'training_fitness': self.training_fitness}
+            for i in range(0,self.no_of_clusters):  
+                state_dict[i] = self.state_dict[i].get_state_dictionary()
+            return state_dict
+        except Exception, e:
+            logging.info("Supplied Empty dictionary.." + str(e))
+            return {}
+        
+    def set_state_dictionary(self, dict):
+        try:
+            self.training_set = dict['training_set']
+            self.training_fitness = dict['training_fitness']
+            self.no_of_clusters = dict['no_of_clusters']
+            self.dpgmm = dict['dpgmm']
+            for i in range(0,self.no_of_clusters): 
+                self.state_dict[i] = self.regressor_countructor()
+                self.state_dict[i].set_state_dictionary(dict[i])
+        except Exception, e:
+            logging.info("Supplied Empty dictionary.." + str(e))
+            
+            
+            

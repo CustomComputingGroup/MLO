@@ -1,4 +1,4 @@
-results_folder_path = '/homes/mk306/log'
+results_folder_path = '/data/log'
 
 ##set to wherever you want the images to be stored
 #images_folder_path = 
@@ -8,7 +8,7 @@ eval_correct = False
 
 ### Basic setup
 
-trials_count = 10
+trials_count = 1
 population_size = 20
 
 max_fitness = 200.0
@@ -24,8 +24,8 @@ M = 10  # How often to perturb the population, used in discrete problems
 
 ### Trial-specific variables
 
-trials_type = 'PSOTrial'
 #trials_type = 'PSOTrial_TimeAware'
+trials_type = 'PSOTrial'
 
 phi1 = 2.0
 phi2 = 2.0
@@ -45,12 +45,11 @@ KK = 0.73
 a="a1"
 ### Visualisation
 
-vis_every_X_steps = 10000000 # How often to visualize
+vis_every_X_steps = 1 # How often to visualize
 counter = 'g'  # The counter that visualization uses as a 'step'
 max_counter = max_iter  # Maximum value of counter
 
 ### Regressor and classifier type
-#regressor = 'GaussianProcess'
 regressor = 'KMeansGaussianProcessRegressor'
 classifier = 'SupportVectorMachine'
 

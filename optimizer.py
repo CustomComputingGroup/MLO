@@ -9,7 +9,7 @@ from controller.controller import Controller
 from utils import load_script
 
 # Configure logging
-LOG_FORMAT = '[%(funcName)s] %(levelname)s: %(message)s'
+LOG_FORMAT = '[%(process)d_%(thread)d] - [%(module)s][%(funcName)s][%(lineno)d] %(levelname)s: %(message)s'
 LOG_LEVEL = logging.DEBUG
 logging.basicConfig(format=LOG_FORMAT, level=LOG_LEVEL)
 
@@ -35,41 +35,43 @@ def main():
     fitness = None
     configuration = None
 
-    # Load the fitness script
-    if args.f:
-        fitness = load_script(args.f, 'fitness')
-        if fitness is None:
-            sys.exit(1)
-
-    # Load the configuration script
-    if args.c:
-        configuration = load_script(args.c, 'configuration')
-        if configuration is None:
-            sys.exit(1)
-
-    if not gui and not restart and (not fitness or not configuration):
-        print 'Make sure to provide both the fitness and configuration scripts'
-        sys.exit(1)
-
-    # Now we have all the inputs and can run the program
-    if restart:
-        logging.info('Will restart optimisation')
+    if not gui and not restart and (not args.f or not args.c):
+        print 'Make sure to provide both the fitness and configuration scripts or restart flag'
+        sys.exit(1)    
     
-    ## initialize controller
-    restart = True
-    controller = Controller(restart)
     ## start in gui mode
     if gui:
+        ## initialize controller
+        restart = True
+        controller = Controller(restart)
         logging.info('Will run with GUI')
         controller.view = GUIView()
     ## start in terminal mode
     else:
+        ## initialize controller, restart runs only if requested
+        controller = Controller(restart)
         controller.view = TerminalView()
         
-    if not gui:
-        controller.fitness = fitness
-        controller.configuration = configuration
+        if restart:
+            logging.info('Will restart most recent run, for other runs run in GUI mode..')
+            fit = self.controller.get_most_recent_fitness_script_folder() + "/" + self.controller.get_most_recent_fitness_script_file() 
+            config = self.controller.get_most_recent_configuration_script_folder() + "/" + self.controller.get_most_recent_configuration_script_file() 
+        else:
+            fit = args.f
+            config = args.c
+            
+        # Load the fitness script
+        controller.fitness = load_script(fit, 'fitness')
+        if controller.fitness is None:
+            logging.info('Could not load fitness file')
+            sys.exit(1)
 
+        # Load the configuration script
+        controller.configuration = load_script(config, 'configuration')
+        if controller.configuration is None:
+            logging.info('Could not load configuration file')
+            sys.exit(1)
+            
     controller.take_over_control()
 
     logging.info('MLO finished successfully')
