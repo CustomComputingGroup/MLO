@@ -26,6 +26,7 @@ class Run(object):
         configuration_folder_name = None
         self.running_trial = None
         trial_type = None
+        self.terminal_mode = False
         self.job_backlog = Queue()
         if fitness:
             fitness_file_name = os.path.abspath(self.fitness.__file__)
@@ -72,7 +73,6 @@ class Run(object):
                           self.results_folder_path)
             if trial.initialise():
                 self.trials.append(trial)
-            
         self.save()
         self.view_update()
         # Run trials
@@ -86,11 +86,13 @@ class Run(object):
         self.running_trial = self.job_backlog.get_nowait()
         self.running_trial.set_running()
         self.running_trial.start()
+        if self.terminal_mode: ## TOODO - get rid of this
+            self.running_trial.join(100000000)
             
     ## TODO - this has to be changed... its just that ctrl+c wont be propagated otherwise...    
-    def join(self):
-        for trial in self.trials:
-            trial.join(100000000)
+    #def join(self):
+    #    for trial in self.trials:
+    #        trial.join(100000000)
         
     def load(self):
         logging.info('Loading the Run')
@@ -150,30 +152,30 @@ class Run(object):
                          "results_folder_path" : self.results_folder_path,
                          "trials_snapshots" : [trial.snapshot() for trial in self.trials]
                          }
+        logging.info("...")
         return snapshot_dict
         
     def view_update(self, visualize=False):
         self.controller.view_update(run=self, visualize=visualize)
         
     def trial_notify(self, trial):
-        if self.get_status() == "Finished":
+        if trial.get_status() == "Finished":
+            try:
+                self.set_running_time((trial.get_running_time() + self.get_running_time()).seconds)
+            except Exception, e:
+                logging.debug("Something went wrong went trying to get trial running time: " + str(e))
+                
+            self.state_dictionary["trials_finished"] = self.state_dictionary["trials_finished"] + 1
+            if self.state_dictionary["trials_finished"] == self.get_no_of_trials():
+                self.set_status("Finished")
+            self.save()
+            self.view_update(visualize=True)
             if not self.job_backlog.empty(): ## start next trial
                 self.running_trial = self.job_backlog.get_nowait()
                 self.running_trial.start()
                 self.running_trial.set_running()
-        else:
-            self.set_running_time((trial.get_running_time() + self.get_running_time()).seconds)
-            self.state_dictionary["trials_finished"] = self.state_dictionary["trials_finished"] + 1
-            logging.info(str(self.state_dictionary["trials_finished"]))
-            logging.info(str(self.state_dictionary["trials_finished"]/self.get_no_of_trials()))
-            logging.info(str(self.get_no_of_trials()))
-            if self.state_dictionary["trials_finished"] == self.get_no_of_trials():
-                self.set_status("Finished")
-                self.view_update(visualize=True)
-            self.save()
-        self.view_update(visualize=True)
-        
-        
+                if self.terminal_mode: ## TOODO - get rid of this
+                    self.running_trial.join(100000000)
     #############
     ## GET/SET ##
     #############

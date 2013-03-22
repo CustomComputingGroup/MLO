@@ -9,7 +9,7 @@ from sklearn.grid_search import GridSearchCV
 from sklearn.cluster import KMeans
 from sklearn import mixture
 from scipy.spatial.distance import euclidean
-from numpy.random import uniform
+from numpy.random import uniform, shuffle, permutation
 
 from utils import numpy_array_index
 from copy import deepcopy
@@ -29,12 +29,19 @@ class Regressor(object):
     def train(self):
         return True
 
-    def predict(self):
+    def predict(self, z):
         output = []
+        output2 = []
         for input_vector in z:
-            output.append([0])
-        return output, output
+            output.append([0.0])
+            output2.append([100.0])
+        return output, output2
 
+    def shuffle(self):
+        p = permutation(len(self.training_fitness))
+        self.training_fitness=self.training_fitness[p]
+        self.training_set=self.training_set[p]
+        
     def add_training_instance(self, part, fitness):
         if self.training_set is None:
             self.training_set = array([part])
@@ -44,9 +51,13 @@ class Regressor(object):
             if contains:
                 logging.debug('A particle duplicate is being added.. check your code!!')
             else:
-                self.training_set = append(self.training_set, [part], axis=0)
-                self.training_fitness = append(self.training_fitness, [fitness],
+                try:
+                    self.training_set = append(self.training_set, [part], axis=0)
+                    self.training_fitness = append(self.training_fitness, [fitness],
                                                axis=0)
+                except:
+                    logging.info(str(self.training_fitness))
+                    raise Exception("KURWO")
 
     def contains_training_instance(self, part):
         contains, index = numpy_array_index(self.training_set, part)
@@ -140,10 +151,13 @@ class GaussianProcessRegressor(Regressor):
                                                     child_end))
             p.start()
             self.regr = parent_end.recv()
-            logging.info('Regressor training successful')
-            self.controller.release_training_sema()
-            self.gp = gp
-            return True
+            if self.regr is None:
+                raise Exception("Something went wrong with the regressor")
+            else:
+                logging.info('Regressor training successful')
+                self.controller.release_training_sema()
+                self.gp = gp
+                return True
         except Exception, e:
             logging.info('Regressor training failed.. retraining.. ' + str(e))
             return False
@@ -166,12 +180,15 @@ class GaussianProcessRegressor(Regressor):
             S2 = sqrt(S2.reshape(-1, 1))
             return MU, S2
         except Exception, e:
-            logging.error('Prediction failed... ' + str(e))
+            logging.error('Prediction failed.... ' + str(e) + "KURWA")
             return None, None
 
     def fit_data(self, gp, scaled_training_set, adjusted_training_fitness,
                  child_end):
-        gp.fit(scaled_training_set, adjusted_training_fitness)
+        try:
+            gp.fit(scaled_training_set, adjusted_training_fitness)
+        except:
+            gp = None
         child_end.send(gp)    
         
     def get_state_dictionary(self):
@@ -189,9 +206,10 @@ class GaussianProcessRegressor(Regressor):
         self.training_set = dict['training_set']
         self.training_fitness = dict['training_fitness']
         self.gp = self.regressor_countructor()
-        if not (self.gp.theta_ is None):
+        try:
             self.gp.theta_ = dict['gp_theta']
-        
+        except:
+            pass
         
 ## Different implementation of GPR regression
 class GaussianProcessRegressor2(Regressor):
@@ -262,7 +280,6 @@ class GaussianProcessRegressor2(Regressor):
             return False
             
     def predict(self, z):
-        import traceback
         try:
             # Scale inputs. it allows us to realod the regressor not retraining the model
             self.input_scaler = preprocessing.StandardScaler().fit(self.training_set)
@@ -321,16 +338,17 @@ class KMeansGaussianProcessRegressor(Regressor):
         self.kmeans = self.kmeans_constructor()
             
     def train(self):
-        self.no_of_clusters = min(self.max_no_of_clusters, len(self.training_set))
+        self.no_of_clusters = min(self.max_no_of_clusters, len(self.training_set)) 
         self.kmeans = self.kmeans_constructor()
         self.kmeans.fit(self.training_set)
         dtype = [('distance', 'float'), ('index', int)]
+        succesfull = True
         for i in range(0,self.no_of_clusters):  
             
             labels = self.kmeans.predict(self.training_set)
             distances = [(euclidean(self.kmeans.cluster_centers_[i],sample), j) for j, sample in enumerate(self.training_set) if labels[j] != i ]
             distance_array = array(distances, dtype=dtype) ## not most efficient but readable
-            cropped_distance_array = distance_array[0:int(len(self.training_set)/float(self.no_of_clusters))]
+            cropped_distance_array = distance_array[0:int(len(self.training_set)/float(self.no_of_clusters))] ##lets assume trainingset > 1
             #logging.debug("cropped_distance_array" + str(len(cropped_distance_array)))
             #logging.debug("distances " + str(len(distances)))
             include_array = [index for distance, index in cropped_distance_array]
@@ -340,8 +358,9 @@ class KMeansGaussianProcessRegressor(Regressor):
                 if labels[j] == i or j in include_array:
                     self.state_dict[i].add_training_instance(sample,self.training_fitness[j])
             logging.debug("i:" + str(i) + " " + str(len(self.state_dict[i].training_set)))
-            self.state_dict[i].train()
-            
+            succesfull = self.state_dict[i].train() and succesfull
+        return succesfull
+        
     def kmeans_constructor(self):
         return KMeans(init='k-means++', n_clusters=self.no_of_clusters, n_init=10)
             
@@ -349,16 +368,20 @@ class KMeansGaussianProcessRegressor(Regressor):
         return GaussianProcessRegressor2(self.controller, self.conf)
             
     def predict(self, z):
-        labels = self.kmeans.predict(z)
-        MU = [0]*len(z)
-        S2 = [0]*len(z)
-        for i in range(0,self.no_of_clusters):  
-            for j, sample in enumerate(z):
-                if labels[j] == i:
-                    mu, s2 = self.state_dict[i].predict([sample])
-                    MU[j] = mu[0]
-                    S2[j] = s2[0]
-        return array(MU), array(S2)
+        try:
+            labels = self.kmeans.predict(z)
+            MU = [0]*len(z)
+            S2 = [0]*len(z)
+            for i in range(0,self.no_of_clusters):  
+                for j, sample in enumerate(z):
+                    if labels[j] == i:
+                        mu, s2 = self.state_dict[i].predict([sample])
+                        MU[j] = mu[0]
+                        S2[j] = s2[0]
+            return array(MU), array(S2)
+        except Exception,e:
+            logging.debug("Something went wrong with the model..:" + str(e))
+            return None, None
         
     def get_state_dictionary(self):
         try:

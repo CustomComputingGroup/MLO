@@ -60,7 +60,7 @@ doCores = False
 doDf = True
 rotate = True
 designSpace = []
-maxError = 0.01
+maxError = 0.05
 errorCorrection=True
 
 minVal = 0.0

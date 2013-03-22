@@ -35,20 +35,26 @@ class TerminalView(View):
         controller.load_profile_dict() ## TODO - implement this later.. for the moment 
         if self.controller.restart:
             logging.info("Restarting Most Recent Run")
-            self.controller.start_run(self.controller.get_most_recent_run_name(), self.controller.fitness, self.controller.configuration).join()
+            self.controller.start_run(self.controller.get_most_recent_run_name(), self.controller.fitness, self.controller.configuration, terminal_mode=True)
         else:
             logging.info("Starting Run")
-            self.controller.start_run('Default_run', self.controller.fitness, self.controller.configuration).join()
-        self.controller.visualizer.terminate()
+            self.controller.start_run('Default_run', self.controller.fitness, self.controller.configuration, terminal_mode=True)
+        #self.controller.visualizer.terminate()
         
     ## Print out run statistics, define a new stats printer
     def update(self, trial=None, run=None, visualize=None):
         if visualize:
-            if trial.get_main_counter() % trial.get_configuration().vis_every_X_steps == 0: ## TODO - its not ideal... rethink it... 
-                snapshot = trial.snapshot()
-                graphdict = self.controller.get_trial_visualization_dict(trial.get_trial_type())
-                snapshot.update(graphdict)
-                self.controller.visualize(snapshot, self.plot_view.render)
+            if not (trial is None): 
+                if trial.get_main_counter() % trial.get_configuration().vis_every_X_steps == 0: ## TODO - its not ideal... rethink it... 
+                    snapshot = trial.snapshot()
+                    graphdict = self.controller.get_trial_visualization_dict(trial.get_trial_type())
+                    snapshot.update(graphdict)
+                    self.controller.visualize(snapshot, self.plot_view.render)
+            if not (run is None): 
+                logging.info("Generating Report")
+                snapshot = run.snapshot()
+                snapshot.update(self.controller.get_run_visualization_dict(run.get_run_type()))
+                self.controller.visualize(snapshot, self.run_view.render)
 
 class GUIView(View):
     """

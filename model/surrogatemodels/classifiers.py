@@ -16,6 +16,7 @@ class Classifier(object):
         self.training_set = None
         self.training_labels = None
         self.clf = None
+        self.oneclass = False
 
     def train(self):
         return True
@@ -79,7 +80,7 @@ class SupportVectorMachineClassifier(Classifier):
                 logging.info('Only one class encountered, we do not need to use a classifier')
                 #self.clf = svm.OneClassSVM()
                 #self.clf.fit(scaledSvcTrainingSet)
-                
+                self.oneclass = True
             else:
                 param_grid = {
                     'gamma': 10.0 ** arange(-5, 4),
@@ -113,10 +114,8 @@ class SupportVectorMachineClassifier(Classifier):
 
     def predict(self, z):
         try:
-            if len(unique(asarray(self.training_labels))) < 2:
+            if self.oneclass:
                 ## TODO - rewrite it not to use a stupid loop...
-                logging.info(str(len(unique(asarray(self.training_labels)))))
-                logging.info(str((unique(asarray(self.training_labels)))))
                 return array([self.training_labels[0][0]] * len(z))
             else:
                 # Scale inputs and particles
@@ -147,7 +146,8 @@ class SupportVectorMachineClassifier(Classifier):
             #    self.type = None
         ''' 
         dict = {'training_set' : self.training_set,
-                'training_labels': self.training_labels}
+                'training_labels': self.training_labels,
+                'oneclass': self.oneclass}
                # 'type': self.type,
                # 'clf': deepcopy(self.clf)}
         return dict
@@ -156,6 +156,7 @@ class SupportVectorMachineClassifier(Classifier):
     def set_state_dictionary(self, dict):
         self.training_set = dict['training_set']
         self.training_labels = dict['training_labels']
+        self.oneclass = dict['oneclass']
         self.train()
         
         '''

@@ -32,8 +32,8 @@ class Controller(object):
         if self.view: ## might not have been initialized yet
             try:
                 self.view.update(trial=trial, run=run, visualize=visualize)
-            except:
-                pass
+            except Exception,e:
+                logging.debug("Error while visualizing.. " + str(e))
             
     def take_over_control(self):
         self.visualizer.start()
@@ -45,12 +45,13 @@ class Controller(object):
     def remove_run_name_jobs(self, run_name):
         self.visualizer.remove_run_name_jobs(run_name)
         
-    def start_run(self, name, fitness, configuration):
+    def start_run(self, name, fitness, configuration, terminal_mode = False):
         if not name:
             name = 'Default_run'
         run = Run(name, fitness, configuration, self)
         run.daemon = True
         # Special case when we are restarting a previously crashed run
+        run.terminal_mode=terminal_mode
         run.run()
         return run
 

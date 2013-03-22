@@ -10,16 +10,10 @@ from numpy import *
 from copy import deepcopy 
 from numpy.random import uniform, seed,rand
 
-from sklearn.gaussian_process import GaussianProcess
-from sklearn import svm
-from sklearn import preprocessing
-
-
 import traceback
 
 from matplotlib import pyplot
 from matplotlib import cm
-from scipy.interpolate import griddata
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.backends.backend_pdf import PdfPages
 
@@ -27,8 +21,6 @@ import os
 import traceback
 import sys
 
-import subprocess
-import threading, os
 from time import gmtime, strftime
 from copy import deepcopy    
 from matplotlib.ticker import MaxNLocator
@@ -50,136 +42,194 @@ initMax = 1
 
 ##maximization
 def is_better(a, b):
-    return a > b
+    return a < b
 
 cost_maxVal = 15000.0
 cost_minVal = 0.0
     
-doMw = True
-doCores = False
-doDf = True
-rotate = True
+
 designSpace = []
 maxError = 0.01
-errorCorrection=True
 
 minVal = 0.0
 maxVal = 300.0
-worst_value = 0.0
-optVal = {0.1:75.37,0.01:1.44,0.05:11.1,0.001:0.469 }[maxError]
+worst_value = 10000.0
 
+designSpace = []
 
-## always do mw
-designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #a
-designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #b 
-designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #B
-designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #T
-if doFrequency:
-    designSpace.append({"min":1.0,"max":16.0,"step":1.0,"type":"discrete","smin":-1.0,"smax":1.0, "set":"h"})
-designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #Ob
-designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #Ot
-if doParallelism:
-    designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #Pdp
-    designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #Pknl
-    designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #Ptl
-designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #Bs
-designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #Ds
-designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #Ls
-designSpace.append({"min":11.0,"max":53.0,"step":1.0,"type":"discrete","smin":-5.0,"smax":5.0, "set":"h"}) #Fs
+designSpace.append({"min":0.05,"max":1.0,"step":1.0,"type":"continuous", "set":"h"}) #alpha
+designSpace.append({"min":0.05,"max":1.0,"step":1.0,"type":"continuous", "set":"h"}) #beta
+designSpace.append({"min":0.05,"max":1.0,"step":1.0,"type":"continuous", "set":"h"}) #B
+designSpace.append({"min":0.05,"max":1.0,"step":1.0,"type":"continuous", "set":"h"}) #T
 
-maxvalue = 0.0
+designSpace.append({"min":1.0,"max":20.0,"step":1.0,"type":"discrete", "set":"h"}) #Pdp
+designSpace.append({"min":1.0,"max":20.0,"step":1.0,"type":"discrete", "set":"h"}) #Pknl
+designSpace.append({"min":1.0,"max":20.0,"step":1.0,"type":"discrete", "set":"h"}) #Ptl
 
-error_labels = {0:'Valid',1:'Overmap',3:'Inaccuracy'}
+maxvalue = worst_value
+error_labels = {0:'Valid',1:'Overmap',2:'Inaccuracy', 3:'Memory'}
 
 def termCond(best):
-    global optVal
-    return best > optVal
-
-def name():
-    return "rtm_" + str(maxError) + "_doCores" + str(doCores) + "_doDf" + str(doDf) + "_errorCorrection" + str(errorCorrection) 
+    return False
     
 def fitnessFunc(particle, state):
+
     # Dimensions dynamically rescalled
     ############Dimensions
-    if doFrequency:
-        cores = int(particle[0])
-        mw = int(particle[1])
+    fknl = 50000000.0 ## 100 MHz
+    
+    alpha = (particle[0])
+    beta = (particle[1])
+    
+    B = (particle[2])
+    T = (particle[3])
+    
+    Pknl = (particle[4])
+    Pt = (particle[5])
+    Pdp = (particle[6])
+        
+
+    ######################
+    Rcc = 1.0
+    x = 100.0
+    y = 100.0
+    Nop = 700000.0
+    Nc = 10.0
+    S=10.0
+    D=10.0**9
+    
+    Wdp = 32.0 # 8 bytes
+    N = 1.0
+    Bw = 1.0
+    Wm = N * (Wdp*Bw*Pdp)
+    BWm = 32000000000.0 * 8 ## GB / s
+    
+    ## not sure
+    Bd = 1.0
+    Bf = 1.0
+    Bl = 1.1
+    #epislon = sqrt()
+    
+    theta = 300000000.0*8.0 # 300 MB /s
+    psi = 10000000000.0 *8 # 10 GB/s
+    gamma = 5.0 
+    Ad = 1000000.0
+    Af = 1000000.0
+    Al = 1000000.0
+    Ab = 8.0 * 64000000.0 ## 64 MB
+    
+    If = Af * 0.2
+    Il = Al * 0.1
+        
+    ######################
+    nx = (((x-2*S)/alpha) + 2*S)
+    #print "nx " + str(nx)
+    ny = (((y-2*S)/beta) + 2*S)
+    #print "ny " + str(ny)
+    Ob = ((((x-2*S)/(nx-2*S)) * ((y-2*S)/(ny-2*S)) * nx * ny)/(x*y))
+    #print "Ob " + str(Ob)            
+    ######################
+    if alpha*beta == 1:
+        Ot = 1
     else:
-        cores = 1.0
-        mw = int(particle[0])
-                
-    if doParallelism:
-        df = int(particle[-1])
-        if not doCores:
-            cores = allData[11][mw][df][0]
-            
-        error = allData[11][mw][df][1]
-        #accuracy = array([allData[11][mw][i+1][1] for i in xrange(32)])[::-1]
-                
-        if(errorCorrection):
-            ###error correction
-            #for dff,acc in enumerate(accuracy):
-            #    if ((32-dff) > df) and  (acc > error):
-            #        error = acc 
+        Ot = ((nx+(Pt-1)*2*S)/(nx)) * ((ny+(Pt-1)*2*S)/(ny))
                     
-            for mww in range(mw,54):
-                accuracy = array([allData[11][mww][i+1][1] for i in xrange(32)])[::-1]
-                for dff,acc in enumerate(accuracy):
-                    if ((32-dff) >= df) and  (acc > error):
-                        error = acc 
-            #print "mww ",mww," dff ",(32-dff)," acc ",acc," df ",df," mw ",mw," ",error
-            #print " df ",df," mw ",mw," ",error
-        
-    else:
-        accuracy = array([allData[11][mw][i+1][1] for i in xrange(32)])[::-1]
-        error = accuracy[0]
-        df = 0
-        for dff,acc in enumerate(accuracy):
-            if acc > maxError:
-                break
-            error = acc
-            df = 32 - dff  
-        
-    frequency = 100
+    ######################
+    mdb = ((nx + (Pt-1)*2*S) / (Pdp)) * (ny + (Pt-1)*S)
+    #print "1 " + str(mdb)
+    #print "2 " + str(Pknl*Pt*Pdp)
+    Bs = (Pknl*Pt*Pdp*(S*(2+Nc)+1)*mdb) / (Ab/(Wdp*Bw))
+    #Bs = (1.0*(S*(2+Nc)+1)*mdb) / (Ab/(Wdp*Bw))
+    #print "Bs " + str(Bs)
+    Ds = (Nop * T * Bd / Ad)
+    #print "DS " + str(Ds)
+    Ls = (Nop * T * Bl + Il)/ Al
+    #print "Ls " + str(Ls)
+    Fs = (Nop * T * Bf + If)/ Af
+    #print "Fs " + str(Fs)
+    overmapped = (Ds >= 1) or (Ls >= 1) or (Fs >= 1) or (Bs >=1)
+    cost, state = getCost(Bs, Ds, Ls, Fs , state) ## we need to cast to float
+    #print "cost " + str(cost)
     #######################
-    executionTime = array([cores/allData[11][mw][df][2]])
-    #executionTime = array([error])
-    #print " df ",df," mw ",mw," ",error," ",allData[11][mw][df][2]
-    cost, state = getCost(df, float(mw),float(cores), state) ## we need to cast to float
-    if error > maxError:
-        return ((executionTime, array([3]),array([0]), cost) , state)##!!!! zmien na 0.0 
+    Ct = Rcc * ((D*Ob*Ot)/(fknl*Pknl*Pdp*Pt))
+    Cre = gamma * max(Bs,Ds,Ls,Fs) / theta
+    Cm = (2 * D * Wdp * (1+Nc)* Bw ) / psi  ### is constant
+    #######################
+    executionTime = array([Ct + Cre])    
+
+    ######################
+    ## mem bandwith exceeded
+    #if BWm >= (Wdp*Bw*Pdp)*Pknl*fknl :
+    #    return ((executionTime, array([4]),array([0]), cost) , state)
+    
     ### accuracy error
-        
+    error = 0.0
+    if error > maxError:
+        return ((executionTime, array([1]),array([0]), cost) , state)
+    
     ### overmapping error
-    if allData[11][mw][df][0] < cores :
-        return ((array([maxvalue]), array([1]),array([1]), cost) , state)
+    if overmapped:
+        return ((array([maxvalue]), array([2]),array([1]), cost) , state)
     
     ### ok values execution time
     return ((executionTime, array([0]),array([0]), cost), state)
     
+##add state saving, we use p and thread id 
+def getCost(Bs, Ds, Ls, Fs , bit_stream_repo):
+    return 4000 + (max(Bs,Ds,Ls,Fs) * 10000), {}
+    
+
 def calcMax():    
-    if len(designSpace)==2:
-        # make up data.
-        x,y = mgrid[designSpace[0]["min"]:designSpace[0]["max"]:(int(designSpace[0]["max"]-designSpace[0]["min"])+1)*1.0j,designSpace[1]["min"]:designSpace[1]["max"]:(int(designSpace[1]["max"]-designSpace[1]["min"])+1)*1.0j]
-        x=reshape(x,-1)
-        y=reshape(y,-1)       
-        z = array([[a,b] for (a,b) in zip(x,y)])
-    else:
-        x,y,v = mgrid[designSpace[0]["min"]:designSpace[0]["max"]:(int(designSpace[0]["max"]-designSpace[0]["min"])+1)*1.0j,designSpace[1]["min"]:designSpace[1]["max"]:(int(designSpace[1]["max"]-designSpace[1]["min"])+1)*1.0j , designSpace[2]["min"]:designSpace[2]["max"]:(int(designSpace[2]["max"]-designSpace[2]["min"])+1)*1.0j]
-        x=reshape(x,-1)
-        y=reshape(y,-1)
-        v=reshape(v,-1)
-        z = array([[a,b,c] for (a,b,c) in zip(x,y,v)])
+    import scipy.optimize as optimize
+    def funcWrapper(x):
+        xx = fitnessFunc(x,None)
+        return xx[0][0][0]
+
+    def funcWrapper2(x):
+        xx = fitnessFunc(x,None)
+        return xx[0][1][0]
+    '''
+    designSpace.append({"min":0.05,"max":1.0,"step":1.0,"type":"continuous", "set":"h"}) #alpha
+    designSpace.append({"min":0.05,"max":1.0,"step":1.0,"type":"continuous", "set":"h"}) #beta
+    designSpace.append({"min":0.05,"max":1.0,"step":1.0,"type":"continuous", "set":"h"}) #B
+    designSpace.append({"min":0.05,"max":1.0,"step":1.0,"type":"continuous", "set":"h"}) #T
+
+    designSpace.append({"min":1.0,"max":20.0,"step":1.0,"type":"discrete", "set":"h"}) #Pdp
+    designSpace.append({"min":1.0,"max":20.0,"step":1.0,"type":"discrete", "set":"h"}) #Pknl
+    designSpace.append({"min":1.0,"max":20.0,"step":1.0,"type":"discrete", "set":"h"}) #Ptl
+    '''
         
-    zReal = array([fitnessFunc(a)[0][0] for a in z])
-    zRealClass = array([fitnessFunc(a)[1][0] for a in z])
-    minn = argmin(zReal)
+    x0 = [0.83635750288312605, 0.37822062215746499, 0.13905958646985159, 0.58215055232421087, 2.0, 6.0, 18.0]
+    x0 = [0.98874672302918809, 0.77342903511390226, 0.82587267298704492, 0.99183074578544894, 17.0, 3.0, 13.0]
+    #x0 = [  0.24367197,   0.16558312,   0.82587267,   0.99183069, 4,   4,  4]
+    xopt = optimize.minimize(fun = funcWrapper, method = "COBYLA", x0 =  x0, tol=1e-15, bounds = [(d["min"],d["max"]) for d in designSpace])
+    print str(xopt)
+    print str(fitnessFunc([  0.24367197,   0.16558312,   0.82587267,   0.99183069, 17,   4,  14],None))
+    print str(fitnessFunc([  0.24367197,   0.16558312,   0.82587267,   0.99183069, 17,   3,  13],None))
+    
+    print str(fitnessFunc([  0.23313723,   0.17056786,   0.82590206,   0.04877084, 18.27665482,   4.36760638,  14.35909523],None))
+    print str(fitnessFunc([  0.23313723,   0.17056786,   0.82590206,   0.04877084, 20,   6,  17],None))
+    
+        
+    '''
+    npts = 15
+    D = len(designSpace)
+    n_bins =  npts*ones(D)
+    bounds = [(d["min"],d["max"]) for d in designSpace]
+    print "bounds" + str(bounds)
+    print "calculating mgrid"
+    result = mgrid[[slice(row[0], row[1], npts*1.0j) for row, n in zip(bounds, n_bins)]]
+    print "calculating mgrid done"
+    Z = result.reshape(D,-1).T
+    print "f(z)"
     filteredminn = []
     filteredZ=[]
-    for i,zreal in enumerate(zReal):
-        if zRealClass[i]==0.0:
-            filteredminn.append(zreal)
-            filteredZ.append(z[i])
+    print "f(z)"
+    for z in Z:
+        fz = fitnessFunc(z,None)
+        if fz[0][1][0]==0.0:
+            filteredminn.append(fz[0][0][0])
+            filteredZ.append(z)
             
     if filteredminn:
         doFor=5
@@ -192,23 +242,4 @@ def calcMax():
             print "[returnMaxS2] Real max :",maxx," ",filteredZ[maxx]," ",filteredminn[maxx]
 
         print "[returnMaxS2] ====================================="
-
-def calcMaxs():    
-    global maxError
-    for maxError in [0.001]:
-        print "maxError: ",maxError
-        calcMax()
-    
-##add state saving, we use p and thread id 
-def getCost(df, wF, cores, bit_stream_repo):
-    global costModel, costModelInputScaler, costModelOutputScaler
-    bit_stream_repo_copy = deepcopy(bit_stream_repo) 
-    if bit_stream_repo is None:
-        bit_stream_repo_copy = {}
-       
-    if bit_stream_repo_copy.has_key((wF,cores)): ## bit_stream evalauted
-        return array([df*5.0*(0.5 + random.random())]), bit_stream_repo_copy
-    else:
-        bit_stream_repo_copy[(wF,cores)] = True
-        return costModelOutputScaler.inverse_transform(costModel.predict(costModelInputScaler.transform(array([[wF,cores]])))) + (df*5.0*(0.8 + random.random()/5.0)), bit_stream_repo_copy  ##software cost, very small fraction and linear
-                
+    '''

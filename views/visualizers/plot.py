@@ -572,7 +572,7 @@ class MLORunReportViewer(object):
 
     @staticmethod
     def render(dictionary):
-            
+        logging.info("Generating Report")
         ## Generate Header   
         header = ['Trial Name', 'Trial Number']  
         counter_headers = []
@@ -641,7 +641,7 @@ class MLORunReportViewer(object):
             f.close()
         except Exception, e:
             logging.error('could not create a report for ' + str(e))
-            
+        logging.info("Done Generating Report")
 
     @staticmethod
     def get_attributes(name):

@@ -10,9 +10,8 @@ def load_script(filename, script_type):
     """
     try:
         return load_source(script_type, filename)
-    except:
-        logging.error('{} file ({}) could not be loaded'.format(
-            script_type.capitalize(), filename), exc_info=sys.exc_info())
+    except Exception,e:
+        logging.error(str(script_type.capitalize()) + ' file (' + str(filename) + ') could not be loaded ' + str(e))
         return None
 
 def numpy_array_index(multi_array, array):

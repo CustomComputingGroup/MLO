@@ -9,7 +9,7 @@ from copy import copy, deepcopy
 import io
 import pickle
 import re
-from numpy import multiply, array, ceil, floor, maximum, minimum
+from numpy import multiply, array, ceil, floor, maximum, minimum, mean, min, max
 from numpy.random import uniform, rand
 from numpy.linalg import norm
 import operator
@@ -33,9 +33,6 @@ class Trial(Thread):
         if configuration.surrogate_type == "dummy":
             self.surrogate_model = DummySurrogateModel(configuration,
                                                        self.controller)
-        elif configuration.surrogate_type == "time_aware":
-             self.surrogate_model = SurrogateModel_TimeAware(configuration,
-                                                        self.controller)
         else:
             self.surrogate_model = ProperSurrogateModel(configuration,
                                                         self.controller)
@@ -50,7 +47,6 @@ class Trial(Thread):
         timer_dictionary['Cost Model Training Time'] = 0 
         timer_dictionary['Model Predict Time'] = 0
         timer_dictionary['Cost Model Predict Time'] = 0
-        
         self.configuration = configuration
         
         self.my_run = my_run
@@ -73,6 +69,7 @@ class Trial(Thread):
             'counter_dictionary' : counter_dictionary,
             'timer_dict' : timer_dictionary,
             'best' : None,
+            'generate' : False,
             'fitness_state' : None,
             'fresh_run' : False
             # True if the user has selected to pause the trial
@@ -90,7 +87,7 @@ class Trial(Thread):
     def train_surrogate_model(self, population):
         logging.info('Training surrogate model')
         start = datetime.now()
-        self.surrogate_model.train()
+        self.set_model_failed(self.surrogate_model.train())
         diff = datetime.now() - start
         self.add_train_surrogate_model_time(diff)
         
@@ -104,7 +101,7 @@ class Trial(Thread):
     def train_cost_model(self, population):
         logging.info('Training cost model')
         start = datetime.now()
-        self.cost_model.train()
+        self.set_model_failed(self.cost_model.train())
         diff = datetime.now() - start
         self.add_train_cost_model_time(diff)
         
@@ -149,24 +146,20 @@ class Trial(Thread):
             return fitness, code, cost
         self.increment_counter('fit')
         
-        
         try:
             results, state = self.fitness.fitnessFunc(part, self.get_fitness_state())
             self.set_fitness_state(state)
-        except Exception,e:
+        except Exception,e:          
             logging.info(str(e))
-            logging.info(str( self.fitness.fitnessFunc(part, self.get_fitness_state())))
-            
             results = self.fitness.fitnessFunc(part) ## fitness function doesnt have state
-            
         fitness = results[0]
         code = results[1]
         addReturn = results[2]
+        logging.info("Evaled " + str(part) + " fitness:" + str(fitness) + " code:" + str(code))
         try: ## not all fitness functions return benchmark exectuion cost
-            cost = results[3]
+            cost = results[3][0]
         except:
             cost = 1.0 ## just keep it constant for all points
-     
         self.set_counter_dictionary("cost", self.get_counter_dictionary("cost") + cost)
         self.surrogate_model.add_training_instance(part, code, fitness, addReturn)
         self.cost_model.add_training_instance(part, cost)
@@ -347,7 +340,14 @@ class Trial(Thread):
         return self.state_dictionary['best']
         
     def set_best(self, new_best):
+        try:
+            logging.info('Old global best ' + str(self.get_best()) + ' fitness:'+ str(self.get_best().fitness.values))
+        except:
+            pass ## there was no best
+            
         self.state_dictionary['best'] = new_best
+        logging.info('New global best found' + str(new_best) + ' fitness:'+ str(new_best.fitness.values))
+        
         
     def get_counter_dictionary(self, counter):
         return self.state_dictionary['counter_dictionary'][counter]
@@ -464,6 +464,7 @@ class PSOTrial(Trial):
         return True
         
     def run_initialize(self):
+        logging.info("Initialize PSOTrial no:" + str(self.get_trial_no()))
         self.cost_model = DummyCostModel(self.configuration, self.controller, self.fitness)
         design_space = self.fitness.designSpace
         self.toolbox = copy(base.Toolbox())
@@ -518,6 +519,7 @@ class PSOTrial(Trial):
         if self.state_dictionary["fresh_run"]: ## we need this as we only want to do it for initial generation
             ## the problem is that we cannot
             self.train_surrogate_model(self.get_population())
+            self.train_cost_model(self.get_population())
             self.view_update(visualize = True)
             self.state_dictionary["fresh_run"] = False
             self.save()
@@ -540,19 +542,31 @@ class PSOTrial(Trial):
             if self.get_counter_dictionary('fit') > self.get_configuration().max_fitness:
                 logging.info('Fitness counter exceeded the limit... exiting')
                 break
-
+            reevalute = False
             # Train surrogate model
             if self.training_set_updated():
                 self.train_surrogate_model(self.get_population())
+                self.train_cost_model(self.get_population())
                 reevalute = True
             ##print self.get_population()
-            code, mean, variance = self.predict_surrogate_model(self.get_population())
-            self.post_model_filter(code, mean, variance)
-
-            ##
+            code, mu, variance = self.predict_surrogate_model(self.get_population())
+            reloop = False
+            if (mu is None) or (variance is None):
+                logging.info("Prediction Failed")
+                self.set_model_failed(True)
+            else:
+                logging.info("mean S2 " + str(mean(variance)))
+                logging.info("max S2  " + str(max(variance)))
+                logging.info("min S2  " + str(min(variance)))
+                logging.info("over 0.05  " + str(min(len([v for v in variance if v > 0.05]))))
+                reloop = self.post_model_filter(code, mu, variance)
+            ##                
             if self.get_model_failed():
                 logging.info('Model Failed, sampling design space')
                 self.sample_design_space()
+            elif reloop:
+                reevalute = True
+                logging.info('Evaluated some particles, will try to retrain model')
             else:#
                 if reevalute:
                     self.reevalute_best()
@@ -563,6 +577,7 @@ class PSOTrial(Trial):
                 #Check if perturbation is neccesary 
                 if self.get_counter_dictionary('g') % self.get_configuration().M == 0:
                     self.evaluate_best()
+                    self.new_best = False
             # Wait until the user unpauses the trial.
             while self.get_wait():
                 time.sleep(0)
@@ -720,8 +735,14 @@ class PSOTrial(Trial):
                 if i < F:
                     part.fitness.values, part.code, cost = self.toolbox.evaluate(part)
                     self.set_at_least_one_in_valid_region((part.code == 0) or self.get_at_least_one_in_valid_region())
+                    if not self.get_best() or self.fitness.is_better(part.fitness, self.get_best().fitness):
+                        particle = self.create_particle(part)
+                        particle.fitness.values = part.fitness.values
+                        self.set_best(particle)
+                        
             ## add one example till we find something that works
             F = 1
+            
         self.state_dictionary["fresh_run"] = True
         
     def meta_iterate(self):
@@ -730,15 +751,17 @@ class PSOTrial(Trial):
         ##    logging.info("All particles within invalid area... have to randomly sample the design space to find one that is OK...")             
             
         #Update Bests
+        logging.info("Meta Iteration")
         for part in self.get_population():
             if not part.best or self.fitness.is_better(part.fitness, part.best.fitness):
                 part.best = self.create_particle(part)
                 part.best.fitness.values = part.fitness.values
             if not self.get_best() or self.fitness.is_better(part.fitness, self.get_best().fitness):
-                self.set_best(self.create_particle(part))
-                self.get_best().fitness.values = part.fitness.values
+                particle = self.create_particle(part)
+                particle.fitness.values = part.fitness.values
+                self.set_best(particle)
                 self.new_best = True
-                logging.info('New global best found' + str(self.get_best()) + ' fitness:'+ str(part.fitness.values))                
+                                
         #PSO
         for part in self.get_population():
             self.toolbox.update(part, self.get_counter_dictionary('g'))
@@ -749,15 +772,15 @@ class PSOTrial(Trial):
     def evaluate_best(self):        
         if self.new_best:
             self.fitness_function(self.get_best())
-            logging.info('New best was found after M')
+            logging.info('New best was found after M :' + str(self.get_best()))
         else:
             ## TODO - clean it up...  messy
-           
-            code, mean, variance = self.predict_surrogate_model([self.get_best()])
+            perturbation = self.perturbation(radius = 100.0)                        
+            logging.info('Best was already evalauted.. adding perturbation ' + str(perturbation))
+            perturbed_particle = self.create_particle(self.get_best())
+            code, mean, variance = self.predict_surrogate_model([perturbed_particle])
             if code[0] == 0:
-                logging.info('Best was already evalauted.. adding perturbation')
-                perturbation = self.perturbation()                        
-                perturbed_particle = self.create_particle(self.get_best())
+                logging.info('Perturbation might be valid, evaluationg')
                 for i,val in enumerate(perturbation):
                     perturbed_particle[i] = perturbed_particle[i] + val       
                 self.toolbox.filter_particle(perturbed_particle)
@@ -767,9 +790,8 @@ class PSOTrial(Trial):
                 if not self.get_best() or self.fitness.is_better(perturbed_particle.fitness, self.get_best().fitness):
                     self.set_best(perturbed_particle)
             else:
-                logging.info('Best is within the invalid area, sampling design space')
+                logging.info('Best is within the invalid area ' + str(code[0]) + ', sampling design space')
                 self.sample_design_space()
-        self.new_best = False
         
     def increment_main_counter(self):
         self.get_best_fitness_array().append(self.get_best().fitness.values[0])
@@ -779,9 +801,9 @@ class PSOTrial(Trial):
 
     def sample_design_space(self):
         logging.info('Evaluating best perturbation')
-        perturbation = self.perturbation()                        
-        hypercube = self.hypercube()
-        particle = self.surrogate_model.max_uncertainty(designSpace=self.fitness.designSpace)
+        perturbation = self.perturbation(radius = 10.0)                        
+        hypercube = self.hypercube()        
+        particle = self.surrogate_model.max_uncertainty(designSpace=self.fitness.designSpace, hypercube = hypercube)
         if particle is None:
             logging.info('Evaluating a perturbation of a random particle')
             particle = self.toolbox.particle()
@@ -858,13 +880,21 @@ class PSOTrial(Trial):
     
     ### TODO - its just copy and pasted ciode now..w could rewrite it realyl
     def post_model_filter(self, code, mean, variance):
+        eval_counter = 1
+        self.set_model_failed(not (False in [self.get_configuration().max_stdv < pred for pred in variance]))
+        if self.get_model_failed():
+            return False
         if (code is None) or (mean is None) or (variance is None):
             self.set_model_failed(False)
         else:
             for i, (p, c, m, v) in enumerate(zip(self.get_population(), code,
                                                  mean, variance)):
                 if v > self.get_configuration().max_stdv and c == 0:
+                    if eval_counter > self.get_configuration().max_eval:
+                        logging.info("Evalauted mroe fitness functions per generation then max_eval")
+                        return True
                     p.fitness.values, p.code, cost = self.toolbox.evaluate(p)
+                    eval_counter = eval_counter + 1
                 else:
                     if c == 0:
                         p.fitness.values = m
@@ -872,8 +902,8 @@ class PSOTrial(Trial):
                         p.fitness.values = [self.fitness.worst_value]
             ## at least one particle has to have std smaller then max_stdv
             ## if all particles are in invalid zone
-            self.set_model_failed(not (False in [self.get_configuration().max_stdv < pred for pred in variance]))
-   
+        return False
+        
     def reevalute_best(self):
         bests_to_model = [p.best for p in self.get_population() if p.best] ### Elimate Nones -- in case M < Number of particles, important for initialb iteratiions
         if self.get_best():
@@ -881,18 +911,21 @@ class PSOTrial(Trial):
         if bests_to_model:
             logging.info("Reevaluating")
             code, bests_to_fitness, variance = self.surrogate_model.predict(bests_to_model)
-            for i,part in enumerate([p for p in self.get_population() if p.best]):
-                if code[i] == 0:
-                    part.best.fitness.values = bests_to_fitness[i]
-                else:
-                    part.best.fitness.values = [self.fitness.worst_value]
-            if self.get_best():
-                best = self.get_best()
-                if code[-1] == 0:
-                    best.fitness.values = bests_to_fitness[-1]
-                else:
-                    best.fitness.values = [self.fitness.worst_value]
-                self.set_best(best)
+            if (code is None) or (bests_to_fitness is None) or (variance is None):
+                logging.info("Prediction failed during reevaluation... omitting")
+            else:
+                for i,part in enumerate([p for p in self.get_population() if p.best]):
+                    if code[i] == 0:
+                        part.best.fitness.values = bests_to_fitness[i]
+                    else:
+                        part.best.fitness.values = [self.fitness.worst_value]
+                if self.get_best():
+                    best = self.get_best()
+                    if code[-1] == 0:
+                        best.fitness.values = bests_to_fitness[-1]
+                    else:
+                        best.fitness.values = [self.fitness.worst_value]
+                    self.set_best(best)
     #######################
     ### GET/SET METHODS ###
     #######################
@@ -932,38 +965,10 @@ class PSOTrial(Trial):
         model.set_state_dictionary(self.cost_model.get_state_dictionary())
         return model
         
-class PSOTrial_TimeAware(Trial):
+class PSOTrial_TimeAware(PSOTrial):
 
-    #######################
-    ## Abstract Methods  ##
-    #######################
-    
-    def initialise(self):
-        """
-        Initialises the trial and returns True if everything went OK,
-        False otherwise.
-        """
-        self.run_initialize()
-        self.state_dictionary['best'] = None
-        self.state_dictionary['fitness_evaluated'] = False
-        self.state_dictionary['model_failed'] = False
-        self.state_dictionary['new_best_over_iteration'] = False
-        self.state_dictionary['population'] = None
-        self.state_dictionary['best_fitness_array'] = []
-        self.state_dictionary['generations_array'] = []
-        self.set_main_counter_name("g")
-        self.set_counter_dictionary("g",0)
-        self.initialize_population()
-        
-        results_folder, images_folder = self.create_results_folder()
-        if not results_folder or not images_folder:
-            # Results folder could not be created
-            logging.error('Results and images folders cound not be created, terminating.')
-            return False
-        
-        return True
-        
     def run_initialize(self):
+        logging.info("Initialize PSOTrial_TimeAware no:" + str(self.get_trial_no()))
         self.cost_model = ProperCostModel(self.configuration, self.controller, self.fitness)
         design_space = self.fitness.designSpace
         self.toolbox = copy(base.Toolbox())
@@ -988,7 +993,7 @@ class PSOTrial_TimeAware(Trial):
                                                                         self.smin)],
                            pmin=[dimSetting['max'] for dimSetting in design_space],
                            pmax=[dimSetting['min'] for dimSetting in design_space],
-                           model=False, best=None, code=None, cost=None)
+                           model=False, best=None, code=None)
 
         self.toolbox.register('particle', self.generate, designSpace=design_space)
         self.toolbox.register('filter_particles', self.filterParticles,
@@ -997,172 +1002,26 @@ class PSOTrial_TimeAware(Trial):
                               designSpace=design_space)
         self.toolbox.register('population', tools.initRepeat,
                               list, self.toolbox.particle)
-        self.toolbox.register('update', self.updateParticle,
+        self.toolbox.register('update', self.updateParticle, 
                               conf=self.get_configuration(),
                               designSpace=design_space)
         self.toolbox.register('evaluate', self.fitness_function)
-        
-    def run(self):
-        self.state_dictionary['generate'] = True
-        self.set_start_time(datetime.now().strftime('%d-%m-%Y  %H:%M:%S'))
-        
-        logging.info(str(self.get_name()) + ' started')
-        logging.info('Trial prepared... executing')
-        self.save() ## training might take a bit...
-        # Initialise termination check
-        
-        self.check = False
-        ## we do this not to retrain model twice during the first iteration. If we ommit
-        ## this bit of code the first view_update wont have a model aviable.
-        
-        if self.state_dictionary["fresh_run"]: ## we need this as we only want to do it for initial generation
-            ## the problem is that we cannot
-            self.train_surrogate_model(self.get_population())
-            self.train_cost_model(self.get_population())
-            self.view_update(visualize = True)
-            self.state_dictionary["fresh_run"] = False
-            self.save()
-            
-        while self.get_counter_dictionary('g') < self.get_configuration().max_iter + 1:
-            
-            logging.info('[' + str(self.get_name()) + '] Generation ' + str(self.get_counter_dictionary('g')))
-            logging.info('[' + str(self.get_name()) + '] Fitness ' + str(self.get_counter_dictionary('fit')))
+        self.new_best=False
 
-            # termination condition - we put it here so that when the trial is reloaded
-            # it wont run if the run has terminated already
-            if self.get_terminating_condition(): 
-                logging.info('Terminating condition reached...')
-                break
-            
-            # Roll population
-            first_pop = self.get_population().pop(0)
-            self.get_population().append(first_pop)
-            
-            if self.get_counter_dictionary('fit') > self.get_configuration().max_fitness:
-                logging.info('Fitness counter exceeded the limit... exiting')
-                break
-
-            # Train surrogate model
-            logging.info("get_retrain_model1 " + str(self.get_retrain_model()))
-            if self.training_set_updated():
-                self.train_surrogate_model(self.get_population())
-                self.train_cost_model(self.get_population())
-                reevalute = True
-            logging.info("get_retrain_model2 " + str(self.get_retrain_model()))
-            ##print self.get_population()
-            code, mean, variance = self.predict_surrogate_model(self.get_population())
-            self.post_model_filter(code, mean, variance)
-
-            ##
-            if self.get_model_failed():
-                logging.info('Model Failed, sampling design space')
-                self.sample_design_space()
-            else:#
-                logging.info("get_retrain_model3 " + str(self.get_retrain_model()))
-                if reevalute:
-                    self.reevalute_best()
-                logging.info("get_retrain_model4 " + str(self.get_retrain_model()))
-                # Iteration of meta-heuristic
-                self.meta_iterate()
-                logging.info("get_retrain_model5 " + str(self.get_retrain_model()))
-                self.filter_population()
-                
-                #Check if perturbation is neccesary 
-                if self.get_counter_dictionary('g') % self.get_configuration().M == 0:
-                    self.evaluate_best()
-                
-            # Wait until the user unpauses the trial.
-            while self.get_wait():
-                time.sleep(0)
-            
-            self.increment_main_counter()
-            self.view_update(visualize = True)
-
-        self.exit()
-        
-    ### returns a snapshot of the trial state
-    def snapshot(self):
-        fitness = self.fitness
-        best_fitness_array = copy(self.get_best_fitness_array())
-        generations_array = copy(self.get_generations_array())
-        results_folder = copy(self.get_results_folder())
-        images_folder = copy(self.get_images_folder())
-        counter = copy(self.get_counter_dictionary('g'))
-        name = self.get_name()
-        run_name = self.my_run.get_name()
-        return_dictionary = {
-            'fitness': fitness,
-            'best_fitness_array': best_fitness_array,
-            'generations_array': generations_array,
-            'results_folder': results_folder,
-            'images_folder': images_folder,
-            'counter': counter,
-            'counter_dict':  self.state_dictionary['counter_dictionary'] ,
-            'timer_dict':  self.state_dictionary['timer_dict'] ,
-            'name': name,
-            'fitness_state': self.get_fitness_state(),
-            'run_name' : run_name,
-            'classifier': self.get_surrogate_model().classifier,
-            'regressor': self.get_surrogate_model().regressor,
-            'cost_model': self.get_cost_model(),
-            'meta_plot': {"particles":{'marker':"o",'data':self.get_population()}},
-            'generate' : self.state_dictionary['generate'] 
-        }
-        return return_dictionary
-        
-    ####################
-    ## Helper Methods ##
-    ####################
-    
     def predict_cost(self, particle):
         try:
             return self.cost_model.predict(particle)
         except Exception,e:
             logging.debug("Cost model is still not avaiable: " + str(e))
             return 1.0 ## model has not been created yet
+
+    def predict_cost_raw(self, particle):
+        try:
+            return self.cost_model.predict_raw(particle)
+        except Exception,e:
+            logging.debug("Cost model is still not avaiable: " + str(e))
+            return 1.0 ## model has not been created yet
             
-    def create_particle(self, particle):
-        return eval('creator.Particle' + self.my_run.get_name())(particle)
-        
-    def createUniformSpace(self, particles, designSpace):
-        pointPerDimensions = 5
-        valueGrid = mgrid[designSpace[0]['min']:designSpace[0]['max']:
-                          complex(0, pointPerDimensions),
-                          designSpace[1]['min']:designSpace[1]['max']:
-                          complex(0, pointPerDimensions)]
-
-        for i in [0, 1]:
-            for j, part in enumerate(particles):
-                part[i] = valueGrid[i].reshape(1, -1)[0][j]
-
-    def filterParticles(self,  particles, designSpace):
-        for particle in particles:
-            self.filterParticle(particle, designSpace)
-            
-    def filterParticle(self, p, designSpace):
-        p.pmin = [dimSetting['min'] for dimSetting in designSpace]
-        p.pmax = [dimSetting['max'] for dimSetting in designSpace]
-
-        for i, val in enumerate(p):
-            #dithering
-            if designSpace[i]['type'] == 'discrete':
-                if uniform(0.0, 1.0) < (p[i] - floor(p[i])):
-                    p[i] = ceil(p[i])  # + designSpace[i]['step']
-                else:
-                    p[i] = floor(p[i])
-
-            #dont allow particles to take the same value
-            p[i] = minimum(p.pmax[i], p[i])
-            p[i] = maximum(p.pmin[i], p[i])
-
-    def generate(self,  designSpace):
-        particle = [uniform(dimSetting['min'], dimSetting['max'])
-                    for dimSetting
-                    in designSpace]
-        particle = self.create_particle(particle)
-        #particle.cost = self.predict_cost(particle)
-        return particle
-
     def updateParticle(self,  part, generation, conf, designSpace):
         if conf.admode == 'fitness':
             fraction = self.fitness_counter / conf.max_fitness
@@ -1170,9 +1029,9 @@ class PSOTrial_TimeAware(Trial):
             fraction = generation / conf.max_iter
         else:
             raise('[updateParticle]: adjustment mode unknown.. ')
-        a1 = self.a_func(part.best, part, self.predict_cost(part.best), self.predict_cost(part))
+        a1 = self.a_func(part.best, part, self.predict_cost_raw(part.best), self.predict_cost_raw(part))
         u1 = [uniform(0, conf.phi1 * a1 ) for _ in range(len(part))]
-        a2 = self.a_func(self.get_best(), part, self.predict_cost(self.get_best()), self.predict_cost(part))
+        a2 = self.a_func(self.get_best(), part, self.predict_cost_raw(self.get_best()), self.predict_cost_raw(part))
         u2 = [uniform(0, conf.phi2 * a2) for _ in range(len(part))]
 
         #logging.info("u1 " + str(u1))
@@ -1244,6 +1103,10 @@ class PSOTrial_TimeAware(Trial):
                 if i < F:
                     part.fitness.values, part.code, cost = self.toolbox.evaluate(part)
                     self.set_at_least_one_in_valid_region((part.code == 0) or self.get_at_least_one_in_valid_region())
+                    if not self.get_best() or self.fitness.is_better(part.fitness, self.get_best().fitness):
+                        particle = self.create_particle(part)
+                        particle.fitness.values = part.fitness.values
+                        self.set_best(particle)
             ## add one example till we find something that works
             F = 1
         ## additionally if software parameters are present, we evalaute and
@@ -1257,144 +1120,34 @@ class PSOTrial_TimeAware(Trial):
             self.toolbox.evaluate(extra_particle)
         self.state_dictionary["fresh_run"] = True
         
-    def meta_iterate(self):
-        #TODO - reavluate one random particle... do it.. very important!
-        ##while(self.get_at_least_one_in_valid_region()):
-        ##    logging.info("All particles within invalid area... have to randomly sample the design space to find one that is OK...")             
-            
-        #Update Bests
-        for part in self.get_population():
-            if not part.best or self.fitness.is_better(part.fitness, part.best.fitness):
-                part.best = self.create_particle(part)
-                part.best.fitness.values = part.fitness.values
-            if not self.get_best() or self.fitness.is_better(part.fitness, self.get_best().fitness):
-                self.set_best(self.create_particle(part))
-                self.get_best().fitness.values = part.fitness.values
-                self.new_best = True
-                logging.info('New global best found' + str(self.get_best()) + ' fitness:'+ str(part.fitness.values))                
-        #PSO
-        for part in self.get_population():
-            self.toolbox.update(part, self.get_counter_dictionary('g'))
-
-    def filter_population(self):
-        self.toolbox.filter_particles(self.get_population())
-   
-    def evaluate_best(self):        
-        if self.new_best:
-            self.fitness_function(self.get_best())
-            logging.info('New best was found after M')
-        else:
-            ## TODO - clean it up...  messy
-            logging.info('Best was already evalauted.. adding perturbation')
-            perturbation = self.perturbation()                        
-            perturbed_particle = self.create_particle(self.get_best())
-            for i,val in enumerate(perturbation):
-                perturbed_particle[i] = perturbed_particle[i] + val       
-            self.toolbox.filter_particle(perturbed_particle)
-            fitness, code, cost = self.fitness_function(perturbed_particle) 
-            ##check if the value is not a new best
-            perturbed_particle.fitness.values = fitness
-            if not self.get_best() or self.fitness.is_better(perturbed_particle.fitness, self.get_best().fitness):
-                self.set_best(perturbed_particle)
-        self.new_best = False
+    def std_func(self, part):
+        cost = self.predict_cost(part)
+        try:
+            ratio = (cost - self.fitness.cost_minVal) / (self.fitness.cost_maxVal - self.fitness.cost_minVal)
+        except:
+            ratio = 0.0
+        min_stdv = self.get_configuration().min_stdv
+        max_stdv = self.get_configuration().max_stdv
+        return min_stdv + (ratio * max_stdv)
         
-    def increment_main_counter(self):
-        self.get_best_fitness_array().append(self.get_best().fitness.values[0])
-        self.get_generations_array().append(self.get_counter_dictionary(self.get_main_counter_name()))
-        self.save()
-        self.increment_counter(self.get_main_counter_name())
-
-    def sample_design_space(self):
-        logging.info('Evaluating best perturbation')
-        perturbation = self.perturbation()                        
-        hypercube = self.hypercube()
-        particle = self.surrogate_model.max_uncertainty(designSpace=self.fitness.designSpace)
-        if particle is None:
-            logging.info('Evaluating a perturbation of a random particle')
-            particle = self.toolbox.particle()
-        perturbedParticle = self.create_particle(particle)
-        for i,val in enumerate(perturbation):
-            perturbedParticle[i] = perturbedParticle[i] + val       
-        self.toolbox.filter_particle(perturbedParticle)
-        perturbedParticle.fitness.values, code, cost = self.fitness_function(perturbedParticle) 
-        if not self.get_best() or self.fitness.is_better(perturbedParticle.fitness, self.get_best().fitness):
-            self.set_best(perturbedParticle)
-        
-    ## not used currently
-    # def get_perturbation_dist(self):
-        # [max_diag, min_diag] = self.get_dist()
-        # d = (max_diag - min_diag)/2.0
-        # if best:
-            # max_diag = best + d
-            # for i,dd in enumerate(self.fitness.designSpace):
-                # max_diag[i] = minimum(max_diag[i],dd["max"])
-            # min_diag = best - d
-            # for i,dd in enumerate(self.fitness.designSpace):
-                # min_diag[i] = maximum(min_diag[i],dd["min"])
-            # return [max_diag,min_diag]
-        # else:
-            # return getHypercube(pop)
-            
-     ## not used currently
-    def get_dist(self):
-        if best:
-            distances = sqrt(sum(pow((self.surrogate.best),2),axis=1))  # TODO
-            order_according_to_manhatan = argsort(distances)
-            closest_array = [gpTrainingSet[index] for index in order_according_to_manhatan[0:conf.nClosest]]
-        ###        
-        ## limit to hypercube around the points
-        #find maximum
-        #print "[getDist] closestArray ",closestArray
-        max_diag = deepcopy(closestArray[0])
-        for part in closest_array:
-            max_diag = maximum(part, max_diag)
-        ###find minimum vectors
-        min_diag = deepcopy(closest_array[0])
-        for part in closest_array:
-            min_diag = minimum(part, min_diag)
-        return [max_diag, min_diag]
-        
-    def hypercube(self):
-        #find maximum
-        max_diag = deepcopy(self.get_population()[0])
-        for part in self.get_population():
-            max_diag = maximum(part,max_diag)
-        ###find minimum vectors
-        min_diag = deepcopy(self.get_population()[0])
-        for part in self.get_population():
-            min_diag = minimum(part,min_diag)
-        return [max_diag,min_diag]
-        
-    def perturbation(self, radius = 10.0):
-        [max_diag,min_diag] = self.hypercube()
-        d = (max_diag - min_diag)/radius
-        for i,dd in enumerate(d):
-            if self.fitness.designSpace[i]["type"] == "discrete":
-                d[i] = maximum(dd,self.fitness.designSpace[i]["step"])
-            elif self.fitness.designSpace[i]["type"] == "continuous":
-                d[i] = maximum(dd,self.smax[i])
-        dimensions = len(self.fitness.designSpace)
-        pertubation =  multiply(((rand(1,dimensions)-0.5)*2.0),d)[0] #TODO add the dimensions
-        return pertubation
-        
-        ###check if between two calls to this functions any fitness functions have been evaluted, so that the models have to be retrained
-    def training_set_updated(self):
-        retrain_model_temp = self.get_retrain_model()
-        self.set_retrain_model(False)
-        return retrain_model_temp
-    
     ### TODO - its just copy and pasted ciode now..w could rewrite it realyl
     def post_model_filter(self, code, mean, variance):
+        eval_counter = 1
+        self.set_model_failed(not (False in [self.get_configuration().max_stdv < pred for pred in variance]))
+        if self.get_model_failed():
+            return False
         if (code is None) or (mean is None) or (variance is None):
             self.set_model_failed(False)
         else:
             for i, (p, c, m, v) in enumerate(zip(self.get_population(), code,
                                                  mean, variance)):
-                stdv = self.get_configuration().max_stdv
-                if self.cost_model.bitstream_was_generated(p):
-                    stdv = self.get_configuration().min_stdv
+                stdv = self.std_func(p)        
                 if v > stdv and c == 0:
+                    if eval_counter > self.get_configuration().max_eval:
+                        logging.info("Evalauted mroe fitness functions per generation then max_eval")
+                        return True
                     p.fitness.values, p.code, p.cost = self.toolbox.evaluate(p)
+                    eval_counter = eval_counter + 1
                 else:
                     if c == 0:
                         p.fitness.values = m
@@ -1402,38 +1155,19 @@ class PSOTrial_TimeAware(Trial):
                         p.fitness.values = [self.fitness.worst_value]
             ## at least one particle has to have std smaller then max_stdv
             ## if all particles are in invalid zone
-            self.set_model_failed(not (False in [self.get_configuration().max_stdv < pred for pred in variance]))
-   
-    def reevalute_best(self):
-        bests_to_model = [p.best for p in self.get_population() if p.best] ### Elimate Nones -- in case M < Number of particles, important for initialb iteratiions
-        if self.get_best():
-            bests_to_model.append(self.get_best())
-        if bests_to_model:
-            logging.info("Reevaluating")
-            code, bests_to_fitness, variance = self.surrogate_model.predict(bests_to_model)
-            for i,part in enumerate([p for p in self.get_population() if p.best]):
-                if code[i] == 0:
-                    part.best.fitness.values = bests_to_fitness[i]
-                else:
-                    part.best.fitness.values = [self.fitness.worst_value]
-            if self.get_best():
-                best = self.get_best()
-                if code[-1] == 0:
-                    best.fitness.values = bests_to_fitness[-1]
-                else:
-                    best.fitness.values = [self.fitness.worst_value]
-                self.set_best(best)  
+        return False
         
     def a_func(self, part_1, part_2, cost_1, cost_2):
         if self.configuration.a == "a1":
-            val = min(abs(cost_1-cost_2)/(0.0000001 + norm(map(operator.add, part_1, part_2))),1.0) ## second norm.. gradient
+            val = min(abs(cost_1-cost_2)/(0.0000001 + norm(map(operator.sub, part_1, part_2))),1.0) ## second norm.. gradient
             return val
         elif self.configuration.a == "a2":
-            return min(abs(cost_1-cost_2)/abs(cost_1),1.0)
+            return min(abs(cost_2)/abs(cost_1),1.0)
         elif self.configuration.a == "a3":
-            return min(abs(cost_1-cost_2)/abs(cost_2), 1.0)
+            return min(abs(cost_1)/abs(cost_2), 1.0)
         else:
             return 1.0
+            
     #######################
     ### GET/SET METHODS ###
     #######################
@@ -1448,28 +1182,3 @@ class PSOTrial_TimeAware(Trial):
         model.set_state_dictionary(self.cost_model.get_state_dictionary())
         return model
     
-    def get_predicted_time(self):
-        predicted_time = self.state_dictionary['total_time'] * self.get_configuration().max_iter / (self.get_counter_dictionary('g') + 1.0)
-        return str(timedelta(seconds=predicted_time))
-    
-    def set_population(self, population):
-        self.state_dictionary["population"] = population
-        
-    def get_population(self):
-        return self.state_dictionary["population"]
-        
-    def get_best_fitness_array(self):
-        return self.state_dictionary['best_fitness_array']
-        
-    def get_generations_array(self):
-        return self.state_dictionary['generations_array']
-        
-    def set_at_least_one_in_valid_region(self, state):
-        if self.state_dictionary.has_key('at_least_one_in_valid_region'):
-            self.state_dictionary['at_least_one_in_valid_region'] = state
-        else:
-            self.state_dictionary['at_least_one_in_valid_region'] = False
-
-    def get_at_least_one_in_valid_region(self):
-        return self.state_dictionary['at_least_one_in_valid_region']
-            

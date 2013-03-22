@@ -96,19 +96,42 @@ class ProperCostModel(CostModel):
         self.soft_regressor = GaussianProcessRegressor(controller, configuration)
         self.hard_regressor = GaussianProcessRegressor(controller, configuration)
                 
+    def no_software_param(self):
+        software_axis = [i for i, dimension in enumerate(self.fitness.designSpace) if dimension["set"] == "s"]
+        return software_axis == []
+                
     def predict(self, part):
         hard = 0.0
+        soft = 0.0
         if not self.bitstream_was_generated(part):
             hard, S2 = self.hard_regressor.predict(array([part]))
-        soft, S2 = self.soft_regressor.predict(array([part]))
+        if not self.no_software_param():
+            soft, S2 = self.soft_regressor.predict(array([part]))
+        ## prediction has to be corrected for software models
+        #logging.debug(str(hard + soft))
+        return hard + soft
+        
+    def predict_raw(self, part):
+        hard, S2 = self.hard_regressor.predict(array([part]))
+        soft = 0.0
+        if not self.no_software_param():
+            soft, S2 = self.soft_regressor.predict(array([part]))
         ## prediction has to be corrected for software models
         #logging.debug(str(hard + soft))
         return hard + soft
                 
     def train(self):
         logging.info("Training Cost Model")
-        self.was_trained = True
-        return self.soft_regressor.train() and self.hard_regressor.train() 
+        if self.no_software_param():
+            soft_trained = True
+        else:
+            soft_trained = self.soft_regressor.train()
+        self.was_trained = soft_trained and self.hard_regressor.train() 
+        if self.was_trained:
+            logging.info("Training Cost Model OK")
+        else:
+            logging.info("Training Cost Model Failed")
+        return self.was_trained
         
     def add_training_instance(self, part, cost):
         self.total_cost = cost + self.total_cost
@@ -116,7 +139,7 @@ class ProperCostModel(CostModel):
             self.soft_regressor.add_training_instance(part, cost)
         else:
             try:
-                software_c_prediction = self.soft_regressor.predict(array([part]))[0][0] ## we ignore s2
+                software_c_prediction = self.soft_regressor.predict(array([part]))[0][0][0] ## we ignore s2
             except:
                 logging.info("Software has not been evaluted yet, using assumption that hardware cost >> software cost")
                 software_c_prediction = 0.0

@@ -9,17 +9,17 @@ eval_correct = False
 ### Basic setup
 
 trials_count = 1
-population_size = 20
+population_size = 50
 
-max_fitness = 100.0
+max_fitness = 200.0
 max_iter = 5000
 max_speed = 0.01
 max_stdv = 0.05
 
 surrogate_type = 'proper'  # Can be proper or dummy
-F = 10  # The size of the initial training set
+F = 110  # The size of the initial training set
 M = 100  # How often to perturb the population, used in discrete problems
-
+max_eval = 3
 
 ### Trial-specific variables
 
@@ -51,15 +51,16 @@ max_counter = max_iter  # Maximum value of counter
 plot_view = 'default'
 
 ### Regressor and classifier type
-regressor = 'GaussianProcess2'
+#regressor = 'KMeansGaussianProcessRegressor'
+regressor = 'KMeansGaussianProcessRegressor'
 classifier = 'SupportVectorMachine'
 
 ### GPR Regression settings
-#regr = 'quadratic'
-#corr = 'squared_exponential'
+regr = 'quadratic'
+corr2 = 'squared_exponential'
 corr = 'isotropic'
 theta0 = 0.01
-thetaL = 0.0001
+thetaL = 0.000001
 thetaU = 3.0
-nugget = 3
-random_start = 100
+nugget = 5
+random_start = 200

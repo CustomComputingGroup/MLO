@@ -5,7 +5,7 @@ from regressors import Regressor, GaussianProcessRegressor, GaussianProcessRegre
 
 from utils import numpy_array_index
 from scipy.interpolate import griddata
-from numpy import linspace, meshgrid, reshape, array, argmax
+from numpy import linspace, meshgrid, reshape, array, argmax, mgrid, ones
 
 class SurrogateModel(object):
 
@@ -23,7 +23,7 @@ class SurrogateModel(object):
         raise NotImplementedError('SurrogateModel is an abstract class, this '
                                   'should not be called.')
                                   
-    def add_training_instance(self, part, code, fitness):
+    def add_training_instance(self, part, code, fitness, addReturn):
         pass
         
     def contains_training_instance(self, part):
@@ -48,7 +48,7 @@ class SurrogateModel(object):
     def model_failed(self, part):
         pass
         
-    def max_uncertainty(self):
+    def max_uncertainty(self, designSpace, hypercube=None, npts=200):
         pass
 
     def get_state_dictionary(self):
@@ -60,6 +60,13 @@ class SurrogateModel(object):
                                   'this should not be called.')
         
 class DummySurrogateModel(SurrogateModel):
+
+    ## TODO - add dummy regressor/classifier
+    def __init__(self, configuration, controller):
+        super(DummySurrogateModel, self).__init__(configuration,
+                                                   controller)
+        self.regressor = Regressor(controller, configuration)
+        self.classifier = Classifier()
 
     def predict(self, particles):
         MU, S2 = self.regressor.predict(particles)
@@ -79,11 +86,10 @@ class DummySurrogateModel(SurrogateModel):
         return False
         
     def get_state_dictionary(self):
-        return {"regressor_state_dict" : self.regressor.get_state_dictionary(), "classifier_state_dicts" : self.classifier.get_state_dictionary()}
+        return {}
         
     def set_state_dictionary(self, dict):
-        self.regressor.set_state_dictionary(dict["regressor_state_dict"])
-        self.classifier.set_state_dictionary(dict["classifier_state_dicts"])
+        pass
         
 class ProperSurrogateModel(SurrogateModel):
 
@@ -94,8 +100,7 @@ class ProperSurrogateModel(SurrogateModel):
         if configuration.classifier == 'SupportVectorMachine':
             self.classifier = SupportVectorMachineClassifier()
         else:
-            logging.error('Classifier type {} not found'.format(
-                configuration.classifier))
+            logging.error('Classifier type ' + str(configuration.classifier) + '  not found')
 
         if configuration.regressor == 'GaussianProcess':
             self.regressor = GaussianProcessRegressor(controller, configuration)
@@ -106,16 +111,26 @@ class ProperSurrogateModel(SurrogateModel):
         elif configuration.regressor == 'DPGMMGaussianProcessRegressor':
             self.regressor = DPGMMGaussianProcessRegressor(controller, configuration)
         else:
-            logging.error('Regressor type {} not found'.format(
-                configuration.regressor))
+            logging.error('Regressor type ' + str(configuration.regressor) + '  not found')
                 
     def predict(self, particles):
-        MU, S2 = self.regressor.predict(particles)
+        for i in range(0,3):
+            MU, S2 = self.regressor.predict(particles)
+            if (not (MU is None)) or (not (S2 is None)) :
+                return self.classifier.predict(particles), MU, S2
+            logging.info("Regressor prediction failed, attempting shuffle and retraining.. attempt " + str(i) + " out of 3")
+            self.regressor.shuffle()
         return self.classifier.predict(particles), MU, S2
                 
     def train(self):
         self.was_trained = True
-        return self.classifier.train() and self.regressor.train()
+        class_trained = self.classifier.train() 
+        for i in range(0,3):
+            if self.regressor.train():
+                return class_trained
+            logging.info("Regressor training failed, attempting shuffle and retraining.. attempt " + str(i) + " out of 3")
+            self.regressor.shuffle()
+        return False
         
     def add_training_instance(self, part, code, fitness, addReturn):
         self.classifier.add_training_instance(part, code)
@@ -135,11 +150,10 @@ class ProperSurrogateModel(SurrogateModel):
     def model_failed(self, part):
         return False
 
-    def max_uncertainty(self, designSpace, hypercube=None, npts=200):
+    def max_uncertainty(self, designSpace, hypercube=None, npts=10):
         if len(designSpace)==2:
             # make up data.
             if hypercube:
-                logging.info("[returnMaxS2]: using hypercube ",hypercube)
                 x = linspace(hypercube[1][0],hypercube[0][0],npts)
                 y = linspace(hypercube[1][1],hypercube[0][1],npts) 
             else:
@@ -150,11 +164,28 @@ class ProperSurrogateModel(SurrogateModel):
             y=reshape(y,-1)
             z = array([[a,b] for (a,b) in zip(x,y)])
         else:
+            D = len(designSpace)
+            n_bins =  npts*ones(D)
+            if hypercube:
+                logging.info("kurwa...")
+                #logging.info("hypercube" + str(hypercube))
+                logging.info(str(hypercube))
+                logging.info(str(hypercube[0]))
+                logging.info(str(hypercube[1]))
+                result = mgrid[[slice(h_min, h_max, npts*1.0j) for h_max, h_min , n in zip(hypercube[0],hypercube[1], n_bins)]]
+                z = result.reshape(D,-1).T
+            else:
+                bounds = [(d["min"],d["max"]) for d in designSpace]
+                result = mgrid[[slice(row[0], row[1], npts*1.0j) for row, n in zip(bounds, n_bins)]]
+                z = result.reshape(D,-1).T
+
+            '''
             x,y,v = mgrid[designSpace[0]["min"]:designSpace[0]["max"]:(int(designSpace[0]["max"]-designSpace[0]["min"])+1)*1.0j,designSpace[1]["min"]:designSpace[1]["max"]:(int(designSpace[1]["max"]-designSpace[1]["min"])+1)*1.0j , designSpace[2]["min"]:designSpace[2]["max"]:(int(designSpace[2]["max"]-designSpace[2]["min"])+1)*1.0j]
             x=reshape(x,-1)
             y=reshape(y,-1)
             v=reshape(v,-1)
             z = array([[a,b,c] for (a,b,c) in zip(x,y,v)])
+            '''
         try:             
             zClass, MU, S2 = self.predict(z)
             filteredS2=[]
@@ -166,7 +197,7 @@ class ProperSurrogateModel(SurrogateModel):
             S2 = array(filteredS2) 
             return filteredZ[argmax(S2)]
         except Exception,e:
-            logging.error("Finding max S2 failed: {}".format(e))
+            logging.error("Finding max S2 failed: " + str(e))
             return None
             
     def get_state_dictionary(self):

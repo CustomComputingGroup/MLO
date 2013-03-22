@@ -9,7 +9,10 @@ run_example2:
 
 run_example3:
 	./run_mlo.sh -f examples/reconfigurable_radio/fitness_script.py -c examples/reconfigurable_radio/configuration_script.py
-    
+
+run_example4:
+	./run_mlo.sh -f examples/xinyu_rtm/fitness_script.py -c examples/xinyu_rtm/configuration_script.py
+
 install_gui:
 	easy_install numpy
 	easy_install scipy
