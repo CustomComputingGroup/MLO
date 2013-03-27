@@ -4,7 +4,8 @@ import traceback
 from numpy import unique, asarray, bincount, array, append, arange
 from sklearn import preprocessing, svm
 from sklearn.grid_search import GridSearchCV
-from sklearn.cross_validation import StratifiedKFold
+from sklearn.cross_validation import StratifiedKFold, KFold
+from copy import deepcopy
 
 from utils import numpy_array_index
 
@@ -15,8 +16,9 @@ class Classifier(object):
         self.training_set = None
         self.training_labels = None
         self.clf = None
+        self.oneclass = False
 
-    def train(self, z):
+    def train(self):
         return True
 
     def predict(self, z):
@@ -70,47 +72,100 @@ class Classifier(object):
 
 class SupportVectorMachineClassifier(Classifier):
 
-    def train(self, pop):
-        try:
-            inputScaler = preprocessing.Scaler().fit(self.training_set)
+    def train(self):
+       # try:
+            inputScaler = preprocessing.StandardScaler().fit(self.training_set)
             scaledSvcTrainingSet = inputScaler.transform(self.training_set)
-
             if len(unique(asarray(self.training_labels))) < 2:
                 logging.info('Only one class encountered, we do not need to use a classifier')
                 #self.clf = svm.OneClassSVM()
                 #self.clf.fit(scaledSvcTrainingSet)
-                
+                self.oneclass = True
             else:
                 param_grid = {
                     'gamma': 10.0 ** arange(-5, 4),
                     'C':     10.0 ** arange(-2, 9)}
-
-                self.clf = GridSearchCV(svm.SVC(), param_grid=param_grid,
-                                        cv=StratifiedKFold(
-                                            y=self.training_labels.reshape(-1),
-                                            k=2))
-
-                self.clf.fit(scaledSvcTrainingSet,
-                             self.training_labels.reshape(-1))
-                self.clf = self.clf.best_estimator_
+                try:
+                    try:
+                        self.type = 2
+                        self.clf = GridSearchCV(svm.SVC(), param_grid=param_grid,
+                                    cv=StratifiedKFold(
+                                        y=self.training_labels.reshape(-1),
+                                        n_folds=2))
+                        self.clf.fit(scaledSvcTrainingSet, self.training_labels.reshape(-1))
+                    except: ##in case when we cannot construct equal proportion folds
+                        self.type = 1
+                        logging.debug('Using KFold cross validation for classifier training')
+                        self.clf = GridSearchCV(svm.SVC(), param_grid=param_grid,
+                                                cv=KFold(
+                                                    y=self.training_labels.reshape(-1),
+                                                    n_folds=2))
+                        self.clf.fit(scaledSvcTrainingSet, self.training_labels.reshape(-1))
+                except:## in case for example when we have single element of a single class, cant construct two folds
+                    self.type = 0
+                    logging.debug('One of the classes has only one element, cant use cross validation')
+                    self.clf = svm.SVC(kernel='rbf', gamma=10)
+                    self.clf.fit(scaledSvcTrainingSet, self.training_labels.reshape(-1))
                 logging.info('Classifier training successful')
             return True
-        except Exception, e:
-            logging.error('Classifier training failed.. {}'.format(e))
-            return False
+        #except Exception, e:
+        #    logging.error('Classifier training failed.. {}'.format(e))
+        #    return False
 
     def predict(self, z):
         try:
-            if len(unique(asarray(self.training_labels))) < 2:
+            if self.oneclass:
                 ## TODO - rewrite it not to use a stupid loop...
                 return array([self.training_labels[0][0]] * len(z))
             else:
                 # Scale inputs and particles
-                inputScaler = preprocessing.Scaler().fit(self.training_set)
-
+                inputScaler = preprocessing.StandardScaler().fit(self.training_set)
                 scaledz = inputScaler.transform(z)
                 zClass = self.clf.predict(scaledz)
                 return zClass
         except Exception, e:
-            logging.error('Prediction failed.. {}'.format(e))
+            logging.error('Prediction failed... ' + str(e))
             return None
+            
+            
+    ## TODO - come up with a smart way of storing these...
+    def get_state_dictionary(self):
+        '''
+        if self.clf is None:
+            clf = None
+            self.type = None
+        else:
+            #try:
+                if self.type == 0 :
+                    clf = deepcopy(self.clf.get_params(deep=True))
+                    logging.info(str(clf))
+                else:
+                    clf = deepcopy(self.clf.best_estimator_.get_params(deep=True))
+                    logging.info(str(clf))
+            #except:
+            #    self.type = None
+        ''' 
+        dict = {'training_set' : self.training_set,
+                'training_labels': self.training_labels,
+                'oneclass': self.oneclass}
+               # 'type': self.type,
+               # 'clf': deepcopy(self.clf)}
+        return dict
+        
+    ###
+    def set_state_dictionary(self, dict):
+        self.training_set = dict['training_set']
+        self.training_labels = dict['training_labels']
+        self.oneclass = dict['oneclass']
+        self.train()
+        
+        '''
+        self.type = dict['type']
+
+        #try:
+        self.clf = svm.SVC()
+        self.clf.set_params(**dict['clf'])
+        #except:
+        #    self.clf = None
+        '''
+

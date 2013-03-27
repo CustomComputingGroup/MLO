@@ -494,14 +494,97 @@ class MLORunReportViewer2(ImageViewer):
             graph_dictionary['all_graph_dicts'][name]['generate'] = True
                           
         return graph_dictionary
-        
-##This class returns a string 
-##It should return either a string, a file reference or 
+
 class MLORunReportViewer(object):
 
     @staticmethod
     def render(dictionary):
+        logging.info("Generating Report")
+        ## Generate Header   
+        header = ['Trial Name', 'Trial Number']  
+        counter_headers = []
+        timer_headers = []
+        trial_snapshots = dictionary["trials_snapshots"]
+        first_trial_snapshot = trial_snapshots[0]
+        ## get counter names
+        counters = first_trial_snapshot['counter_dict'].keys()
+        for counter in counters: ## list of names of Counters
+            header.append('Counter "' + counter + '"')
+            counter_headers.append(counter)
+        ## get timing names
+        timers = first_trial_snapshot['timer_dict'].keys()
+        for timer in timers: ## list of names of Counters
+            header.append(timer)
+            timer_headers.append(timer)
             
+        htmlcode = HTML.Table(header_row=header)
+        
+        statistics = ["mean","std","max","min",]
+        data = []
+        
+        for trial_snapshot in trial_snapshots:
+            ## Display trial timers
+            trial_name = [trial_snapshot["name"]]
+            trial_no = [1]
+            trial_counters = [trial_snapshot['counter_dict'][counter_header] for counter_header in counter_headers] 
+            trial_timers = [trial_snapshot['timer_dict'][timer_header] for timer_header in timer_headers] 
+            data.append(trial_counters + trial_timers)
+            row = [HTML.TableCell(cell, bgcolor='Lime') for cell in trial_name + trial_no + trial_counters + trial_timers]
+            htmlcode.rows.append(row)
+            ## Display trial counters
+        htmlcode = str(htmlcode)    
+        
+        data = array(data)
+        htmlcode2 = HTML.Table(header_row=header)
+        statistic_no = 0
+        for statistic in statistics:
+            statistic_name = statistic
+            result = [str(elem) for elem in eval("data." + statistic + "(axis=0)")]
+            row = [HTML.TableCell(cell, bgcolor='Lime') for cell in [statistic_name] + [str(statistic_no)] + result]
+            statistic_no = statistic_no + 1
+            htmlcode2.rows.append(row)
+            ## append to list used to calculate statistical data
+        htmlcode2 = str(htmlcode2)
+        ### Save and exit
+        filename = dictionary["results_folder_path"] + "/run_raport.pdf"
+        filename2 = dictionary["results_folder_path"] + "/run_raport.html"
+        
+        if os.path.isfile(filename):
+            os.remove(filename)
+        try:
+            f = file(filename, 'wb')
+            pdf = pisa.CreatePDF(htmlcode + htmlcode2,f)
+            if not pdf.err:
+                pisa.startViewer(f)
+            f.close()
+        except Exception, e:
+            logging.error('could not create a report for ' + str(e))
+            
+        if os.path.isfile(filename2):
+            os.remove(filename2)
+        try:
+            f = file(filename2, 'wb')
+            f.write(htmlcode + htmlcode2)
+            f.close()
+        except Exception, e:
+            logging.error('could not create a report for ' + str(e))
+        logging.info("Done Generating Report")
+
+    @staticmethod
+    def get_attributes(name):
+        return {}
+        
+    @staticmethod
+    def get_default_attributes():
+        return {}
+        
+##This class returns a string 
+##It should return either a string, a file reference or 
+class MLOAllReportViewer(object):
+
+    @staticmethod
+    def render(dictionary):
+        logging.info("Generating Report...")
         ## Generate Header   
         header = ['Trial Name', 'Trial Number']  
         counter_headers = []
@@ -509,8 +592,8 @@ class MLORunReportViewer(object):
         trial_snapshots = dictionary["trials_snapshots"]
         first_trial_snapshot = trial_snapshots[0]
         
-        run_name = str(first_trial_snapshot["name"])
-        run_name = run_name[0:run_name.find('_')]
+        run_name = str(first_trial_snapshot['run_name'])
+        #run_name = run_name[0:run_name.find('_')]
         ## get counter names
         counters = first_trial_snapshot['counter_dict'].keys()
         for counter in counters: ## list of names of Counters
@@ -523,7 +606,7 @@ class MLORunReportViewer(object):
             timer_headers.append(timer)
         
         header.append('Error Code')
-        htmlcode = HTML.Table(header_row=header)
+        htmlcode1 = HTML.Table(header_row=header)
         data = []
         bestfit= 1
         failurecount=0
@@ -533,50 +616,41 @@ class MLORunReportViewer(object):
         	for i in range(len(tem)):
         		if abs(tem[i])<bestfit:
         			bestfit=abs(tem[i])
+
         for trial_snapshot in trial_snapshots:
-            ErrorC = [0]
             ## Display trial timers
             trial_name = [trial_snapshot["name"]]
             trial_no = [1]
             trial_counters = [trial_snapshot['counter_dict'][counter_header] for counter_header in counter_headers] 
             trial_timers = [trial_snapshot['timer_dict'][timer_header] for timer_header in timer_headers] 
             data.append(trial_counters + trial_timers)
-            color='lime'
             
-            '''
-            # converge??
-            tem=array(trial_snapshot['best_fitness_array'])
-            for i in range(len(tem)-1):
-            	if abs(tem[i+1]-tem[i])<0.000001:
-            		color='lime'
-            	else:
-            		color='red'
-            localbest=1
-	    for i in range(len(tem)):
-        	if abs(tem[i])<localbest:
-        		localbest=abs(tem[i])
-            '''
+            ## Initialize all run to be true
+            color='lime'
+            ErrorC = ['0']
+            
+            ## Tell if one fails
             if trial_snapshot['counter_dict']['fit']>50:
             	color = 'red'
-            	ErrorC = [1]
+            	ErrorC = ['1']
             	
             if trial_snapshot['counter_dict']['g']>5000: 
             	color = 'red'
-            	ErrorC = [2]
+            	ErrorC = ['2']
             	
-            if trial_snapshot['generate'] != True:
-            	color = 'red'
-            	ErrorC = [3]
+            #if not trial_snapshot['new_best']:
+            #	color = 'red'
+            #	ErrorC = ['3']
             	
             if color == 'red':
             	failure_trial.append(trial_name)
             	failurecount = failurecount + 1
             	
             row = [HTML.TableCell( cell, bgcolor = color) for cell in trial_name + trial_no + trial_counters + trial_timers + ErrorC]
-            htmlcode.rows.append( row )
+            htmlcode1.rows.append( row )
             
         ## Display trial counters
-        htmlcode = str(htmlcode)
+
     
         ## statistics
         header = ['Statistics', 'Total Trials']  
@@ -601,65 +675,78 @@ class MLORunReportViewer(object):
             row = [HTML.TableCell(cell) for cell in [statistic_name] + [str(total_trials)] + result]
             htmlcode2.rows.append(row)
             ## append to list used to calculate statistical data
-        htmlcode2 = str(htmlcode2)
-    
-        ### Save and exit
-        filename = dictionary["results_folder_path"] + "/run_report.pdf"
-        filename2 = dictionary["results_folder_path"] + "/run_report.html"
-        filename3 = os.getcwd() + "/data/report_all.html"
-    	logfile = os.getcwd() + "/data/runlog"
-    	
-        #create the test report
+
+        # information list in report
         headlist = []
         time=strftime("<hr><hgroup> <h3>Repo Time: %d/%b/%Y %H:%M:%S</h3></hgroup>", gmtime())
         headlist.append(time)
+        
+        # generate git information
         repo = git.Repo( os.getcwd() )
         headcommit = repo.head.commit
 	headlist.append("Git Committer :  " + str(headcommit.committer))
 	headlist.append("Commit Date : " + asctime(gmtime(headcommit.committed_date)))
+	
+	# generate run information
 	headlist.append("Run Name: "+ run_name)
+	
+	# generate the regressor name and classifier name
 	reg = str(trial_snapshots[0]['regressor'])
 	cla = str(trial_snapshots[0]['classifier'])
 	headlist.append("Regressor:     " + reg[34:reg.find("object")])
 	headlist.append("Classifier:     " + cla[35:cla.find("object")])
+	
+	## generate the trial information: fail or not?
 	headlist.append( "Total Trials :  " + str(len(trial_snapshots)) )
 	headlist.append( "Total Fails : " + str(failurecount))
 	if failurecount>0:
 		headlist.append("Fail trials: " + str(failure_trial))
+	
 	html_list = HTML.list(headlist)
+	
+	# create the report contents
+	htmlcode1 = str( htmlcode1 )
+	htmlcode2 = str( htmlcode2 )
 	htmlcode3 = str ( html_list )
+        repocontent = htmlcode3 + '<center> <b><font size="5">Trial information:</font></b> '+'<br>' + htmlcode1 + '</center><br>' + '<center><b><font size="5">Statistics:</font></b> ' + htmlcode2 + '</center><br>'
         
+            
+        ### Save and exit
+        filename1 = dictionary["results_folder_path"] + "/run_report.pdf"
+        filename2 = dictionary["results_folder_path"] + "/run_report.html"
+        filename3 = first_trial_snapshot["run_folders_path"] + "/report_all.html"
         
-        if os.path.isfile(filename):
-            os.remove(filename)
+        # save pdf report 
+        if os.path.isfile(filename1):
+            os.remove(filename1)
         try:
-            f = file(filename, 'w')
-            pdf = pisa.CreatePDF(htmlcode + htmlcode2,f)
+            f = file(filename1, 'w')
+            pdf = pisa.CreatePDF(repocontent,f)
             if not pdf.err:
                 pisa.startViewer(f)
             f.close()
         except Exception, e:
             logging.error('could not create a report for {}'.format(str(e)))
-        
-        repocontent = '<center>Trial information: '+'<br>' + htmlcode + '</center><br>' + '<center>Statistics: ' + htmlcode2 + '</center><br>'
+            
+        # save html report 
         if os.path.isfile(filename2):
             os.remove(filename2)
         try:
             f = file(filename2, 'w')
-            f.writelines(htmlcode3+repocontent)
+            f.writelines(repocontent)
             f.close()
 
         except Exception, e:
             logging.error('could not create a report for {}'.format(str(e)))
-        
-        loglist=os.listdir(os.getcwd() + "/data/log")
-        print loglist
+	
+	# save the report for all the runs in the folder
+        loglist=os.listdir(first_trial_snapshot["run_folders_path"])
         reportfile=[]
-	for i in range(1,len(loglist)):
-		reportfile.append(os.getcwd()+"/data/log/"+loglist[i]+"/run_report.html")
+	for i in range(0,len(loglist)):
+		reportfile.append(first_trial_snapshot["run_folders_path"]+"/"+loglist[i]+"/run_report.html")
 	f = file(filename3, 'w' )
 	f.write("<hgroup> <center> <h2> MLO Report </h2> </center> </hgroup>")
-	f.write("<center> (Error Code:  0 - No Error; 1 - Exceed Max Fitness, 2 - Exceed Max Generation, 3- Generate is Not True) </center>")
+	f.write("<center> (Error Code:  0 - No Error; 1 - Exceed Max Fitness, 2 - Exceed Max Generation, 3- Didn't find new best) </center>")
 	for e in reportfile:
 		if os.path.exists(e):
 			fr = file(e,'r')

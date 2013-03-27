@@ -1,7 +1,7 @@
 import wx
 
 from views.gui.windows import RunWindow, UpdateEvent, UpdateEvent2
-from visualizers.plot import MLOImageViewer, MLORunReportViewer
+from visualizers.plot import MLOImageViewer, MLORunReportViewer,MLOAllReportViewer
 
 
 
@@ -28,7 +28,7 @@ class TerminalView(View):
     def initialize(self, controller):
         self.controller = controller       
         self.plot_view = MLOImageViewer
-        self.run_view = MLORunReportViewer
+        self.run_view = MLOAllReportViewer
         
         if not self.controller.restart and not (self.controller.fitness and  self.controller.configuration):
             logging.error('Benchmark and/or configuration script not '

@@ -32,8 +32,8 @@ class Controller(object):
         if self.view: ## might not have been initialized yet
             try:
                 self.view.update(trial=trial, run=run, visualize=visualize)
-            except:
-                pass
+            except Exception,e:
+                logging.debug("Error while visualizing.. " + str(e))
             
     def take_over_control(self):
         self.visualizer.start()
@@ -45,12 +45,13 @@ class Controller(object):
     def remove_run_name_jobs(self, run_name):
         self.visualizer.remove_run_name_jobs(run_name)
         
-    def start_run(self, name, fitness, configuration):
+    def start_run(self, name, fitness, configuration, terminal_mode = False):
         if not name:
-            name = 'Default Run'
+            name = 'Default_run'
         run = Run(name, fitness, configuration, self)
         run.daemon = True
         # Special case when we are restarting a previously crashed run
+        run.terminal_mode=terminal_mode
         run.run()
         return run
 
@@ -75,24 +76,24 @@ class Controller(object):
             pass
         try:
             run = self.runs[name]
-            self.runs = {key: value for key, value
-                       in self.trials.items()
-                       if key != name}
+            del self.runs[name] 
         except Exception, e:
             pass
             
     def get_run_visualization_dict(self, trial_type):
         try:
-            return self.profile_dict["run_visualization_dict"]["trial_type"]
+            return self.profile_dict["run_visualization_dict"][trial_type]
         except:
             logging.info("You have never visualized runs of this trial type, will update your profile using default configuration")
             self.update_run_visualization_dict(trial_type, get_run_type_visualizer(trial_type)["default"].get_default_attributes())
-            return self.profile_dict["run_visualization_dict"]["trial_type"]
+            return self.profile_dict["run_visualization_dict"][trial_type]
        
     def update_run_visualization_dict(self, trial_type, dict):
-        self.profile_dict["run_visualization_dict"]["trial_type"] = dict
+        self.profile_dict["run_visualization_dict"][trial_type] = dict
         self.save_profile_dict()
      
+    def get_most_recent_run_name(self):
+        return self.profile_dict["last_run"]
                        
     def register_run(self, run):
         if self.runs.has_key(run.get_name()):
@@ -100,7 +101,7 @@ class Controller(object):
             raise
         else:
             self.runs[run.get_name()] = run
-            self.last_run = run.get_name()
+            self.profile_dict["last_run"] = run.get_name()
             self.profile_dict["most_recent_fitness_script_file"] = run.get_fitness_script_file()
             self.profile_dict["most_recent_fitness_script_folder"] = run.get_fitness_script_folder()
             self.profile_dict["most_recent_configuration_script_file"] = run.get_configuration_script_file()
@@ -129,13 +130,11 @@ class Controller(object):
                                
     def pause_run(self, name):
         run = self.runs[name]
-        run.set_wait(True)
-        run.set_status("Paused")
+        run.set_paused()
             
     def resume_run(self, name):
         run = self.runs[name]
-        run.set_wait(False)
-        run.set_status("Running")
+        run.set_running()
             
     ### trial managment methods
         
@@ -151,19 +150,15 @@ class Controller(object):
     def delete_trial(self, name):
         trial = self.trials[name]
         trial.set_kill(True)
-        self.trials = {key: value for key, value
-                       in self.trials.items()
-                       if key != name}
+        del self.trials[name]
                        
     def pause_trial(self, name):
         trial = self.trials[name]
-        trial.set_wait(True)
-        trial.set_status("Paused")
+        trial.set_paused()
 
     def resume_trial(self, name):
         trial = self.trials[name]
-        trial.set_wait(False)
-        trial.set_status("Running")
+        trial.set_running()
 
     ## visualizer methods
 
@@ -233,8 +228,9 @@ class Controller(object):
         logging.info(self.profile_dict["run_paths"])
         self.save_profile_dict()
        
-    def load_profile_dict(self):
-        dir = os.getcwd() + "/profile"
+    def load_profile_dict(self, provided_dir=None):
+        if provided_dir is None:
+            dir = os.getcwd() + "/profile"
         try:
             with open(dir, 'rb') as outfile:
                 dict = pickle.load(outfile)
@@ -274,3 +270,4 @@ class Controller(object):
                                   "run_paths": {}
                                 }
             self.save_profile_dict()
+
