@@ -546,8 +546,8 @@ class MLORunReportViewer(object):
             ## append to list used to calculate statistical data
         htmlcode2 = str(htmlcode2)
         ### Save and exit
-        filename = dictionary["results_folder_path"] + "/run_raport.pdf"
-        filename2 = dictionary["results_folder_path"] + "/run_raport.html"
+        filename = dictionary["results_folder_path"] + "/run_report.pdf"
+        filename2 = dictionary["results_folder_path"] + "/run_report.html"
         
         if os.path.isfile(filename):
             os.remove(filename)
@@ -630,11 +630,11 @@ class MLOAllReportViewer(object):
             ErrorC = ['0']
             
             ## Tell if one fails
-            if trial_snapshot['counter_dict']['fit']>50:
+            if trial_snapshot['counter_dict']['fit']>trial_snapshot['max_fi']:
             	color = 'red'
             	ErrorC = ['1']
             	
-            if trial_snapshot['counter_dict']['g']>5000: 
+            if trial_snapshot['counter_dict']['g']>trial_snapshot['max_iter']: 
             	color = 'red'
             	ErrorC = ['2']
             	
@@ -724,6 +724,8 @@ class MLOAllReportViewer(object):
             pdf = pisa.CreatePDF(repocontent,f)
             if not pdf.err:
                 pisa.startViewer(f)
+                logging.info("Viewing Report...")
+                
             f.close()
         except Exception, e:
             logging.error('could not create a report for {}'.format(str(e)))

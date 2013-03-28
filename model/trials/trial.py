@@ -607,13 +607,14 @@ class PSOTrial(Trial):
             'timer_dict':  self.state_dictionary['timer_dict'] ,
             'name': name,
             'fitness_state': self.get_fitness_state(),
-            "run_name": self.my_run.get_name(),
+            'run_name': self.my_run.get_name(),
             'classifier': self.get_surrogate_model().classifier, ## return a copy! 
             'regressor': self.get_surrogate_model().regressor, ## return a copy!
             'cost_model': self.get_cost_model(), ## return a copy!
             'meta_plot': {"particles":{'marker':"o",'data':self.get_population()}},
             'generate' : self.state_dictionary['generate'],
-            'new_best' : self.new_best
+            'max_iter' : self.configuration.max_iter,
+            'max_fitness' : self.configuration.max_fitness
         }
         return return_dictionary
         

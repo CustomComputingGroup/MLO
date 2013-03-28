@@ -1090,7 +1090,7 @@ class RunGraphWindow(wx.Frame):
         html = wx.html.HtmlWindow(self)
         if "gtk2" in wx.PlatformInfo:
             html.SetStandardFonts()
-        html.LoadPage(self.results_folder + "/run_raport.html")
+        html.LoadPage(self.results_folder + "/run_report.html")
         self.panel2 = wx.Panel(self,-1, style=wx.SUNKEN_BORDER)
         box = wx.BoxSizer(wx.VERTICAL)
         box.Add(html, 1, wx.EXPAND)
