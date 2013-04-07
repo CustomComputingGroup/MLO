@@ -655,7 +655,7 @@ class MLORunReportViewer(object):
 
 ##This class returns a string 
 ##It should return either a string, a file reference or 
-class regressionRunViewer(object):
+class regressionMLORunViewer(object):
 
     @staticmethod
     def render(dictionary):
@@ -685,7 +685,7 @@ class regressionRunViewer(object):
         data = []
         failurecount=0
         failure_trial=[]
-	goldenResultsFile = 
+	#goldenResultsFile = 
 
         for trial_snapshot in trial_snapshots:
             ## Display trial timers
