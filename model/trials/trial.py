@@ -18,7 +18,7 @@ from deap import base, creator, tools
 toolbox = base.Toolbox()
 ##TODO - clean it up... only should be loaded when needed... 
 
-from ..surrogatemodels.surrogatemodel import DummySurrogateModel, ProperSurrogateModel
+from ..surrogatemodels.surrogatemodel import DummySurrogateModel, ProperSurrogateModel, LocalSurrogateModel
 from ..surrogatemodels.costmodel import DummyCostModel, ProperCostModel
 
 class Trial(Thread):
@@ -33,6 +33,9 @@ class Trial(Thread):
         if configuration.surrogate_type == "dummy":
             self.surrogate_model = DummySurrogateModel(configuration,
                                                        self.controller)
+        elif configuration.surrogate_type == "local":
+            self.surrogate_model = LocalSurrogateModel(configuration,
+                                                        self.controller)
         else:
             self.surrogate_model = ProperSurrogateModel(configuration,
                                                         self.controller)
@@ -84,10 +87,21 @@ class Trial(Thread):
     ## Helper Methods ##
     ####################
     
+    def hypercube(self):
+        #find maximum
+        max_diag = deepcopy(self.get_population()[0])
+        for part in self.get_population():
+            max_diag = maximum(part,max_diag)
+        ###find minimum vectors
+        min_diag = deepcopy(self.get_population()[0])
+        for part in self.get_population():
+            min_diag = minimum(part,min_diag)
+        return [max_diag,min_diag]
+    
     def train_surrogate_model(self, population):
         logging.info('Training surrogate model')
         start = datetime.now()
-        self.set_model_failed(self.surrogate_model.train())
+        self.set_model_failed(self.surrogate_model.train(self.hypercube()))
         diff = datetime.now() - start
         self.add_train_surrogate_model_time(diff)
         
@@ -574,10 +588,10 @@ class PSOTrial(Trial):
                 self.meta_iterate()
                 self.filter_population()
                 
-                #Check if perturbation is neccesary 
-                if self.get_counter_dictionary('g') % self.get_configuration().M == 0:
-                    self.evaluate_best()
-                    self.new_best = False
+            #Check if perturbation is neccesary 
+            if self.get_counter_dictionary('g') % self.get_configuration().M == 0:
+                self.evaluate_best()
+                self.new_best = False
             # Wait until the user unpauses the trial.
             while self.get_wait():
                 time.sleep(0)
@@ -779,7 +793,9 @@ class PSOTrial(Trial):
             logging.info('Best was already evalauted.. adding perturbation ' + str(perturbation))
             perturbed_particle = self.create_particle(self.get_best())
             code, mean, variance = self.predict_surrogate_model([perturbed_particle])
-            if code[0] == 0:
+            if code is None:
+                logging.debug("Code is none..watch out")
+            if code is None or code[0] == 0:
                 logging.info('Perturbation might be valid, evaluationg')
                 for i,val in enumerate(perturbation):
                     perturbed_particle[i] = perturbed_particle[i] + val       
@@ -849,17 +865,6 @@ class PSOTrial(Trial):
             min_diag = minimum(part, min_diag)
         return [max_diag, min_diag]
         
-    def hypercube(self):
-        #find maximum
-        max_diag = deepcopy(self.get_population()[0])
-        for part in self.get_population():
-            max_diag = maximum(part,max_diag)
-        ###find minimum vectors
-        min_diag = deepcopy(self.get_population()[0])
-        for part in self.get_population():
-            min_diag = minimum(part,min_diag)
-        return [max_diag,min_diag]
-        
     def perturbation(self, radius = 10.0):
         [max_diag,min_diag] = self.hypercube()
         d = (max_diag - min_diag)/radius
@@ -896,10 +901,15 @@ class PSOTrial(Trial):
                     p.fitness.values, p.code, cost = self.toolbox.evaluate(p)
                     eval_counter = eval_counter + 1
                 else:
-                    if c == 0:
-                        p.fitness.values = m
-                    else:
-                        p.fitness.values = [self.fitness.worst_value]
+                    try:
+                        if c == 0:
+                            p.fitness.values = m
+                        else:
+                            p.fitness.values = [self.fitness.worst_value]
+                    except:
+                        p.fitness.values, p.code, cost = self.toolbox.evaluate(p)
+                        logging.info("KURWA Start")
+                        logging.info("KURWA End")
             ## at least one particle has to have std smaller then max_stdv
             ## if all particles are in invalid zone
         return False
@@ -1146,13 +1156,18 @@ class PSOTrial_TimeAware(PSOTrial):
                     if eval_counter > self.get_configuration().max_eval:
                         logging.info("Evalauted mroe fitness functions per generation then max_eval")
                         return True
-                    p.fitness.values, p.code, p.cost = self.toolbox.evaluate(p)
+                    p.fitness.values, p.code, cost = self.toolbox.evaluate(p)
                     eval_counter = eval_counter + 1
                 else:
-                    if c == 0:
-                        p.fitness.values = m
-                    else:
-                        p.fitness.values = [self.fitness.worst_value]
+                    try:
+                        if c == 0:
+                            p.fitness.values = m
+                        else:
+                            p.fitness.values = [self.fitness.worst_value]
+                    except:
+                        p.fitness.values, p.code, cost = self.toolbox.evaluate(p)
+                        logging.info("KURWA Start")
+                        logging.info("KURWA End")
             ## at least one particle has to have std smaller then max_stdv
             ## if all particles are in invalid zone
         return False

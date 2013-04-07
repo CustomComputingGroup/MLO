@@ -52,25 +52,57 @@ designSpace = []
 maxError = 0.01
 
 minVal = 0.0
-maxVal = 300.0
-worst_value = 10000.0
+maxVal = 20.0
+worst_value = 20.0
 
 designSpace = []
 
-designSpace.append({"min":0.05,"max":1.0,"step":1.0,"type":"continuous", "set":"h"}) #alpha
-designSpace.append({"min":0.05,"max":1.0,"step":1.0,"type":"continuous", "set":"h"}) #beta
-designSpace.append({"min":0.05,"max":1.0,"step":1.0,"type":"continuous", "set":"h"}) #B
+designSpace.append({"min":1.0,"max":20.0,"step":1.0,"type":"discrete", "set":"h"}) #alpha
+designSpace.append({"min":1.0,"max":20.0,"step":1.0,"type":"discrete", "set":"h"}) #beta
+designSpace.append({"min":4.0,"max":24.0,"step":1.0,"type":"discrete", "set":"h"}) #B
 designSpace.append({"min":0.05,"max":1.0,"step":1.0,"type":"continuous", "set":"h"}) #T
 
-designSpace.append({"min":1.0,"max":20.0,"step":1.0,"type":"discrete", "set":"h"}) #Pdp
-designSpace.append({"min":1.0,"max":20.0,"step":1.0,"type":"discrete", "set":"h"}) #Pknl
-designSpace.append({"min":1.0,"max":20.0,"step":1.0,"type":"discrete", "set":"h"}) #Ptl
+designSpace.append({"min":1.0,"max":10.0,"step":1.0,"type":"discrete", "set":"h"}) #Pknl
+designSpace.append({"min":1.0,"max":10.0,"step":1.0,"type":"discrete", "set":"h"}) #Ptl
+designSpace.append({"min":1.0,"max":32.0,"step":1.0,"type":"discrete", "set":"h"}) #Pdp
 
 maxvalue = worst_value
 error_labels = {0:'Valid',1:'Overmap',2:'Inaccuracy', 3:'Memory'}
 
+#[  6.,1.,5,1,2., 2.,32.04800588] around this point
 def termCond(best):
-    return False
+    return best < 0.1
+'''
+n1*n2*n3:
+128*128*128
+256*256*256
+512*512*512
+
+coefficients range:
+Pknl = (1~10)
+Pdp  = (1~32)
+Pt     =(1~10)
+
+T = (1,2,3)
+T<B> = 1
+T<D> = (0~1)
+T<L>  = (1.82~1)
+T<F> =  (1.68~1)
+
+B= (4~24)
+B<w> = (12~32)
+B<D> = (0.45~1)
+B<L>  = (0.434~1)
+B<F>  = (0.39~1)
+
+optimal configuration:
+128*128*128: alpha:1.00, beta:1.00, T=3, B=12, Pknl=1, Pdp =12, Pt =2,
+Ot*Ob= 1.12
+256*256*256: alpha:2.00, beta:1.00, T=3, B=12, Pknl=1, Pdp =12, Pt =2,
+Ot*Ob= 1.16
+512*512*512: alpha:4.00, beta:2.00, T=3, B=10, Pknl=1, Pdp =12, Pt =2,
+Ot*Ob= 1.20
+'''
     
 def fitnessFunc(particle, state):
 
@@ -91,23 +123,24 @@ def fitnessFunc(particle, state):
 
     ######################
     Rcc = 1.0
-    x = 100.0
-    y = 100.0
+    x = 256.0
+    y = 256.0
     Nop = 700000.0
     Nc = 10.0
-    S=10.0
+    S=4.0
     D=10.0**9
     
     Wdp = 32.0 # 8 bytes
     N = 1.0
-    Bw = 1.0
+    Bw = 12.0
     Wm = N * (Wdp*Bw*Pdp)
     BWm = 32000000000.0 * 8 ## GB / s
     
     ## not sure
-    Bd = 1.0
-    Bf = 1.0
-    Bl = 1.1
+    Bd = 0.45
+    Bl = 0.39
+    Bf = 0.434
+    
     #epislon = sqrt()
     
     theta = 300000000.0*8.0 # 300 MB /s
@@ -116,7 +149,7 @@ def fitnessFunc(particle, state):
     Ad = 1000000.0
     Af = 1000000.0
     Al = 1000000.0
-    Ab = 8.0 * 64000000.0 ## 64 MB
+    Ab = 8.0 * 220000000.0 ## 300 MB, need to change it...
     
     If = Af * 0.2
     Il = Al * 0.1
@@ -129,23 +162,22 @@ def fitnessFunc(particle, state):
     Ob = ((((x-2*S)/(nx-2*S)) * ((y-2*S)/(ny-2*S)) * nx * ny)/(x*y))
     #print "Ob " + str(Ob)            
     ######################
-    if alpha*beta == 1:
-        Ot = 1
+    if alpha*beta == 1.0:
+        Ot = 1.0
     else:
         Ot = ((nx+(Pt-1)*2*S)/(nx)) * ((ny+(Pt-1)*2*S)/(ny))
                     
     ######################
     mdb = ((nx + (Pt-1)*2*S) / (Pdp)) * (ny + (Pt-1)*S)
-    #print "1 " + str(mdb)
     #print "2 " + str(Pknl*Pt*Pdp)
     Bs = (Pknl*Pt*Pdp*(S*(2+Nc)+1)*mdb) / (Ab/(Wdp*Bw))
     #Bs = (1.0*(S*(2+Nc)+1)*mdb) / (Ab/(Wdp*Bw))
-    #print "Bs " + str(Bs)
+    
     Ds = (Nop * T * Bd / Ad)
     #print "DS " + str(Ds)
-    Ls = (Nop * T * Bl + Il)/ Al
+    Ls = (Nop * (1.82-T) * Bl + Il)/ Al
     #print "Ls " + str(Ls)
-    Fs = (Nop * T * Bf + If)/ Af
+    Fs = (Nop * (1.68-T) * Bf + If)/ Af
     #print "Fs " + str(Fs)
     overmapped = (Ds >= 1) or (Ls >= 1) or (Fs >= 1) or (Bs >=1)
     cost, state = getCost(Bs, Ds, Ls, Fs , state) ## we need to cast to float
@@ -155,7 +187,7 @@ def fitnessFunc(particle, state):
     Cre = gamma * max(Bs,Ds,Ls,Fs) / theta
     Cm = (2 * D * Wdp * (1+Nc)* Bw ) / psi  ### is constant
     #######################
-    executionTime = array([Ct + Cre])    
+    executionTime = array([Ct])    
 
     ######################
     ## mem bandwith exceeded
@@ -189,29 +221,34 @@ def calcMax():
         xx = fitnessFunc(x,None)
         return xx[0][1][0]
     '''
-    designSpace.append({"min":0.05,"max":1.0,"step":1.0,"type":"continuous", "set":"h"}) #alpha
-    designSpace.append({"min":0.05,"max":1.0,"step":1.0,"type":"continuous", "set":"h"}) #beta
-    designSpace.append({"min":0.05,"max":1.0,"step":1.0,"type":"continuous", "set":"h"}) #B
-    designSpace.append({"min":0.05,"max":1.0,"step":1.0,"type":"continuous", "set":"h"}) #T
+designSpace.append({"min":1.0,"max":20.0,"step":1.0,"type":"discrete", "set":"h"}) #alpha
+designSpace.append({"min":1.0,"max":20.0,"step":1.0,"type":"discrete", "set":"h"}) #beta
+designSpace.append({"min":4.0,"max":24.0,"step":1.0,"type":"discrete", "set":"h"}) #B
+designSpace.append({"min":0.05,"max":1.0,"step":1.0,"type":"continuous", "set":"h"}) #T
 
-    designSpace.append({"min":1.0,"max":20.0,"step":1.0,"type":"discrete", "set":"h"}) #Pdp
-    designSpace.append({"min":1.0,"max":20.0,"step":1.0,"type":"discrete", "set":"h"}) #Pknl
-    designSpace.append({"min":1.0,"max":20.0,"step":1.0,"type":"discrete", "set":"h"}) #Ptl
+designSpace.append({"min":1.0,"max":10.0,"step":1.0,"type":"discrete", "set":"h"}) #Pknl
+designSpace.append({"min":1.0,"max":10.0,"step":1.0,"type":"discrete", "set":"h"}) #Ptl
+designSpace.append({"min":1.0,"max":32.0,"step":1.0,"type":"discrete", "set":"h"}) #Pdp
     '''
-        
-    x0 = [0.83635750288312605, 0.37822062215746499, 0.13905958646985159, 0.58215055232421087, 2.0, 6.0, 18.0]
-    x0 = [0.98874672302918809, 0.77342903511390226, 0.82587267298704492, 0.99183074578544894, 17.0, 3.0, 13.0]
-    #x0 = [  0.24367197,   0.16558312,   0.82587267,   0.99183069, 4,   4,  4]
-    xopt = optimize.minimize(fun = funcWrapper, method = "COBYLA", x0 =  x0, tol=1e-15, bounds = [(d["min"],d["max"]) for d in designSpace])
-    print str(xopt)
-    print str(fitnessFunc([  0.24367197,   0.16558312,   0.82587267,   0.99183069, 17,   4,  14],None))
-    print str(fitnessFunc([  0.24367197,   0.16558312,   0.82587267,   0.99183069, 17,   3,  13],None))
-    
-    print str(fitnessFunc([  0.23313723,   0.17056786,   0.82590206,   0.04877084, 18.27665482,   4.36760638,  14.35909523],None))
-    print str(fitnessFunc([  0.23313723,   0.17056786,   0.82590206,   0.04877084, 20,   6,  17],None))
-    
-        
+    x0 = [6.0, 3.0, 5.0, 0.56117378588844269, 4.0, 3.0, 29.0]
+    for kk in range(0,15):
+        x0 = optimize.minimize(fun = funcWrapper, method = "COBYLA", x0 =  x0, tol=1e-15, bounds = [(d["min"],d["max"]) for d in designSpace])
+        x0 = x0.x
+    print str(fitnessFunc(x0,None))
+    print str(fitnessFunc(x0,None))
+    print str(fitnessFunc([6.0, 3.0, 5.0, 1.0, 4.0, 3.0, 32.0],None))
+    print str(fitnessFunc([6.0, 3.0, 5.0, 0.56117378588844269, 4.0, 3.0, 32.0],None))
+    print str(fitnessFunc([  20.,1.,15,1,4., 2.,32.04800588],None))
+    print str(x0)
+    print str([(d["min"],d["max"]) for d in designSpace])
     '''
+    print str(fitnessFunc([  4.0,   2.0,   10.0,   0.1, 2,   2,  8],None))
+    print str(fitnessFunc([  4.0,   4.0,   10.0,   0.1, 2,   2,  5],None))
+    print str(fitnessFunc([  1.0,   1.0,   10.0,   0.1, 2,   2,  5],None))
+    print str(fitnessFunc([  4,   3,  10.0,   0.53298803, 4.0,   3.0 ,  10.0],None))
+    
+        
+    
     npts = 15
     D = len(designSpace)
     n_bins =  npts*ones(D)

@@ -94,8 +94,8 @@ def gp(hyp, inffunc, meanfunc, covfunc, likfunc, x, y, xs=None, ys=None, der=Non
                 post = vargout[0]; nlZ = vargout[1]; dnlZ = vargout[2] 
             #end
         #end
-    except:
-        raise Exception('Inference method failed\n') 
+    except Exception, e:
+        raise Exception('Inference method failed ' + str(e) + '\n') 
     #end
 
     if xs == None:                           # if no test cases are provided

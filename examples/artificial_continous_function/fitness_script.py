@@ -2,7 +2,7 @@ from math import e, pow
 from deap import benchmarks
 from numpy import array
 
-dimensions = 7  # Dimensionality of solution space
+dimensions = 2  # Dimensionality of solution space
 
 # Min and max fitness values
 minVal = 0.0
@@ -25,7 +25,7 @@ cost_minVal = 0.0
 # Example fitness function for surrogate model testing
 def fitnessFunc(part):
     code = 0 if is_valid(part) else 1
-    return benchmarks.sphere(part), array([code]), array([0]), array([1.0]) ## cost always 1
+    return benchmarks.rosenbrock(part), array([code]), array([0]), array([1.0]) ## cost always 1
     
 # Example function to define if a design is valid or invalid
 def is_valid(part):

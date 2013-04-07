@@ -1,7 +1,7 @@
 import logging
 
 from classifiers import Classifier, SupportVectorMachineClassifier
-from regressors import Regressor, GaussianProcessRegressor, GaussianProcessRegressor2, KMeansGaussianProcessRegressor, DPGMMGaussianProcessRegressor
+from regressors import Regressor, GaussianProcessRegressor, GaussianProcessRegressor2, GaussianProcessRegressor3, KMeansGaussianProcessRegressor, DPGMMGaussianProcessRegressor
 
 from utils import numpy_array_index
 from scipy.interpolate import griddata
@@ -13,7 +13,7 @@ class SurrogateModel(object):
         self.configuration = configuration
         self.was_trained = False
         
-    def train(self):
+    def train(self, hypercube):
         raise NotImplementedError('SurrogateModel is an abstract class, this '
                                   'should not be called.')
     def trained(self):
@@ -38,7 +38,7 @@ class SurrogateModel(object):
         # del d['configuration']
         # del d['fitness']
         # return d
-
+        
     def contains_particle(self, part):
         pass
         
@@ -72,7 +72,7 @@ class DummySurrogateModel(SurrogateModel):
         MU, S2 = self.regressor.predict(particles)
         return self.classifier.predict(particles), MU, S2
 
-    def train(self):
+    def train(self, hypercube):
         self.was_trained = True
         return True
 
@@ -96,41 +96,42 @@ class ProperSurrogateModel(SurrogateModel):
     def __init__(self, configuration, controller):
         super(ProperSurrogateModel, self).__init__(configuration,
                                                    controller)
-
+        self.controller = controller
+        self.configuration = configuration
+        
         if configuration.classifier == 'SupportVectorMachine':
             self.classifier = SupportVectorMachineClassifier()
         else:
             logging.error('Classifier type ' + str(configuration.classifier) + '  not found')
-
-        if configuration.regressor == 'GaussianProcess':
-            self.regressor = GaussianProcessRegressor(controller, configuration)
-        elif configuration.regressor == 'GaussianProcess2':
-            self.regressor = GaussianProcessRegressor2(controller, configuration)        
-        elif configuration.regressor == 'KMeansGaussianProcessRegressor':
-            self.regressor = KMeansGaussianProcessRegressor(controller, configuration)        
-        elif configuration.regressor == 'DPGMMGaussianProcessRegressor':
-            self.regressor = DPGMMGaussianProcessRegressor(controller, configuration)
-        else:
-            logging.error('Regressor type ' + str(configuration.regressor) + '  not found')
+        self.regressor = self.regressor_constructor()
                 
     def predict(self, particles):
-        for i in range(0,3):
-            MU, S2 = self.regressor.predict(particles)
-            if (not (MU is None)) or (not (S2 is None)) :
-                return self.classifier.predict(particles), MU, S2
-            logging.info("Regressor prediction failed, attempting shuffle and retraining.. attempt " + str(i) + " out of 3")
-            self.regressor.shuffle()
+        MU, S2 = self.regressor.predict(particles)
         return self.classifier.predict(particles), MU, S2
                 
-    def train(self):
+    def train(self, hypercube):
         self.was_trained = True
-        class_trained = self.classifier.train() 
-        for i in range(0,3):
-            if self.regressor.train():
-                return class_trained
-            logging.info("Regressor training failed, attempting shuffle and retraining.. attempt " + str(i) + " out of 3")
-            self.regressor.shuffle()
-        return False
+        if self.classifier.train() and self.regressor.train():
+            logging.info("Trained Surrogate Model")
+        else:
+            logging.info("Couldnt Train Surrogate Model")
+            return False
+            
+    def regressor_constructor(self):
+        controller = self.controller
+        configuration = self.configuration
+        if self.configuration.regressor == 'GaussianProcess':
+            return GaussianProcessRegressor(controller, configuration)
+        elif self.configuration.regressor == 'GaussianProcess2':
+            return GaussianProcessRegressor2(controller, configuration)          
+        elif self.configuration.regressor == 'GaussianProcess3':
+            return GaussianProcessRegressor3(controller, configuration)        
+        elif self.configuration.regressor == 'KMeansGaussianProcessRegressor':
+            return KMeansGaussianProcessRegressor(controller, configuration)        
+        elif self.configuration.regressor == 'DPGMMGaussianProcessRegressor':
+            return DPGMMGaussianProcessRegressor(controller, configuration)
+        else:
+            raise Exception('Regressor type ' + str(configuration.regressor) + '  not found')
         
     def add_training_instance(self, part, code, fitness, addReturn):
         self.classifier.add_training_instance(part, code)
@@ -167,7 +168,6 @@ class ProperSurrogateModel(SurrogateModel):
             D = len(designSpace)
             n_bins =  npts*ones(D)
             if hypercube:
-                logging.info("kurwa...")
                 #logging.info("hypercube" + str(hypercube))
                 logging.info(str(hypercube))
                 logging.info(str(hypercube[0]))
@@ -206,3 +206,65 @@ class ProperSurrogateModel(SurrogateModel):
     def set_state_dictionary(self, dict):
         self.regressor.set_state_dictionary(dict["regressor_state_dict"])
         self.classifier.set_state_dictionary(dict["classifier_state_dicts"])
+
+class LocalSurrogateModel(ProperSurrogateModel):
+
+    def __init__(self, configuration, controller):
+        super(LocalSurrogateModel, self).__init__(configuration,
+                                                   controller)
+        self.max_r = 10
+        self.local_regressor = self.regressor_constructor()
+        self.use_local = False
+        
+    def predict(self, particles):
+        if self.use_local:
+            MU, S2 = self.local_regressor.predict(particles)
+        else:
+            MU, S2 = self.regressor.predict(particles)
+        return self.classifier.predict(particles), MU, S2
+        
+                
+    def train_local(self, hypercube):
+        self.local_regressor = self.regressor_constructor()
+        regressor_training_fitness = self.regressor.get_training_fitness()
+        regressor_training_set = self.regressor.get_training_set()
+        [maxDiag,minDiag] = hypercube
+        for k,part in enumerate(regressor_training_set):
+            if all(part <= maxDiag):
+                if all(part >= minDiag):
+                    self.local_regressor.add_training_instance(part, regressor_training_fitness[k])
+        ## add most recent
+        valid_examples = max(self.max_r,len(regressor_training_set))
+        for k,part in enumerate(regressor_training_set[-conf.max_r:]):
+            if not any([array_equal(part,pp) for pp in limitedGpTrainingSet]):
+                self.local_regressor.add_training_instance(part, regressor_training_fitness[k-valid_examples])
+        return self.local_regressor.train()
+        
+    def train(self, hypercube):
+        self.was_trained = True
+        self.use_local = False
+        classifier_trained = self.classifier.train()
+        regressor_trained = self.regressor.train()
+        if not regressor_trained:
+            regressor_trained = self.train_local(hypercube)
+            self.use_local = regressor_trained
+        if classifier_trained and regressor_trained:
+            if self.use_local:
+                logging.info("Trained Local Surrogate Model")
+            else:
+                logging.info("Trained Surrogate Model")
+        else:
+            logging.info("Couldnt Train Surrogate Model")
+            return False
+                        
+    def get_state_dictionary(self):
+        return {"regressor_state_dict" : self.regressor.get_state_dictionary(), "classifier_state_dicts" : self.classifier.get_state_dictionary(), "use_local" : self.use_local,
+            "local_regressor_state_dict":self.local_regressor.get_state_dictionary()}
+        
+    def set_state_dictionary(self, dict):
+        self.regressor.set_state_dictionary(dict["regressor_state_dict"])
+        self.regressor.set_state_dictionary(dict["local_regressor_state_dict"])
+        self.classifier.set_state_dictionary(dict["classifier_state_dicts"])
+        self.use_local = dict["use_local"]
+
+        

@@ -14,7 +14,13 @@ from numpy.random import uniform, shuffle, permutation
 from utils import numpy_array_index
 from copy import deepcopy
 
-from GPR import gpr
+
+## pyGPR
+from UTIL.utils import hyperParameters
+from Tools.min_wrapper import min_wrapper
+from GPR.gp import gp
+###old pyXGPR
+##from GPR import gpr
 
 #TODO - abstract class
 class Regressor(object):
@@ -51,14 +57,9 @@ class Regressor(object):
             if contains:
                 logging.debug('A particle duplicate is being added.. check your code!!')
             else:
-                try:
-                    self.training_set = append(self.training_set, [part], axis=0)
-                    self.training_fitness = append(self.training_fitness, [fitness],
-                                               axis=0)
-                except:
-                    logging.info(str(self.training_fitness))
-                    raise Exception("KURWO")
-
+                self.training_set = append(self.training_set, [part], axis=0)
+                self.training_fitness = append(self.training_fitness, [fitness],
+                                           axis=0)
     def contains_training_instance(self, part):
         contains, index = numpy_array_index(self.training_set, part)
         return contains
@@ -76,6 +77,9 @@ class Regressor(object):
                                            
     def get_training_set(self):
         return self.training_set
+        
+    def get_training_fitness(self):
+        return self.training_fitness
     # def __getstate__(self):
        # Don't pickle controller
         # d = dict(self.__dict__)
@@ -211,7 +215,7 @@ class GaussianProcessRegressor(Regressor):
         except:
             pass
         
-## Different implementation of GPR regression
+## Different implementation of GPR regression, based on pyXGPR
 class GaussianProcessRegressor2(Regressor):
 
     def __init__(self, controller, conf):
@@ -243,43 +247,43 @@ class GaussianProcessRegressor2(Regressor):
                 self.training_fitness)
             self.adjusted_training_fitness = self.output_scaler.transform(
                 self.training_fitness)
-            try:
-                ## retrain a number of times and pick best likelihood
-                for i in xrange(conf.random_start):
-                    if conf.corr == "isotropic":
-                        self.covfunc = ['kernels.covSum', ['kernels.covSEiso','kernels.covNoise']]
-                        gp = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions)]
-                    elif conf.corr == "anisotropic":
-                        self.covfunc = ['kernels.covSum', ['kernels.covSEard','kernels.covNoise']]
-                        gp = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions+1)]
-                    else:
-                        logging.error("The specified kernel function is not supported for GPR")
-                        return False
-                        
-                    gp.append(log(uniform(low=0.0001, high=0.01)))
-                    try:
-                        gp = array(gp)
-                        gp, nml = gpr.gp_train(gp, self.covfunc, self.scaled_training_set, self.adjusted_training_fitness)
-                        if gp[-1] > -3.0 :
-                            raise Exception("Error to large",nml)
+            ## retrain a number of times and pick best likelihood
+            for i in xrange(conf.random_start):
+                if conf.corr == "isotropic":
+                    self.covfunc = ['kernels.covSum', ['kernels.covSEiso','kernels.covNoise']]
+                    gp = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions)]
+                elif conf.corr == "anisotropic":
+                    self.covfunc = ['kernels.covSum', ['kernels.covSEard','kernels.covNoise']]
+                    gp = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions+1)]
+                else:
+                    logging.error("The specified kernel function is not supported for GPR")
+                    return False
+                    
+                gp.append(log(uniform(low=0.001, high=0.1)))
+                try:
+                    gp = array(gp)
+                    gp, nml = gpr.gp_train(gp, self.covfunc, self.scaled_training_set, self.adjusted_training_fitness)
+                    if gp[-1] < -2.0 :
                         if (((not nml_best) or (nml < nml_best))):
                             gp_best = gp
                             nml_best = nml
-                    except Exception,e:
-                        pass
-                ## the gp with highest likelihood becomes the new hyperparameter set
-                self.set_gp(gp_best)
-            except Exception,e:
-                ### will try to retarin till succesful
-                logging.info('Regressor training failed.. retraining.. ' + str(e))
-                self.train()
+                except Exception, e:
+                    logging.debug("Exception in gp_tren " + str(e))
+                    pass
+            ## the gp with highest likelihood becomes the new hyperparameter set
+            self.set_gp(gp_best)
+            if gp_best is None:
+                raise Exception("Didnt manage to optimie hyperparameters")
             logging.info('Regressor training successful')
             return True
         except Exception, e:
-            logging.info('Regressor training failed.. retraining.. ' + str(e))
+            logging.info('Regressor training failed.. ' + str(e))
             return False
             
     def predict(self, z):
+        if self.get_gp() is None:
+            logging.error('Train GP before using it!!')
+            return None, None
         try:
             # Scale inputs. it allows us to realod the regressor not retraining the model
             self.input_scaler = preprocessing.StandardScaler().fit(self.training_set)
@@ -314,7 +318,7 @@ class GaussianProcessRegressor2(Regressor):
                 'training_fitness': self.training_fitness,
                 'covfunc': self.covfunc,
                 'gp': self.gp}
-        return dict
+        return deepcopy(dict)
         
     def set_state_dictionary(self, dict):
         self.training_set = dict['training_set']
@@ -322,6 +326,135 @@ class GaussianProcessRegressor2(Regressor):
         self.gp = dict['gp']
         self.covfunc = dict['covfunc']
         
+## Different implementation of GPR regression, based on pyGPR
+class GaussianProcessRegressor3(Regressor):
+
+    def __init__(self, controller, conf):
+        super(GaussianProcessRegressor3, self).__init__(controller, conf)
+        self.input_scaler = None
+        self.output_scaler = None
+        self.scaled_training_set = None
+        self.adjusted_training_fitness = None
+        self.hyp=None
+        self.conf = conf
+        self.meanfunc = [ ['means.meanSum'], [ ['means.meanLinear'] , ['means.meanConst'] ] ]
+        self.inffunc  = ['inf.infExact']
+        self.likfunc  = ['lik.likGauss']
+        self.covfunc = None
+            
+    def train(self):
+        ## not sure how importatn this crap is..
+        ## SET (hyper)parameters
+        hyp = hyperParameters()   
+        sn = 0.01; hyp.lik = array([log(sn)])        
+        conf = self.conf
+        dimensions = len(self.training_set[0])
+        hyp.mean = [0.5 for d in xrange(dimensions)]
+        hyp.mean.append(1.0)
+        hyp.mean = array(hyp.mean)
+        #hyp.mean = array([])
+         # Scale inputs and particles?
+        self.input_scaler = preprocessing.StandardScaler().fit(self.training_set)
+        self.scaled_training_set = self.input_scaler.transform(
+            self.training_set)
+
+        # Scale training data
+        self.output_scaler = preprocessing.StandardScaler(with_std=False).fit(
+            self.training_fitness)
+        self.adjusted_training_fitness = self.output_scaler.transform(
+            self.training_fitness)
+        ## retrain a number of times and pick best likelihood
+        nlml_best = None
+        for i in xrange(conf.random_start):
+            if conf.corr == "isotropic":
+                self.covfunc = [['kernels.covSum'], [['kernels.covSEiso'],['kernels.covNoise']]]
+                hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions)]
+            elif conf.corr == "anisotropic":
+                self.covfunc = [['kernels.covSum'], [['kernels.covSEard'],['kernels.covNoise']]]
+                hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions+1)]           
+            elif conf.corr == "anirat": ## todo
+                self.covfunc = [['kernels.covSum'], [['kernels.covRQard'],['kernels.covNoise']]]
+                hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions)]
+                hyp.cov.append(log(uniform(low=conf.thetaL, high=conf.thetaU)))
+                hyp.cov.append(log(uniform(low=conf.thetaL, high=conf.thetaU)))
+            elif conf.corr == "matern":
+                self.covfunc = [['kernels.covSum'], [['kernels.covMatern'],['kernels.covNoise']]]
+                hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions)]
+                hyp.cov.append(log(3))
+            else:
+                logging.error("The specified kernel function is not supported")
+                return False
+                
+            hyp.cov.append(log(uniform(low=0.001, high=0.1)))
+            try:
+                vargout = min_wrapper(hyp,gp,'CG',self.inffunc,self.meanfunc,self.covfunc,self.likfunc,self.scaled_training_set ,self.adjusted_training_fitness,None,None,True)
+                hyp = vargout[0]
+                vargout = gp(hyp, self.inffunc,self.meanfunc,self.covfunc,self.likfunc,self.scaled_training_set ,self.adjusted_training_fitness, None,None,False)      
+                nlml = vargout[0]
+                #if hyp.cov[-1] < -2.0 :
+                #logging.info(str(nlml) + " " + str(hyp.cov))
+                if (((not nlml_best) or (nlml < nlml_best))):
+                    self.hyp = hyp
+                    nlml_best = nlml
+            except Exception, e:
+                logging.debug("Regressor training Failed")
+            
+                
+        if (not nlml_best):        
+            logging.debug("Regressor training Failed")
+            return False
+        ## the gp with highest likelihood becomes the new hyperparameter set
+        logging.info('Regressor training successful')
+        return True
+            
+    def predict(self, z):
+        if self.hyp is None:
+            logging.error('Train GP before using it!!')
+            return None, None
+        #try:
+        # Scale inputs. it allows us to realod the regressor not retraining the model
+        self.input_scaler = preprocessing.StandardScaler().fit(self.training_set)
+        self.output_scaler = preprocessing.StandardScaler(with_std=False).fit(
+            self.training_fitness) 
+        self.adjusted_training_fitness = self.output_scaler.transform(
+            self.training_fitness)
+        self.scaled_training_set = self.input_scaler.transform(
+            self.training_set)
+            
+        ## do predictions
+        try:
+            vargout = gp(self.hyp, self.inffunc,self.meanfunc,self.covfunc,self.likfunc,self.scaled_training_set ,self.adjusted_training_fitness, self.input_scaler.transform(array(z)))      
+        except ValueError, e:
+            logging.info(str(self.scaled_training_set))
+            logging.info(str(self.adjusted_training_fitness))
+            logging.info(str(z))
+            logging.info(str(self.input_scaler.transform(array(z))))
+            raise Exception("kurwa")
+        MU = self.output_scaler.inverse_transform(vargout[2])
+        S2 = vargout[3]
+        ##get rid of negative variance... refer to some papers (there is a lot of it out there)
+        for s,s2 in enumerate(S2):
+            if s2 < 0.0:
+                S2[s] = 0.0
+        return MU, S2
+        #except Exception, e:
+        #    logging.error('Prediction failed... ' + str(e))
+        #    return None, None
+        
+    def get_state_dictionary(self):
+        dict = {'training_set' : self.training_set,
+                'training_fitness': self.training_fitness,
+                'covfunc': self.covfunc,
+                'hyp': self.hyp}
+        return deepcopy(dict)
+        
+    def set_state_dictionary(self, dict):
+        self.training_set = dict['training_set']
+        self.training_fitness = dict['training_fitness']
+        self.hyp = deepcopy(dict['hyp'])
+        self.covfunc = deepcopy(dict['covfunc'])
+        
+
 ## Different implementation of GPR regression
 class KMeansGaussianProcessRegressor(Regressor):
 
@@ -329,40 +462,48 @@ class KMeansGaussianProcessRegressor(Regressor):
         super(KMeansGaussianProcessRegressor, self).__init__(controller, conf)
         self.controller = controller
         self.state_dict = {}
-        self.no_of_clusters = 0
-        self.max_no_of_clusters = 3
+        self.no_of_clusters = 3
+        self.increase_max_no_of_clusters_by = 4
         self.reuse = 0.6
         self.conf = conf
-        for i in range(0, self.max_no_of_clusters): 
+        for i in range(0, 20):  #TODO -should be changed... stupid hardcoding fix
             self.state_dict[i] = self.regressor_countructor() 
-        self.kmeans = self.kmeans_constructor()
+        self.kmeans = self.kmeans_constructor(3)
             
     def train(self):
-        self.no_of_clusters = min(self.max_no_of_clusters, len(self.training_set)) 
-        self.kmeans = self.kmeans_constructor()
-        self.kmeans.fit(self.training_set)
-        dtype = [('distance', 'float'), ('index', int)]
-        succesfull = True
-        for i in range(0,self.no_of_clusters):  
-            
-            labels = self.kmeans.predict(self.training_set)
-            distances = [(euclidean(self.kmeans.cluster_centers_[i],sample), j) for j, sample in enumerate(self.training_set) if labels[j] != i ]
-            distance_array = array(distances, dtype=dtype) ## not most efficient but readable
-            cropped_distance_array = distance_array[0:int(len(self.training_set)/float(self.no_of_clusters))] ##lets assume trainingset > 1
-            #logging.debug("cropped_distance_array" + str(len(cropped_distance_array)))
-            #logging.debug("distances " + str(len(distances)))
-            include_array = [index for distance, index in cropped_distance_array]
-            #labels = self.kmeans.predict(self.training_set )
-            self.state_dict[i] = self.regressor_countructor() ### need to reset the regressor
-            for j, sample in enumerate(self.training_set):
-                if labels[j] == i or j in include_array:
-                    self.state_dict[i].add_training_instance(sample,self.training_fitness[j])
-            logging.debug("i:" + str(i) + " " + str(len(self.state_dict[i].training_set)))
-            succesfull = self.state_dict[i].train() and succesfull
-        return succesfull
         
-    def kmeans_constructor(self):
-        return KMeans(init='k-means++', n_clusters=self.no_of_clusters, n_init=10)
+        dtype = [('distance', 'float'), ('index', int)]
+        for num_of_clusters in range(3,self.increase_max_no_of_clusters_by+3):
+            self.no_of_clusters = num_of_clusters
+            self.kmeans = self.kmeans_constructor(num_of_clusters)
+            self.kmeans.fit(self.training_set)
+            succesfull = True
+            for i in range(0,num_of_clusters):  
+                labels = self.kmeans.predict(self.training_set)
+                distances = [(euclidean(self.kmeans.cluster_centers_[i],sample), j) for j, sample in enumerate(self.training_set) if labels[j] != i ]
+                distance_array = array(distances, dtype=dtype) ## not most efficient but readable
+                cropped_distance_array = distance_array[0:int(len(self.training_set)/float(num_of_clusters))] ##lets assume trainingset > 1
+                #logging.debug("cropped_distance_array" + str(len(cropped_distance_array)))
+                #logging.debug("distances " + str(len(distances)))
+                include_array = [index for distance, index in cropped_distance_array]
+                #labels = self.kmeans.predict(self.training_set )
+                self.state_dict[i] = self.regressor_countructor() ### need to reset the regressor
+                for j, sample in enumerate(self.training_set):
+                    if labels[j] == i or j in include_array:
+                        self.state_dict[i].add_training_instance(sample,self.training_fitness[j])
+                logging.debug("i:" + str(i) + " " + str(len(self.state_dict[i].training_set)))
+                succesfull = self.state_dict[i].train() and succesfull
+                if not succesfull:
+                    logging.info("breaking training...")
+                    break
+            if succesfull:
+                return True
+            else:
+                logging.info("Trying increasing number of clusters... currently: " + str(num_of_clusters))
+        return False
+            
+    def kmeans_constructor(self, num_of_clusters):
+        return KMeans(init='k-means++', n_clusters=num_of_clusters, n_init=10)
             
     def regressor_countructor(self):
         return GaussianProcessRegressor2(self.controller, self.conf)
@@ -404,7 +545,7 @@ class KMeansGaussianProcessRegressor(Regressor):
             self.training_set = dict['training_set']
             self.training_fitness = dict['training_fitness']
             self.no_of_clusters = dict['no_of_clusters']
-            self.kmeans = self.kmeans_constructor()
+            self.kmeans = self.kmeans_constructor(self.no_of_clusters)
             self.kmeans.cluster_centers_ = dict['kmeans_cluster_centers_']
             self.kmeans.labels_ = dict['kmeans_labels_']
             self.kmeans.inertia_ = dict['kmeans_inertia_']
@@ -421,8 +562,8 @@ class DPGMMGaussianProcessRegressor(Regressor):
         super(DPGMMGaussianProcessRegressor, self).__init__(controller, conf)
         self.controller = controller
         self.state_dict = {}
-        self.no_of_clusters = 0
-        self.max_no_of_clusters = 2
+        self.no_of_clusters = 2
+        self.max_no_of_clusters = 4
         self.radius = 0.1 ## TODO
         self.conf = conf
         for i in range(0, self.max_no_of_clusters): 

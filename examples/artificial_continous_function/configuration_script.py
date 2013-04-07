@@ -1,4 +1,4 @@
-results_folder_path = '/data/log'
+results_folder_path = '/homes/mk306/log'
 
 ##set to wherever you want the images to be stored
 #images_folder_path = 
@@ -9,17 +9,17 @@ eval_correct = False
 ### Basic setup
 
 trials_count = 1
-population_size = 50
+population_size = 20
 
-max_fitness = 200.0
+max_fitness = 100.0
 max_iter = 5000
 max_speed = 0.01
 max_stdv = 0.05
 
-surrogate_type = 'proper'  # Can be proper or dummy
-F = 110  # The size of the initial training set
-M = 100  # How often to perturb the population, used in discrete problems
-max_eval = 3
+surrogate_type = 'local'  # Can be proper or dummy
+F = 10  # The size of the initial training set
+M = 20  # How often to perturb the population, used in discrete problems
+max_eval = 1
 
 ### Trial-specific variables
 
@@ -43,7 +43,7 @@ KK = 0.73
 
 ### Visualisation
 
-vis_every_X_steps = 1000000 # How often to visualize
+vis_every_X_steps = 5 # How often to visualize
 counter = 'g'  # The counter that visualization uses as a 'step'
 max_counter = max_iter  # Maximum value of counter
 
@@ -52,15 +52,15 @@ plot_view = 'default'
 
 ### Regressor and classifier type
 #regressor = 'KMeansGaussianProcessRegressor'
-regressor = 'KMeansGaussianProcessRegressor'
+regressor = 'GaussianProcess3'
 classifier = 'SupportVectorMachine'
 
 ### GPR Regression settings
 regr = 'quadratic'
 corr2 = 'squared_exponential'
-corr = 'isotropic'
+corr = 'matern'
 theta0 = 0.01
-thetaL = 0.000001
+thetaL = 0.00001
 thetaU = 3.0
 nugget = 5
-random_start = 200
+random_start = 100

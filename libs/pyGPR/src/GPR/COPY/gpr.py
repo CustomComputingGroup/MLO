@@ -73,7 +73,7 @@ import matplotlib.pyplot as plt
 
 sn2 = 1e-6 #Hardcoded noise for Gaussian inference
 
-def gp_train(gp, X, y, R=None, w=None, Flag = 'CG'):
+def gp_train(gp, X, y, R=None, w=None, Flag = None):
     ''' gp_train() returns the learnt hyperparameters.
     Following chapter 5.4.1 in Rasmussen and Williams: GPs for ML (2006).
     The original version (MATLAB implementation) of used optimizer minimize.m 

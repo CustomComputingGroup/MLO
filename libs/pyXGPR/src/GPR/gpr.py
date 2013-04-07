@@ -55,12 +55,13 @@ Created on 31/08/2009
 @author: Marion Neumann (last update 08/01/10)
 '''
 
-from numpy import array, dot, zeros, size, log, diag, pi, eye, tril, identity, linalg, finfo, double
+from numpy import array, dot, zeros, size, log, diag, pi, eye, tril, identity, linalg, finfo, double, eye
 from scipy import linalg
 from Tools.general import feval
 import minimize
+import numpy as np
 lu=False
-e=10. * finfo(double).eps
+sn2 = 1e-6 #Hardcoded noise for Gaussian inference
 
 def gp_train(loghyper, covfunc, X, y, R=None, w=None):
     ''' gp_train() returns the learnt hyperparameters.
@@ -87,21 +88,18 @@ def gp_pred(logtheta, covfunc, X, y, Xstar, R=None, w=None, Rstar=None):
     else:
         K = feval(covfunc, logtheta, X, R, w)               # training covariances
         [Kss, Kstar] = feval(covfunc, logtheta, X, R, w, Xstar, Rstar)   # test covariances
+   # K += sn2*eye(X.shape[0]
     try:
         n = X.shape[0]
-        K = K + identity(n)*e #numerical stability 
-    except:
-         pass
-    if(lu):#lu factorization of the covariance - sometimes this shit doesnt work... rausmessen [page 19
-      LUP =  scipy.linalg.lu_factor(K)     # lower triangular matrix
-      U = scipy.linalg.lu(K,permute_l=False)[0]
-      L = scipy.linalg.lu(K,permute_l=False)[1]
-      #print L
-      # compute inv(K)*y
-      alpha = solve_lu(LUP,y)
-    else:# cholesky factorization of the covariance
-      L = linalg.cholesky(K, lower=True)                      # cholesky factorization of cov (lower triangular matrix)
-      alpha = solve_chol(L.transpose(),y)         # compute inv(K)*y
+        K = K + identity(n)*sn2 #numerical stability shit
+    except TypeError:
+        raise Exception(str(K) + " " + str(X.shape) + " " + str(identity(sn2).shape) + " " + str(np.array(K).shape))
+    try:
+        L = linalg.cholesky(K,lower=True) # lower triangular matrix
+    except linalg.LinAlgError:
+        L = linalg.cholesky(nearPD(K),lower=True)
+    #L = linalg.cholesky(K,lower=True) # lower triangular matrix    
+    alpha = solve_chol(L.transpose(),y)         # compute inv(K)*y
       
     out1 = dot(Kstar.transpose(),alpha)         # predicted means
     v = linalg.solve(L, Kstar)                  
@@ -127,21 +125,18 @@ def nlml(loghyper, covfunc, X, y, R=None, w=None):
     else:
         K = feval(covfunc, loghyper, X, R, w)     
     
+   # K += sn2*eye(X.shape[0])
+    
     n = X.shape[0]
-    K = K + identity(n)*e #numerical stability shit
-
-    if(lu):#lu factorization of the covariance - sometimes this shit doesnt work... rausmessen [page 19
-      LUP =  scipy.linalg.lu_factor(K)     # lower triangular matrix
-      U = scipy.linalg.lu(K,permute_l=False)[0]
-      L = scipy.linalg.lu(K,permute_l=False)[1]
-      # compute inv(K)*y
-      alpha = solve_lu(LUP,y)
-      return (0.5*dot(y.transpose(),alpha) + (log(diag(U))+log(diag(L))).sum(axis=0) + 0.5*n*log(2*pi))[0][0] 
-    else:# cholesky factorization of the covariance
-      L = linalg.cholesky(K, lower=True)      # lower triangular matrix
-      # compute inv(K)*y
-      alpha = solve_chol(L.transpose(),y)
-      return (0.5*dot(y.transpose(),alpha) + (log(diag(L))).sum(axis=0) + 0.5*n*log(2*pi))[0][0] 
+    K = K + identity(n)*sn2 #numerical stability shit
+    try:
+        L = linalg.cholesky(K,lower=True) # lower triangular matrix
+    except linalg.LinAlgError:
+        L = linalg.cholesky(nearPD(K),lower=True)
+    #L = linalg.cholesky(K,lower=True) # lower triangular matrix
+    # compute inv(K)*y
+    alpha = solve_chol(L.transpose(),y)
+    return (0.5*dot(y.transpose(),alpha) + (log(diag(L))).sum(axis=0) + 0.5*n*log(2*pi))[0][0] 
     #print "a",log(diag(L))
     #print "a",diag(L)
     #print L
@@ -173,24 +168,16 @@ def get_W(loghyper, covfunc, X, y, R=None, w=None):
         K = feval(covfunc, loghyper, X)
     else:
         K = feval(covfunc, loghyper, X, R, w)
+    #K += sn2*eye(X.shape[0])
+        
     n = X.shape[0]
-    #print K.shape
-    #print (identity(n)*e).shape
+    K = K + identity(n)*sn2 #numerical stability shit
+    try:
+        L = linalg.cholesky(K,lower=True) # lower triangular matrix
+    except linalg.LinAlgError:
+        L = linalg.cholesky(nearPD(K),Lower=True)
+    #L = linalg.cholesky(K,lower=True) # lower triangular matrix
+    alpha = solve_chol(L.transpose(),y)
     
-    K = K + identity(n)*e #numerical stability shit
-    if(lu):
-      LUP =  scipy.linalg.lu_factor(K)     # lower triangular matrix
-      U = scipy.linalg.lu(K,permute_l=False)[0]
-      L = scipy.linalg.lu(K,permute_l=False)[1]
-      # compute inv(K)*y
-      alpha = solve_lu(LUP,y)
-      #return (0.5*dot(y.transpose(),alpha) + (log(diag(U))).sum(axis=0) + 0.5*n*log(2*pi))[0][0] 
-      W = linalg.solve(L.transpose(),linalg.solve(L,eye(n)))-dot(alpha,alpha.transpose())
-      return W
-    else:
-      # cholesky factorization of the covariance
-      L = linalg.cholesky(K, lower=True)      # lower triangular matrix
-      alpha = solve_chol(L.transpose(),y)
-    
-      W = linalg.solve(L.transpose(),linalg.solve(L,eye(n)))-dot(alpha,alpha.transpose())
-      return W
+    W = linalg.solve(L.transpose(),linalg.solve(L,eye(n)))-dot(alpha,alpha.transpose())
+    return W

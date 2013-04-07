@@ -56,7 +56,11 @@ class Run(object):
         
     def run(self):
         now = strftime('%Y-%m-%d_%H-%M-%S')
-        self.results_folder_path = str(self.configuration.results_folder_path) + '/' + str(now)
+        try:
+            self.results_folder_path = self.configuration.run_name + "_" + str(self.configuration.results_folder_path) + '/' + str(now)
+        except AttributeError:
+            self.results_folder_path = str(self.configuration.results_folder_path) + '/' + str(now)
+            
         try:
             self.controller.register_run(self)
         except:
