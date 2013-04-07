@@ -76,6 +76,7 @@ class SupportVectorMachineClassifier(Classifier):
        # try:
             inputScaler = preprocessing.StandardScaler().fit(self.training_set)
             scaledSvcTrainingSet = inputScaler.transform(self.training_set)
+
             if len(unique(asarray(self.training_labels))) < 2:
                 logging.info('Only one class encountered, we do not need to use a classifier')
                 #self.clf = svm.OneClassSVM()
@@ -88,9 +89,9 @@ class SupportVectorMachineClassifier(Classifier):
                 try:
                     try:
                         self.type = 2
-                        self.clf = GridSearchCV(svm.SVC(), param_grid=param_grid,
-                                    cv=StratifiedKFold(
-                                        y=self.training_labels.reshape(-1),
+                self.clf = GridSearchCV(svm.SVC(), param_grid=param_grid,
+                                        cv=StratifiedKFold(
+                                            y=self.training_labels.reshape(-1),
                                         n_folds=2))
                         self.clf.fit(scaledSvcTrainingSet, self.training_labels.reshape(-1))
                     except: ##in case when we cannot construct equal proportion folds

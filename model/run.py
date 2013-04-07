@@ -65,7 +65,7 @@ class Run(object):
             self.controller.register_run(self)
         except:
             return
-        
+            
         # Initialise results folder
             
         self.set_start_time(datetime.now().strftime('%d-%m-%Y  %H:%M:%S'))
@@ -77,6 +77,7 @@ class Run(object):
                           self.results_folder_path)
             if trial.initialise():
                 self.trials.append(trial)
+            
         self.save()
         self.view_update()
         # Run trials
@@ -92,7 +93,7 @@ class Run(object):
         self.running_trial.start()
         if self.terminal_mode: ## TOODO - get rid of this
             self.running_trial.join(100000000)
-            
+
     ## TODO - this has to be changed... its just that ctrl+c wont be propagated otherwise...    
     #def join(self):
     #    for trial in self.trials:
@@ -165,15 +166,19 @@ class Run(object):
     def trial_notify(self, trial):
         if trial.get_status() == "Finished":
             try:
-                self.set_running_time((trial.get_running_time() + self.get_running_time()).seconds)
+            self.set_running_time((trial.get_running_time() + self.get_running_time()).seconds)
             except Exception, e:
                 logging.debug("Something went wrong went trying to get trial running time: " + str(e))
                 
             self.state_dictionary["trials_finished"] = self.state_dictionary["trials_finished"] + 1
+            logging.info(str(self.state_dictionary["trials_finished"]))
+            logging.info(str(self.state_dictionary["trials_finished"]/self.get_no_of_trials()))
+            logging.info(str(self.get_no_of_trials()))
             if self.state_dictionary["trials_finished"] == self.get_no_of_trials():
                 self.set_status("Finished")
+                self.view_update(visualize=True)
             self.save()
-            self.view_update(visualize=True)
+        self.view_update(visualize=True)
             if not self.job_backlog.empty(): ## start next trial
                 self.running_trial = self.job_backlog.get_nowait()
                 self.running_trial.start()

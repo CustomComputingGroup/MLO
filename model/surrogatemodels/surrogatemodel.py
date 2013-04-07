@@ -22,7 +22,7 @@ class SurrogateModel(object):
     def predict(self, particles):
         raise NotImplementedError('SurrogateModel is an abstract class, this '
                                   'should not be called.')
-                                  
+
     def add_training_instance(self, part, code, fitness, addReturn):
         pass
         
@@ -33,12 +33,12 @@ class SurrogateModel(object):
         pass
 
     # def __getstate__(self):
-       # Don't pickle fitness and configuration
+        # Don't pickle fitness and configuration
         # d = dict(self.__dict__)
         # del d['configuration']
         # del d['fitness']
         # return d
-        
+
     def contains_particle(self, part):
         pass
         
@@ -98,17 +98,17 @@ class ProperSurrogateModel(SurrogateModel):
                                                    controller)
         self.controller = controller
         self.configuration = configuration
-        
+
         if configuration.classifier == 'SupportVectorMachine':
             self.classifier = SupportVectorMachineClassifier()
         else:
             logging.error('Classifier type ' + str(configuration.classifier) + '  not found')
         self.regressor = self.regressor_constructor()
-                
+
     def predict(self, particles):
         MU, S2 = self.regressor.predict(particles)
         return self.classifier.predict(particles), MU, S2
-                
+
     def train(self, hypercube):
         self.was_trained = True
         if self.classifier.train() and self.regressor.train():
@@ -155,6 +155,7 @@ class ProperSurrogateModel(SurrogateModel):
         if len(designSpace)==2:
             # make up data.
             if hypercube:
+                logging.info("[returnMaxS2]: using hypercube ",hypercube)
                 x = linspace(hypercube[1][0],hypercube[0][0],npts)
                 y = linspace(hypercube[1][1],hypercube[0][1],npts) 
             else:
@@ -267,4 +268,3 @@ class LocalSurrogateModel(ProperSurrogateModel):
         self.classifier.set_state_dictionary(dict["classifier_state_dicts"])
         self.use_local = dict["use_local"]
 
-        

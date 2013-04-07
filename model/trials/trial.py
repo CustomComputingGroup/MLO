@@ -35,7 +35,7 @@ class Trial(Thread):
                                                        self.controller)
         elif configuration.surrogate_type == "local":
             self.surrogate_model = LocalSurrogateModel(configuration,
-                                                        self.controller)
+                                                       self.controller)
         else:
             self.surrogate_model = ProperSurrogateModel(configuration,
                                                         self.controller)
@@ -128,7 +128,7 @@ class Trial(Thread):
         
     def set_kill(self, kill):
         self.kill = kill
-        
+               
     def create_results_folder(self):
         """
         Creates folder structure used for storing results.
@@ -289,7 +289,7 @@ class Trial(Thread):
         raise NotImplementedError('Trial is an abstract class, '
                                   'this should not be called.')
                                   
-  #######################
+    #######################
     ### GET/SET METHODS ###
     #######################
         
@@ -468,7 +468,7 @@ class PSOTrial(Trial):
         self.state_dictionary['generations_array'] = []
         self.set_main_counter_name("g")
         self.set_counter_dictionary("g",0)
-        self.initialize_population()
+        self.initialize_population()    
         results_folder, images_folder = self.create_results_folder()
         if not results_folder or not images_folder:
             # Results folder could not be created
@@ -574,7 +574,7 @@ class PSOTrial(Trial):
                 logging.info("min S2  " + str(min(variance)))
                 logging.info("over 0.05  " + str(min(len([v for v in variance if v > 0.05]))))
                 reloop = self.post_model_filter(code, mu, variance)
-            ##                
+            ##
             if self.get_model_failed():
                 logging.info('Model Failed, sampling design space')
                 self.sample_design_space()
@@ -588,9 +588,9 @@ class PSOTrial(Trial):
                 self.meta_iterate()
                 self.filter_population()
                 
-            #Check if perturbation is neccesary 
-            if self.get_counter_dictionary('g') % self.get_configuration().M == 0:
-                self.evaluate_best()
+                #Check if perturbation is neccesary 
+                if self.get_counter_dictionary('g') % self.get_configuration().M == 0:
+                    self.evaluate_best()
                 self.new_best = False
             # Wait until the user unpauses the trial.
             while self.get_wait():
@@ -598,6 +598,7 @@ class PSOTrial(Trial):
             
             self.increment_main_counter()
             self.view_update(visualize = True)
+
         self.exit()
         
     ### returns a snapshot of the trial state
@@ -613,6 +614,7 @@ class PSOTrial(Trial):
             'fitness': fitness,
             'best_fitness_array': best_fitness_array,
             'generations_array': generations_array,
+            'run_folders_path':self.configuration.results_folder_path,
             'results_folder': results_folder,
             'images_folder': images_folder,
             'counter': counter,
@@ -620,12 +622,14 @@ class PSOTrial(Trial):
             'timer_dict':  self.state_dictionary['timer_dict'] ,
             'name': name,
             'fitness_state': self.get_fitness_state(),
-            "run_name": self.my_run.get_name(),
+            'run_name': self.my_run.get_name(),
             'classifier': self.get_surrogate_model().classifier, ## return a copy! 
             'regressor': self.get_surrogate_model().regressor, ## return a copy!
             'cost_model': self.get_cost_model(), ## return a copy!
             'meta_plot': {"particles":{'marker':"o",'data':self.get_population()}},
-            'generate' : self.state_dictionary['generate'] 
+            'generate' : self.state_dictionary['generate'],
+            'max_iter' : self.configuration.max_iter,
+            'max_fitness' : self.configuration.max_fitness
         }
         return return_dictionary
         
@@ -636,6 +640,7 @@ class PSOTrial(Trial):
     def create_particle(self, particle):
         return eval('creator.Particle' + self.my_run.get_name())(particle)
         
+    
     def createUniformSpace(self, particles, designSpace):
         pointPerDimensions = 5
         valueGrid = mgrid[designSpace[0]['min']:designSpace[0]['max']:
@@ -797,14 +802,14 @@ class PSOTrial(Trial):
                 logging.debug("Code is none..watch out")
             if code is None or code[0] == 0:
                 logging.info('Perturbation might be valid, evaluationg')
-                for i,val in enumerate(perturbation):
-                    perturbed_particle[i] = perturbed_particle[i] + val       
-                self.toolbox.filter_particle(perturbed_particle)
+            for i,val in enumerate(perturbation):
+                perturbed_particle[i] = perturbed_particle[i] + val       
+            self.toolbox.filter_particle(perturbed_particle)
                 fitness, code, cost = self.fitness_function(perturbed_particle) 
-                ##check if the value is not a new best
-                perturbed_particle.fitness.values = fitness
-                if not self.get_best() or self.fitness.is_better(perturbed_particle.fitness, self.get_best().fitness):
-                    self.set_best(perturbed_particle)
+            ##check if the value is not a new best
+            perturbed_particle.fitness.values = fitness
+            if not self.get_best() or self.fitness.is_better(perturbed_particle.fitness, self.get_best().fitness):
+                self.set_best(perturbed_particle)
             else:
                 logging.info('Best is within the invalid area ' + str(code[0]) + ', sampling design space')
                 self.sample_design_space()
@@ -818,7 +823,7 @@ class PSOTrial(Trial):
     def sample_design_space(self):
         logging.info('Evaluating best perturbation')
         perturbation = self.perturbation(radius = 10.0)                        
-        hypercube = self.hypercube()        
+        hypercube = self.hypercube()
         particle = self.surrogate_model.max_uncertainty(designSpace=self.fitness.designSpace, hypercube = hypercube)
         if particle is None:
             logging.info('Evaluating a perturbation of a random particle')
@@ -865,6 +870,17 @@ class PSOTrial(Trial):
             min_diag = minimum(part, min_diag)
         return [max_diag, min_diag]
         
+    def hypercube(self):
+        #find maximum
+        max_diag = deepcopy(self.get_population()[0])
+        for part in self.get_population():
+            max_diag = maximum(part,max_diag)
+        ###find minimum vectors
+        min_diag = deepcopy(self.get_population()[0])
+        for part in self.get_population():
+            min_diag = minimum(part,min_diag)
+        return [max_diag,min_diag]
+        
     def perturbation(self, radius = 10.0):
         [max_diag,min_diag] = self.hypercube()
         d = (max_diag - min_diag)/radius
@@ -902,10 +918,10 @@ class PSOTrial(Trial):
                     eval_counter = eval_counter + 1
                 else:
                     try:
-                        if c == 0:
-                            p.fitness.values = m
-                        else:
-                            p.fitness.values = [self.fitness.worst_value]
+                    if c == 0:
+                        p.fitness.values = m
+                    else:
+                        p.fitness.values = [self.fitness.worst_value]
                     except:
                         p.fitness.values, p.code, cost = self.toolbox.evaluate(p)
                         logging.info("KURWA Start")
@@ -913,7 +929,7 @@ class PSOTrial(Trial):
             ## at least one particle has to have std smaller then max_stdv
             ## if all particles are in invalid zone
         return False
-        
+   
     def reevalute_best(self):
         bests_to_model = [p.best for p in self.get_population() if p.best] ### Elimate Nones -- in case M < Number of particles, important for initialb iteratiions
         if self.get_best():
@@ -924,15 +940,15 @@ class PSOTrial(Trial):
             if (code is None) or (bests_to_fitness is None) or (variance is None):
                 logging.info("Prediction failed during reevaluation... omitting")
             else:
-                for i,part in enumerate([p for p in self.get_population() if p.best]):
+            for i,part in enumerate([p for p in self.get_population() if p.best]):
                     if code[i] == 0:
-                        part.best.fitness.values = bests_to_fitness[i]
+                part.best.fitness.values = bests_to_fitness[i]
                     else:
                         part.best.fitness.values = [self.fitness.worst_value]
                 if self.get_best():
                     best = self.get_best()
                     if code[-1] == 0:
-                        best.fitness.values = bests_to_fitness[-1]
+                best.fitness.values = bests_to_fitness[-1]
                     else:
                         best.fitness.values = [self.fitness.worst_value]
                     self.set_best(best)
@@ -969,14 +985,14 @@ class PSOTrial(Trial):
         model = ProperSurrogateModel(self.get_configuration(), self.controller)
         model.set_state_dictionary(self.surrogate_model.get_state_dictionary())
         return model
-        
+
     def get_cost_model(self): ## returns a copy of the model... quite important not to return the model itself as ll might get F up
         model = DummyCostModel(self.get_configuration(), self.controller, self.fitness)
         model.set_state_dictionary(self.cost_model.get_state_dictionary())
         return model
-        
+    
 class PSOTrial_TimeAware(PSOTrial):
-
+        
     def run_initialize(self):
         logging.info("Initialize PSOTrial_TimeAware no:" + str(self.get_trial_no()))
         self.cost_model = ProperCostModel(self.configuration, self.controller, self.fitness)
@@ -1017,21 +1033,21 @@ class PSOTrial_TimeAware(PSOTrial):
                               designSpace=design_space)
         self.toolbox.register('evaluate', self.fitness_function)
         self.new_best=False
-
+        
     def predict_cost(self, particle):
         try:
             return self.cost_model.predict(particle)
         except Exception,e:
             logging.debug("Cost model is still not avaiable: " + str(e))
             return 1.0 ## model has not been created yet
-
+        
     def predict_cost_raw(self, particle):
         try:
             return self.cost_model.predict_raw(particle)
         except Exception,e:
             logging.debug("Cost model is still not avaiable: " + str(e))
             return 1.0 ## model has not been created yet
-            
+        
     def updateParticle(self,  part, generation, conf, designSpace):
         if conf.admode == 'fitness':
             fraction = self.fitness_counter / conf.max_fitness
@@ -1139,7 +1155,7 @@ class PSOTrial_TimeAware(PSOTrial):
         min_stdv = self.get_configuration().min_stdv
         max_stdv = self.get_configuration().max_stdv
         return min_stdv + (ratio * max_stdv)
-        
+    
     ### TODO - its just copy and pasted ciode now..w could rewrite it realyl
     def post_model_filter(self, code, mean, variance):
         eval_counter = 1
@@ -1160,10 +1176,10 @@ class PSOTrial_TimeAware(PSOTrial):
                     eval_counter = eval_counter + 1
                 else:
                     try:
-                        if c == 0:
-                            p.fitness.values = m
-                        else:
-                            p.fitness.values = [self.fitness.worst_value]
+                    if c == 0:
+                        p.fitness.values = m
+                    else:
+                        p.fitness.values = [self.fitness.worst_value]
                     except:
                         p.fitness.values, p.code, cost = self.toolbox.evaluate(p)
                         logging.info("KURWA Start")
@@ -1171,7 +1187,7 @@ class PSOTrial_TimeAware(PSOTrial):
             ## at least one particle has to have std smaller then max_stdv
             ## if all particles are in invalid zone
         return False
-        
+   
     def a_func(self, part_1, part_2, cost_1, cost_2):
         if self.configuration.a == "a1":
             val = min(abs(cost_1-cost_2)/(0.0000001 + norm(map(operator.sub, part_1, part_2))),1.0) ## second norm.. gradient
@@ -1182,7 +1198,7 @@ class PSOTrial_TimeAware(PSOTrial):
             return min(abs(cost_1)/abs(cost_2), 1.0)
         else:
             return 1.0
-            
+        
     #######################
     ### GET/SET METHODS ###
     #######################
@@ -1191,9 +1207,9 @@ class PSOTrial_TimeAware(PSOTrial):
         model = ProperSurrogateModel(self.get_configuration(), self.controller)
         model.set_state_dictionary(self.surrogate_model.get_state_dictionary())
         return model
-        
+    
     def get_cost_model(self): ## returns a copy of the model... quite important not to return the model itself as ll might get F up
         model = ProperCostModel(self.get_configuration(), self.controller, self.fitness)
         model.set_state_dictionary(self.cost_model.get_state_dictionary())
         return model
-    
+        

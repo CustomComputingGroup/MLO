@@ -6,7 +6,7 @@ import wx, wx.html
 from wx.lib.newevent import NewEvent
 from datetime import datetime
 
-from ..visualizers.plot import MLOImageViewer, MLORunReportViewer
+from ..visualizers.plot import MLOImageViewer, MLORunReportViewer,MLOAllReportViewer
 from utils import get_trial_constructor
 
 UpdateEvent, EVT_UPDATE = NewEvent()
@@ -21,7 +21,7 @@ class RunWindow(wx.Frame):
 
         self.GetEventHandler().Bind(EVT_UPDATE, self.update_run)
         self.plot_view = MLOImageViewer
-        self.run_view = MLORunReportViewer
+        self.run_view = MLOAllReportViewer
         self.controller = controller
 
         ### Set up display
@@ -1096,7 +1096,7 @@ class RunGraphWindow(wx.Frame):
         html = wx.html.HtmlWindow(self)
         if "gtk2" in wx.PlatformInfo:
             html.SetStandardFonts()
-        html.LoadPage(self.results_folder + "/run_raport.html")
+        html.LoadPage(self.results_folder + "/run_report.html")
         self.panel2 = wx.Panel(self,-1, style=wx.SUNKEN_BORDER)
         box = wx.BoxSizer(wx.VERTICAL)
         box.Add(html, 1, wx.EXPAND)

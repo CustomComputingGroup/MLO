@@ -79,9 +79,9 @@ class ParallelisedVisualizer(Visualizer):
     def render_graph(self, function, snapshot, name, child_end):
         logging.info('Visualizing ' + str(name))
         try:
-            function(snapshot)
+        function(snapshot)
             logging.info(str(name) + ' visualized' )
-            child_end.send(True)
+        child_end.send(True)
         except Exception,e:
             logging.info('Exception ' + str(e)) 
             child_end.send(False)
@@ -107,8 +107,8 @@ class SingleThreadVisualizer(Visualizer):
                 run_name, function, snapshot = self.job_backlog.get_nowait()
                 if not (run_name in self.remove_run_name):
                     logging.info('Visualizing ' + str(run_name))
-                self.render_graph(function, snapshot, run_name)
-                self.job_backlog.task_done()
+                    self.render_graph(function, snapshot, run_name)
+                    self.job_backlog.task_done()
 
     def render_graph(self, function, snapshot, name):
         function(snapshot)

@@ -47,7 +47,7 @@ class Regressor(object):
         p = permutation(len(self.training_fitness))
         self.training_fitness=self.training_fitness[p]
         self.training_set=self.training_set[p]
-        
+
     def add_training_instance(self, part, fitness):
         if self.training_set is None:
             self.training_set = array([part])
@@ -59,7 +59,8 @@ class Regressor(object):
             else:
                 self.training_set = append(self.training_set, [part], axis=0)
                 self.training_fitness = append(self.training_fitness, [fitness],
-                                           axis=0)
+                                               axis=0)
+
     def contains_training_instance(self, part):
         contains, index = numpy_array_index(self.training_set, part)
         return contains
@@ -81,7 +82,7 @@ class Regressor(object):
     def get_training_fitness(self):
         return self.training_fitness
     # def __getstate__(self):
-       # Don't pickle controller
+        # Don't pickle controller
         # d = dict(self.__dict__)
         # del d['controller']
         # return d
@@ -108,26 +109,26 @@ class GaussianProcessRegressor(Regressor):
         self.input_scaler = None
         self.output_scaler = None
         self.conf = conf
-        
+
         self.gp = None
-        
+
     def regressor_countructor(self):
         conf = self.conf
         dimensions = len(self.training_set[0])
-        if conf.nugget == 0:
+            if conf.nugget == 0:
             gp = GaussianProcess(regr=conf.regr, corr=conf.corr2,
-                                 theta0=array([conf.theta0] * dimensions),
-                                 thetaL=array([conf.thetaL] * dimensions),
-                                 thetaU=array([conf.thetaU] * dimensions),
-                                 random_start=conf.random_start)
-        else:
+                                     theta0=array([conf.theta0] * dimensions),
+                                     thetaL=array([conf.thetaL] * dimensions),
+                                     thetaU=array([conf.thetaU] * dimensions),
+                                     random_start=conf.random_start)
+            else:
             gp = GaussianProcess(regr=conf.regr, corr=conf.corr2,
-                                 theta0=array([conf.theta0] * dimensions),
-                                 thetaL=array([conf.thetaL] * dimensions),
-                                 thetaU=array([conf.thetaU] * dimensions),
-                                 random_start=conf.random_start, nugget=conf.nugget)
+                                     theta0=array([conf.theta0] * dimensions),
+                                     thetaL=array([conf.thetaL] * dimensions),
+                                     thetaU=array([conf.thetaU] * dimensions),
+                                     random_start=conf.random_start, nugget=conf.nugget)
         return gp
-        
+
     def train(self):
         conf = self.conf
         if len(self.training_set) == 0:
@@ -158,10 +159,10 @@ class GaussianProcessRegressor(Regressor):
             if self.regr is None:
                 raise Exception("Something went wrong with the regressor")
             else:
-                logging.info('Regressor training successful')
-                self.controller.release_training_sema()
+            logging.info('Regressor training successful')
+            self.controller.release_training_sema()
                 self.gp = gp
-                return True
+            return True
         except Exception, e:
             logging.info('Regressor training failed.. retraining.. ' + str(e))
             return False
@@ -190,7 +191,7 @@ class GaussianProcessRegressor(Regressor):
     def fit_data(self, gp, scaled_training_set, adjusted_training_fitness,
                  child_end):
         try:
-            gp.fit(scaled_training_set, adjusted_training_fitness)
+        gp.fit(scaled_training_set, adjusted_training_fitness)
         except:
             gp = None
         child_end.send(gp)    
@@ -202,7 +203,7 @@ class GaussianProcessRegressor(Regressor):
             theta_ = None
             
         dict = {'training_set' : self.training_set,
-                    'training_fitness': self.training_fitness,
+                'training_fitness': self.training_fitness,
                     'gp_theta': theta_}
         return dict
         
@@ -230,11 +231,11 @@ class GaussianProcessRegressor2(Regressor):
             
     def train(self):
         try:
-            MU_best = None
-            gp_best = None
-            S2_best = None
-            nml_best = None
-            self.gp = None
+            MU_best=None
+            gp_best=None
+            S2_best=None
+            nml_best=None
+            self.gp=None
             conf = self.conf
             dimensions = len(self.training_set[0])
              # Scale inputs and particles?
@@ -247,31 +248,32 @@ class GaussianProcessRegressor2(Regressor):
                 self.training_fitness)
             self.adjusted_training_fitness = self.output_scaler.transform(
                 self.training_fitness)
-            ## retrain a number of times and pick best likelihood
-            for i in xrange(conf.random_start):
-                if conf.corr == "isotropic":
-                    self.covfunc = ['kernels.covSum', ['kernels.covSEiso','kernels.covNoise']]
-                    gp = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions)]
-                elif conf.corr == "anisotropic":
-                    self.covfunc = ['kernels.covSum', ['kernels.covSEard','kernels.covNoise']]
-                    gp = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions+1)]
-                else:
-                    logging.error("The specified kernel function is not supported for GPR")
-                    return False
-                    
+            try:
+                ## retrain a number of times and pick best likelihood
+                for i in xrange(conf.random_start):
+                    if conf.corr == "isotropic":
+                        self.covfunc = ['kernels.covSum', ['kernels.covSEiso','kernels.covNoise']]
+                        gp = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions)]
+                    elif conf.corr == "anisotropic":
+                        self.covfunc = ['kernels.covSum', ['kernels.covSEard','kernels.covNoise']]
+                        gp = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions+1)]
+                    else:
+                        logging.error("The specified kernel function is not supported for GPR")
+                        return False
+                        
                 gp.append(log(uniform(low=0.001, high=0.1)))
-                try:
-                    gp = array(gp)
-                    gp, nml = gpr.gp_train(gp, self.covfunc, self.scaled_training_set, self.adjusted_training_fitness)
+                    try:
+                        gp = array(gp)
+                        gp, nml = gpr.gp_train(gp, self.covfunc, self.scaled_training_set, self.adjusted_training_fitness)
                     if gp[-1] < -2.0 :
                         if (((not nml_best) or (nml < nml_best))):
                             gp_best = gp
                             nml_best = nml
-                except Exception, e:
+                    except Exception,e:
                     logging.debug("Exception in gp_tren " + str(e))
-                    pass
-            ## the gp with highest likelihood becomes the new hyperparameter set
-            self.set_gp(gp_best)
+                        pass
+                ## the gp with highest likelihood becomes the new hyperparameter set
+                self.set_gp(gp_best)
             if gp_best is None:
                 raise Exception("Didnt manage to optimie hyperparameters")
             logging.info('Regressor training successful')
@@ -328,7 +330,7 @@ class GaussianProcessRegressor2(Regressor):
         
 ## Different implementation of GPR regression, based on pyGPR
 class GaussianProcessRegressor3(Regressor):
-
+        
     def __init__(self, controller, conf):
         super(GaussianProcessRegressor3, self).__init__(controller, conf)
         self.input_scaler = None
@@ -341,7 +343,7 @@ class GaussianProcessRegressor3(Regressor):
         self.inffunc  = ['inf.infExact']
         self.likfunc  = ['lik.likGauss']
         self.covfunc = None
-            
+    
     def train(self):
         ## not sure how importatn this crap is..
         ## SET (hyper)parameters
@@ -411,7 +413,7 @@ class GaussianProcessRegressor3(Regressor):
         if self.hyp is None:
             logging.error('Train GP before using it!!')
             return None, None
-        #try:
+    # try:
         # Scale inputs. it allows us to realod the regressor not retraining the model
         self.input_scaler = preprocessing.StandardScaler().fit(self.training_set)
         self.output_scaler = preprocessing.StandardScaler(with_std=False).fit(
@@ -447,7 +449,7 @@ class GaussianProcessRegressor3(Regressor):
                 'covfunc': self.covfunc,
                 'hyp': self.hyp}
         return deepcopy(dict)
-        
+    
     def set_state_dictionary(self, dict):
         self.training_set = dict['training_set']
         self.training_fitness = dict['training_fitness']

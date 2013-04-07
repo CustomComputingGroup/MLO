@@ -1,3 +1,6 @@
+import wx
+
+from views.gui.windows import RunWindow, UpdateEvent, UpdateEvent2
 from visualizers.plot import MLOImageViewer, MLORunReportViewer
 
 import logging
@@ -45,11 +48,11 @@ class TerminalView(View):
     def update(self, trial=None, run=None, visualize=None):
         if visualize:
             if not (trial is None): 
-                if trial.get_main_counter() % trial.get_configuration().vis_every_X_steps == 0: ## TODO - its not ideal... rethink it... 
-                    snapshot = trial.snapshot()
-                    graphdict = self.controller.get_trial_visualization_dict(trial.get_trial_type())
-                    snapshot.update(graphdict)
-                    self.controller.visualize(snapshot, self.plot_view.render)
+            if trial.get_main_counter() % trial.get_configuration().vis_every_X_steps == 0: ## TODO - its not ideal... rethink it... 
+                snapshot = trial.snapshot()
+                graphdict = self.controller.get_trial_visualization_dict(trial.get_trial_type())
+                snapshot.update(graphdict)
+                self.controller.visualize(snapshot, self.plot_view.render)
             if not (run is None): 
                 logging.info("Generating Report")
                 snapshot = run.snapshot()

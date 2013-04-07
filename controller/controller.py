@@ -215,7 +215,7 @@ class Controller(object):
     def save_profile_dict(self):
         try:
             logging.info("Updated controller profile dictionary")
-            logging.info(str(self.profile_dict))
+            #logging.info(str(self.profile_dict))
             with io.open(self.profile_dict["dir"], 'wb') as outfile:
                 pickle.dump(self.profile_dict, outfile)            
         except Exception, e:
@@ -270,3 +270,4 @@ class Controller(object):
                                   "run_paths": {}
                                 }
             self.save_profile_dict()
+
