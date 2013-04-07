@@ -530,7 +530,7 @@ class PSOTrial(Trial):
         ## we do this not to retrain model twice during the first iteration. If we ommit
         ## this bit of code the first view_update wont have a model aviable.
         reevalute = False
-        if self.state_dictionary["fresh_run"]: ## we need this as we only want to do it for initial generation
+        if self.state_dictionary["fresh_run"]: ## we need this as we only want to do it for initial generation because the view
             ## the problem is that we cannot
             self.train_surrogate_model(self.get_population())
             self.train_cost_model(self.get_population())
@@ -545,6 +545,7 @@ class PSOTrial(Trial):
 
             # termination condition - we put it here so that when the trial is reloaded
             # it wont run if the run has terminated already
+		# see this
             if self.get_terminating_condition(): 
                 logging.info('Terminating condition reached...')
                 break
@@ -589,7 +590,7 @@ class PSOTrial(Trial):
                 self.filter_population()
                 
                 #Check if perturbation is neccesary 
-                if self.get_counter_dictionary('g') % self.get_configuration().M == 0:
+                if self.get_counter_dictionary('g') % self.get_configuration().M == 0:# perturb
                     self.evaluate_best()
                 self.new_best = False
             # Wait until the user unpauses the trial.
@@ -679,6 +680,8 @@ class PSOTrial(Trial):
         particle = self.create_particle(particle)
         return particle
 
+	# update the position of the particles
+	# should change this part in order to change the leader election strategy
     def updateParticle(self,  part, generation, conf, designSpace):
         if conf.admode == 'fitness':
             fraction = self.fitness_counter / conf.max_fitness
@@ -689,6 +692,8 @@ class PSOTrial(Trial):
 
         u1 = [uniform(0, conf.phi1) for _ in range(len(part))]
         u2 = [uniform(0, conf.phi2) for _ in range(len(part))]
+        
+        ##########   this part particulately, leader election for every particle
         v_u1 = map(operator.mul, u1, map(operator.sub, part.best, part))
         v_u2 = map(operator.mul, u2, map(operator.sub, self.get_best(), part))
         weight = 1.0
@@ -704,6 +709,7 @@ class PSOTrial(Trial):
                          map(operator.mul, part.speed, weightVector),
                          map(operator.add, v_u1, v_u2))
 
+	# what's this mean?
         if conf.applyK is True:
             phi = array(u1) + array(u1)
 
@@ -711,6 +717,7 @@ class PSOTrial(Trial):
                                             sqrt(pow(phi, 2.0) - 4.0 * phi))
             part.speed = map(operator.mul, part.speed, XVector)
 
+	# what's the difference between these modes?
         if conf.mode == 'vp':
             for i, speed in enumerate(part.speed):
                 speedCoeff = (conf.K - pow(fraction, conf.p)) * part.smax[i]
@@ -764,6 +771,7 @@ class PSOTrial(Trial):
             
         self.state_dictionary["fresh_run"] = True
         
+        #what's this function do?
     def meta_iterate(self):
         #TODO - reavluate one random particle... do it.. very important!
         ##while(self.get_at_least_one_in_valid_region()):
