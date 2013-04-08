@@ -122,3 +122,17 @@ def checkParameters(func,hyp,D):
         val = valt
     res = (val == len(hyp))
     return res
+    
+def numberOfHyper(func,hyp,D):
+    valt = flatten(Tools.general.feval(func))
+    val = 0
+    if isinstance(valt,list):
+        for v in valt:
+            if isinstance(v,str):
+                val += eval(v)
+            else:
+                val += v
+    else:
+        val = valt
+    return val, len(hyp)
+

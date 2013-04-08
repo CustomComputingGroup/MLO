@@ -235,7 +235,6 @@ class Trial(Thread):
             generation_file = str(generation)
             trial_file = str(self.get_results_folder()) + '/' + str(generation_file) + '.txt'
             
-            
             with open(trial_file, 'rb') as outfile:
                 dict = pickle.load(outfile)
             self.set_state_dictionary(dict)
@@ -637,6 +636,18 @@ class PSOTrial(Trial):
     ## Helper Methods ##
     ####################
     
+    def checkCollapse(self): 
+        ## this method checks if the particls
+        ## a) collapsed onto a single point
+        ## b) collapsed onto the edge of the search space
+        ## if so it reintializes them.
+        minimum_diverity = 0.95 ##if over 95 collapsed reseed
+        
+        
+        if collapsed:
+            self.set_population(self.toolbox.population(self.get_configuration().population_size))
+            self.toolbox.filter_particles(self.get_population())
+    
     def create_particle(self, particle):
         return eval('creator.Particle' + self.my_run.get_name())(particle)
         
@@ -805,7 +816,7 @@ class PSOTrial(Trial):
             for i,val in enumerate(perturbation):
                 perturbed_particle[i] = perturbed_particle[i] + val       
             self.toolbox.filter_particle(perturbed_particle)
-                fitness, code, cost = self.fitness_function(perturbed_particle) 
+            fitness, code, cost = self.fitness_function(perturbed_particle) 
             ##check if the value is not a new best
             perturbed_particle.fitness.values = fitness
             if not self.get_best() or self.fitness.is_better(perturbed_particle.fitness, self.get_best().fitness):
@@ -918,10 +929,10 @@ class PSOTrial(Trial):
                     eval_counter = eval_counter + 1
                 else:
                     try:
-                    if c == 0:
-                        p.fitness.values = m
-                    else:
-                        p.fitness.values = [self.fitness.worst_value]
+                        if c == 0:
+                            p.fitness.values = m
+                        else:
+                            p.fitness.values = [self.fitness.worst_value]
                     except:
                         p.fitness.values, p.code, cost = self.toolbox.evaluate(p)
                         logging.info("KURWA Start")
@@ -940,15 +951,15 @@ class PSOTrial(Trial):
             if (code is None) or (bests_to_fitness is None) or (variance is None):
                 logging.info("Prediction failed during reevaluation... omitting")
             else:
-            for i,part in enumerate([p for p in self.get_population() if p.best]):
+                for i,part in enumerate([p for p in self.get_population() if p.best]):
                     if code[i] == 0:
-                part.best.fitness.values = bests_to_fitness[i]
+                        part.best.fitness.values = bests_to_fitness[i]
                     else:
                         part.best.fitness.values = [self.fitness.worst_value]
                 if self.get_best():
                     best = self.get_best()
                     if code[-1] == 0:
-                best.fitness.values = bests_to_fitness[-1]
+                        best.fitness.values = bests_to_fitness[-1]
                     else:
                         best.fitness.values = [self.fitness.worst_value]
                     self.set_best(best)
@@ -1176,10 +1187,10 @@ class PSOTrial_TimeAware(PSOTrial):
                     eval_counter = eval_counter + 1
                 else:
                     try:
-                    if c == 0:
-                        p.fitness.values = m
-                    else:
-                        p.fitness.values = [self.fitness.worst_value]
+                        if c == 0:
+                            p.fitness.values = m
+                        else:
+                            p.fitness.values = [self.fitness.worst_value]                       
                     except:
                         p.fitness.values, p.code, cost = self.toolbox.evaluate(p)
                         logging.info("KURWA Start")

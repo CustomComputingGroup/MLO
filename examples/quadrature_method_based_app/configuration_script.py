@@ -9,8 +9,8 @@ eval_correct = False
 max_eval = 1
 ### Basic setup
 
-trials_count = 5
-population_size = 20
+trials_count = 10
+population_size = 30
 
 max_fitness = 150.0
 max_iter = 5000
@@ -18,8 +18,8 @@ max_speed = 0.1
 max_stdv = 0.05
 min_stdv = 0.01
 
-surrogate_type = 'local'  # Can be proper or dummy
-F = 5  # The size of the initial training set
+surrogate_type = 'proper'  # Can be proper or dummy
+F = 15  # The size of the initial training set
 M = 10  # How often to perturb the population, used in discrete problems
 
 
@@ -58,7 +58,7 @@ classifier = 'SupportVectorMachine'
 ### GPR Regression settings
 regr = 'linear'
 corr2 = 'squared_exponential'
-corr = 'matern'
+corr = 'anisotropic'
 theta0 = 0.01
 thetaL = 0.00001
 thetaU = 3.0

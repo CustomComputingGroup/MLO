@@ -1,7 +1,7 @@
 import numpy as np
 import Tools.general
 from UTIL import solve_chol
-from UTIL.utils import checkParameters, unique
+from UTIL.utils import checkParameters, unique, numberOfHyper
 
 def gp(hyp, inffunc, meanfunc, covfunc, likfunc, x, y, xs=None, ys=None, der=None):
     # Gaussian Process inference and prediction. The gp function provides a
@@ -66,11 +66,14 @@ def gp(hyp, inffunc, meanfunc, covfunc, likfunc, x, y, xs=None, ys=None, der=Non
     D = np.shape(x)[1]
 
     if not checkParameters(meanfunc,hyp.mean,D):
-        raise Exception('Number of mean function hyperparameters disagree with mean function')
+        should,andis = numberOfHyper(meanfunc,hyp.mean,D)
+        raise Exception('Number of mean function hyperparameters disagree with mean function' + str(should) + " and " + str(andis))
     if not checkParameters(covfunc,hyp.cov,D):
-        raise Exception('Number of cov function hyperparameters disagree with cov function')
+        should,andis = numberOfHyper(covfunc,hyp.cov,D)
+        raise Exception('Number of cov function hyperparameters disagree with cov function: ' + str(should) + " and " + str(andis))
     if not checkParameters(likfunc,hyp.lik,D):
-        raise Exception('Number of lik function hyperparameters disagree with lik function')
+        should,andis = numberOfHyper(likfunc,hyp.lik,D)
+        raise Exception('Number of lik function hyperparameters disagree with lik function' + str(should) + " and " + str(andis))
 
     try:                                         # call the inference method
         # issue a warning if a classification likelihood is used in conjunction with

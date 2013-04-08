@@ -11,7 +11,7 @@ run_example3:
 	./run_mlo.sh -f examples/reconfigurable_radio/fitness_script.py -c examples/reconfigurable_radio/configuration_script.py
 
 run_example4:
-	nohup ./run_mlo.sh -f examples/xinyu_rtm/fitness_script.py -c examples/xinyu_rtm/configuration_script.py
+	./run_mlo.sh -f examples/xinyu_rtm/fitness_script.py -c examples/xinyu_rtm/configuration_script.py
 
 run_exp:
 	nohup ./run_mlo.sh -f examples/quadrature_method_based_app/fitness_script.py -c examples/quadrature_method_based_app/a1.py > /homes/mk306/public_html/a1.txt&

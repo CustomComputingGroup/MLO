@@ -73,7 +73,7 @@ class Classifier(object):
 class SupportVectorMachineClassifier(Classifier):
 
     def train(self):
-       # try:
+        try:
             inputScaler = preprocessing.StandardScaler().fit(self.training_set)
             scaledSvcTrainingSet = inputScaler.transform(self.training_set)
 
@@ -81,15 +81,17 @@ class SupportVectorMachineClassifier(Classifier):
                 logging.info('Only one class encountered, we do not need to use a classifier')
                 #self.clf = svm.OneClassSVM()
                 #self.clf.fit(scaledSvcTrainingSet)
+                logging.info(str(self.training_labels))
                 self.oneclass = True
             else:
+                self.oneclass = False
                 param_grid = {
                     'gamma': 10.0 ** arange(-5, 4),
                     'C':     10.0 ** arange(-2, 9)}
                 try:
                     try:
                         self.type = 2
-                self.clf = GridSearchCV(svm.SVC(), param_grid=param_grid,
+                        self.clf = GridSearchCV(svm.SVC(), param_grid=param_grid,
                                         cv=StratifiedKFold(
                                             y=self.training_labels.reshape(-1),
                                         n_folds=2))
@@ -104,14 +106,14 @@ class SupportVectorMachineClassifier(Classifier):
                         self.clf.fit(scaledSvcTrainingSet, self.training_labels.reshape(-1))
                 except:## in case for example when we have single element of a single class, cant construct two folds
                     self.type = 0
-                    logging.debug('One of the classes has only one eleent, cant use cross validation')
+                    logging.debug('One of the classes has only one element, cant use cross validation')
                     self.clf = svm.SVC(kernel='rbf', gamma=10)
                     self.clf.fit(scaledSvcTrainingSet, self.training_labels.reshape(-1))
                 logging.info('Classifier training successful')
             return True
-        #except Exception, e:
-        #    logging.error('Classifier training failed.. {}'.format(e))
-        #    return False
+        except Exception, e:
+            logging.error('Classifier training failed.. {}'.format(e))
+            return False
 
     def predict(self, z):
         try:

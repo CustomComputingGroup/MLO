@@ -58,8 +58,7 @@ class Regressor(object):
                 logging.debug('A particle duplicate is being added.. check your code!!')
             else:
                 self.training_set = append(self.training_set, [part], axis=0)
-                self.training_fitness = append(self.training_fitness, [fitness],
-                                               axis=0)
+                self.training_fitness = append(self.training_fitness, [fitness], axis=0)
 
     def contains_training_instance(self, part):
         contains, index = numpy_array_index(self.training_set, part)
@@ -115,18 +114,18 @@ class GaussianProcessRegressor(Regressor):
     def regressor_countructor(self):
         conf = self.conf
         dimensions = len(self.training_set[0])
-            if conf.nugget == 0:
+        if conf.nugget == 0:
             gp = GaussianProcess(regr=conf.regr, corr=conf.corr2,
-                                     theta0=array([conf.theta0] * dimensions),
-                                     thetaL=array([conf.thetaL] * dimensions),
-                                     thetaU=array([conf.thetaU] * dimensions),
-                                     random_start=conf.random_start)
-            else:
+                                 theta0=array([conf.theta0] * dimensions),
+                                 thetaL=array([conf.thetaL] * dimensions),
+                                 thetaU=array([conf.thetaU] * dimensions),
+                                 random_start=conf.random_start)
+        else:
             gp = GaussianProcess(regr=conf.regr, corr=conf.corr2,
-                                     theta0=array([conf.theta0] * dimensions),
-                                     thetaL=array([conf.thetaL] * dimensions),
-                                     thetaU=array([conf.thetaU] * dimensions),
-                                     random_start=conf.random_start, nugget=conf.nugget)
+                                 theta0=array([conf.theta0] * dimensions),
+                                 thetaL=array([conf.thetaL] * dimensions),
+                                 thetaU=array([conf.thetaU] * dimensions),
+                                 random_start=conf.random_start, nugget=conf.nugget)
         return gp
 
     def train(self):
@@ -159,10 +158,10 @@ class GaussianProcessRegressor(Regressor):
             if self.regr is None:
                 raise Exception("Something went wrong with the regressor")
             else:
-            logging.info('Regressor training successful')
-            self.controller.release_training_sema()
+                logging.info('Regressor training successful')
+                self.controller.release_training_sema()
                 self.gp = gp
-            return True
+                return True
         except Exception, e:
             logging.info('Regressor training failed.. retraining.. ' + str(e))
             return False
@@ -191,7 +190,7 @@ class GaussianProcessRegressor(Regressor):
     def fit_data(self, gp, scaled_training_set, adjusted_training_fitness,
                  child_end):
         try:
-        gp.fit(scaled_training_set, adjusted_training_fitness)
+            gp.fit(scaled_training_set, adjusted_training_fitness)
         except:
             gp = None
         child_end.send(gp)    
@@ -204,7 +203,7 @@ class GaussianProcessRegressor(Regressor):
             
         dict = {'training_set' : self.training_set,
                 'training_fitness': self.training_fitness,
-                    'gp_theta': theta_}
+                'gp_theta': theta_}
         return dict
         
     def set_state_dictionary(self, dict):
@@ -248,32 +247,31 @@ class GaussianProcessRegressor2(Regressor):
                 self.training_fitness)
             self.adjusted_training_fitness = self.output_scaler.transform(
                 self.training_fitness)
-            try:
-                ## retrain a number of times and pick best likelihood
-                for i in xrange(conf.random_start):
-                    if conf.corr == "isotropic":
-                        self.covfunc = ['kernels.covSum', ['kernels.covSEiso','kernels.covNoise']]
-                        gp = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions)]
-                    elif conf.corr == "anisotropic":
-                        self.covfunc = ['kernels.covSum', ['kernels.covSEard','kernels.covNoise']]
-                        gp = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions+1)]
-                    else:
-                        logging.error("The specified kernel function is not supported for GPR")
-                        return False
-                        
+            ## retrain a number of times and pick best likelihood
+            for i in xrange(conf.random_start):
+                if conf.corr == "isotropic":
+                    self.covfunc = ['kernels.covSum', ['kernels.covSEiso','kernels.covNoise']]
+                    gp = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions)]
+                elif conf.corr == "anisotropic":
+                    self.covfunc = ['kernels.covSum', ['kernels.covSEard','kernels.covNoise']]
+                    gp = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions+1)]
+                else:
+                    logging.error("The specified kernel function is not supported for GPR")
+                    return False
+                    
                 gp.append(log(uniform(low=0.001, high=0.1)))
-                    try:
-                        gp = array(gp)
-                        gp, nml = gpr.gp_train(gp, self.covfunc, self.scaled_training_set, self.adjusted_training_fitness)
+                try:
+                    gp = array(gp)
+                    gp, nml = gpr.gp_train(gp, self.covfunc, self.scaled_training_set, self.adjusted_training_fitness)
                     if gp[-1] < -2.0 :
                         if (((not nml_best) or (nml < nml_best))):
                             gp_best = gp
                             nml_best = nml
-                    except Exception,e:
+                except Exception,e:
                     logging.debug("Exception in gp_tren " + str(e))
-                        pass
-                ## the gp with highest likelihood becomes the new hyperparameter set
-                self.set_gp(gp_best)
+                    pass
+            ## the gp with highest likelihood becomes the new hyperparameter set
+            self.set_gp(gp_best)
             if gp_best is None:
                 raise Exception("Didnt manage to optimie hyperparameters")
             logging.info('Regressor training successful')
@@ -381,7 +379,7 @@ class GaussianProcessRegressor3(Regressor):
                 hyp.cov.append(log(uniform(low=conf.thetaL, high=conf.thetaU)))
             elif conf.corr == "matern":
                 self.covfunc = [['kernels.covSum'], [['kernels.covMatern'],['kernels.covNoise']]]
-                hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions)]
+                hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(2)]
                 hyp.cov.append(log(3))
             else:
                 logging.error("The specified kernel function is not supported")
@@ -399,7 +397,7 @@ class GaussianProcessRegressor3(Regressor):
                     self.hyp = hyp
                     nlml_best = nlml
             except Exception, e:
-                logging.debug("Regressor training Failed")
+                logging.debug("Regressor training Failed " + str(e))
             
                 
         if (not nlml_best):        
@@ -424,14 +422,7 @@ class GaussianProcessRegressor3(Regressor):
             self.training_set)
             
         ## do predictions
-        try:
-            vargout = gp(self.hyp, self.inffunc,self.meanfunc,self.covfunc,self.likfunc,self.scaled_training_set ,self.adjusted_training_fitness, self.input_scaler.transform(array(z)))      
-        except ValueError, e:
-            logging.info(str(self.scaled_training_set))
-            logging.info(str(self.adjusted_training_fitness))
-            logging.info(str(z))
-            logging.info(str(self.input_scaler.transform(array(z))))
-            raise Exception("kurwa")
+        vargout = gp(self.hyp, self.inffunc,self.meanfunc,self.covfunc,self.likfunc,self.scaled_training_set ,self.adjusted_training_fitness, self.input_scaler.transform(array(z)))      
         MU = self.output_scaler.inverse_transform(vargout[2])
         S2 = vargout[3]
         ##get rid of negative variance... refer to some papers (there is a lot of it out there)

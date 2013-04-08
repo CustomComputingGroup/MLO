@@ -166,19 +166,16 @@ class Run(object):
     def trial_notify(self, trial):
         if trial.get_status() == "Finished":
             try:
-            self.set_running_time((trial.get_running_time() + self.get_running_time()).seconds)
+                self.set_running_time((trial.get_running_time() + self.get_running_time()).seconds)
             except Exception, e:
                 logging.debug("Something went wrong went trying to get trial running time: " + str(e))
                 
             self.state_dictionary["trials_finished"] = self.state_dictionary["trials_finished"] + 1
-            logging.info(str(self.state_dictionary["trials_finished"]))
-            logging.info(str(self.state_dictionary["trials_finished"]/self.get_no_of_trials()))
-            logging.info(str(self.get_no_of_trials()))
             if self.state_dictionary["trials_finished"] == self.get_no_of_trials():
                 self.set_status("Finished")
                 self.view_update(visualize=True)
             self.save()
-        self.view_update(visualize=True)
+            self.view_update(visualize=True)
             if not self.job_backlog.empty(): ## start next trial
                 self.running_trial = self.job_backlog.get_nowait()
                 self.running_trial.start()

@@ -155,7 +155,6 @@ class ProperSurrogateModel(SurrogateModel):
         if len(designSpace)==2:
             # make up data.
             if hypercube:
-                logging.info("[returnMaxS2]: using hypercube ",hypercube)
                 x = linspace(hypercube[1][0],hypercube[0][0],npts)
                 y = linspace(hypercube[1][1],hypercube[0][1],npts) 
             else:
@@ -169,10 +168,6 @@ class ProperSurrogateModel(SurrogateModel):
             D = len(designSpace)
             n_bins =  npts*ones(D)
             if hypercube:
-                #logging.info("hypercube" + str(hypercube))
-                logging.info(str(hypercube))
-                logging.info(str(hypercube[0]))
-                logging.info(str(hypercube[1]))
                 result = mgrid[[slice(h_min, h_max, npts*1.0j) for h_max, h_min , n in zip(hypercube[0],hypercube[1], n_bins)]]
                 z = result.reshape(D,-1).T
             else:
@@ -236,9 +231,8 @@ class LocalSurrogateModel(ProperSurrogateModel):
                     self.local_regressor.add_training_instance(part, regressor_training_fitness[k])
         ## add most recent
         valid_examples = max(self.max_r,len(regressor_training_set))
-        for k,part in enumerate(regressor_training_set[-conf.max_r:]):
-            if not any([array_equal(part,pp) for pp in limitedGpTrainingSet]):
-                self.local_regressor.add_training_instance(part, regressor_training_fitness[k-valid_examples])
+        for k,part in enumerate(regressor_training_set[-self.max_r:]):
+            self.local_regressor.add_training_instance(part, regressor_training_fitness[k-valid_examples])
         return self.local_regressor.train()
         
     def train(self, hypercube):

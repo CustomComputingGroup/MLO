@@ -18,7 +18,7 @@ def numpy_array_index(multi_array, array):
     #TODO - check if multi_array is non empty and if they match size.. throw appropariate warnings
     if not multi_array is None:
         try:
-        for i,trainp in enumerate(multi_array):
+            for i,trainp in enumerate(multi_array):
                 if array_equal(trainp,array):
                     return True, i
         except:
