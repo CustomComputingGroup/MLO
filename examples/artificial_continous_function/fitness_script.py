@@ -39,7 +39,7 @@ def termCond(best):
 
 # Name of the benchmark
 def name():
-    return 'sphere'
+    return 'rosenbrock'
 
 # Example definition of the design space
 designSpace = []
