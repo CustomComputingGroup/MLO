@@ -655,7 +655,7 @@ class MLORunReportViewer(object):
 
 ##This class returns a string 
 ##It should return either a string, a file reference or 
-class MLOAllReportViewer(object):
+class regressionMLORunViewer(object):
 
     @staticmethod
     def render(dictionary):
@@ -683,14 +683,9 @@ class MLOAllReportViewer(object):
         header.append('Error Code')
         htmlcode1 = HTML.Table(header_row=header)
         data = []
-        bestfit= 1
         failurecount=0
         failure_trial=[]
-        for trial_snapshot in trial_snapshots:
-        	tem=trial_snapshot['best_fitness_array']
-        	for i in range(len(tem)):
-        		if abs(tem[i])<bestfit:
-        			bestfit=abs(tem[i])
+	#goldenResultsFile = 
 
         for trial_snapshot in trial_snapshots:
             ## Display trial timers
