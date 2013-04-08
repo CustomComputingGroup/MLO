@@ -8,7 +8,6 @@ from datetime import datetime
 
 from ..visualizers.plot import MLOImageViewer, MLORunReportViewer,MLORegressionReportViewer
 from utils import get_trial_constructor
-regressionMLORunViewer
 UpdateEvent, EVT_UPDATE = NewEvent()
 UpdateEvent2, EVT_UPDATE2 = NewEvent()
 
