@@ -45,9 +45,9 @@ def get_trial_type_visualizer(trial_name):
             "Blank" : {"Blank" : None, "default" : None}}[trial_name]
 
 def get_run_type_visualizer(trial_name):
-    from views.visualizers.plot import MLORunReportViewer,regressionMLORunViewer
-    return {"PSOTrial" : {"MLOReportViewer" : MLORunReportViewer,"regressions": regressionMLORunViewer, "default" : MLORunReportViewer}, 
-            "PSOTrial_TimeAware" : {"MLOReportViewer" : MLORunReportViewer,"regressions": regressionMLORunViewer, "default" : MLORunReportViewer}, 
+    from views.visualizers.plot import MLORunReportViewer,MLORegressionReportViewer
+    return {"PSOTrial" : {"MLOReportViewer" : MLORunReportViewer,"regressions": MLORegressionReportViewer, "default" : MLORunReportViewer}, 
+            "PSOTrial_TimeAware" : {"MLOReportViewer" : MLORunReportViewer,"regressions": MLORegressionReportViewer, "default" : MLORunReportViewer}, 
             "Blank" : {"Blank" : None, "default" : None}}[trial_name] 
             
 

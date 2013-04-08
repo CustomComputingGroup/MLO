@@ -655,7 +655,7 @@ class MLORunReportViewer(object):
 
 ##This class returns a string 
 ##It should return either a string, a file reference or 
-class regressionMLORunViewer(object):
+class MLORegressionReportViewer(object):
 
     @staticmethod
     def render(dictionary):

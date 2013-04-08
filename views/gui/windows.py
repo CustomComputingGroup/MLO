@@ -6,7 +6,7 @@ import wx, wx.html
 from wx.lib.newevent import NewEvent
 from datetime import datetime
 
-from ..visualizers.plot import MLOImageViewer, MLORunReportViewer,regressionMLORunViewer
+from ..visualizers.plot import MLOImageViewer, MLORunReportViewer,MLORegressionReportViewer
 from utils import get_trial_constructor
 regressionMLORunViewer
 UpdateEvent, EVT_UPDATE = NewEvent()
