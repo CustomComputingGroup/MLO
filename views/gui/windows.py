@@ -6,9 +6,9 @@ import wx, wx.html
 from wx.lib.newevent import NewEvent
 from datetime import datetime
 
-from ..visualizers.plot import MLOImageViewer, MLORunReportViewer,MLOAllReportViewer
+from ..visualizers.plot import MLOImageViewer, MLORunReportViewer,regressionMLORunViewer
 from utils import get_trial_constructor
-
+regressionMLORunViewer
 UpdateEvent, EVT_UPDATE = NewEvent()
 UpdateEvent2, EVT_UPDATE2 = NewEvent()
 
@@ -21,7 +21,7 @@ class RunWindow(wx.Frame):
 
         self.GetEventHandler().Bind(EVT_UPDATE, self.update_run)
         self.plot_view = MLOImageViewer
-        self.run_view = MLOAllReportViewer
+        self.run_view = MLORunReportViewer
         self.controller = controller
 
         ### Set up display
