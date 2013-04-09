@@ -56,7 +56,7 @@ cost_maxVal = 15000.0
 cost_minVal = 0.0
     
 doMw = True
-doCores = False
+doCores = True
 doDf = True
 rotate = True
 designSpace = []

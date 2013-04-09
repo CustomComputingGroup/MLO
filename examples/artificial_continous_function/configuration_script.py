@@ -58,7 +58,7 @@ classifier = 'SupportVectorMachine'
 ### GPR Regression settings
 regr = 'quadratic'
 corr2 = 'squared_exponential'
-corr = 'matern'
+corr = 'anisotropic'
 theta0 = 0.01
 thetaL = 0.00001
 thetaU = 3.0

@@ -81,7 +81,6 @@ class SupportVectorMachineClassifier(Classifier):
                 logging.info('Only one class encountered, we do not need to use a classifier')
                 #self.clf = svm.OneClassSVM()
                 #self.clf.fit(scaledSvcTrainingSet)
-                logging.info(str(self.training_labels))
                 self.oneclass = True
             else:
                 self.oneclass = False

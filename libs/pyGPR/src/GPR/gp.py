@@ -139,7 +139,12 @@ def gp(hyp, inffunc, meanfunc, covfunc, likfunc, x, y, xs=None, ys=None, der=Non
             #
             if Ltril: # L is triangular => use Cholesky parameters (alpha,sW,L)
                 V       = np.linalg.solve(L.T,np.tile(sW,(1,len(id)))*Ks)
-                fs2[id] = kss - np.array([(V*V).sum(axis=0)]).T           # predictive variances
+                
+                try:
+                    fs2[id] = kss - np.array([(V*V).sum(axis=0)]).T           # predictive variances
+                except ValueError,e:
+                    bbbbb = kss - np.array([(V*V).sum(axis=0)]).T
+                    raise Exception(str(e) + ' ' + str((kss - np.array([(V*V).sum(axis=0)]).T).shape))
             else:     # L is not triangular => use alternative parametrization
                 fs2[id] = kss + np.array([(Ks*np.dot(L,Ks)).sum(axis=0)]).T # predictive variances
             #end
@@ -152,7 +157,10 @@ def gp(hyp, inffunc, meanfunc, covfunc, likfunc, x, y, xs=None, ys=None, der=Non
             #end
             lp[id]  = np.reshape( np.reshape(Lp,(np.prod(Lp.shape),N)).sum(axis=1)/N , (len(id),1) )   # log probability; sample averaging
             ymu[id] = np.reshape( np.reshape(Ymu,(np.prod(Ymu.shape),N)).sum(axis=1)/N ,(len(id),1) )  # predictive mean ys|y and ...
-            ys2[id] = np.reshape( np.reshape(Ys2,(np.prod(Ys2.shape),N)).sum(axis=1)/N , (len(id),1) ) # .. variance
+            try:
+                ys2[id] = np.reshape( np.reshape(Ys2,(np.prod(Ys2.shape),N)).sum(axis=1)/N , (len(id),1) ) # .. variance
+            except ValueError,e:
+                raise Exception(str(e) + " " + str((len(id),1)) + " " + str(Ys2.shape) + " " + str((np.prod(Ys2.shape),N)) + " " + str((np.reshape(Ys2,(np.prod(Ys2.shape),N)).sum(axis=1)/N).shape) + " " + str(np.reshape( np.reshape(Ys2,(np.prod(Ys2.shape),N)).sum(axis=1)/N , (len(id),1) )))
             nact = id[-1]          # set counter to index of last processed data point
         #end
        

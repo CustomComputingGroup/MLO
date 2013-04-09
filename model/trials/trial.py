@@ -544,7 +544,7 @@ class PSOTrial(Trial):
 
             # termination condition - we put it here so that when the trial is reloaded
             # it wont run if the run has terminated already
-		# see this
+        # see this
             if self.get_terminating_condition(): 
                 logging.info('Terminating condition reached...')
                 break
@@ -573,6 +573,7 @@ class PSOTrial(Trial):
                 logging.info("max S2  " + str(max(variance)))
                 logging.info("min S2  " + str(min(variance)))
                 logging.info("over 0.05  " + str(min(len([v for v in variance if v > 0.05]))))
+                logging.info("over 0.01  " + str(min(len([v for v in variance if v > 0.01]))))
                 reloop = self.post_model_filter(code, mu, variance)
             ##
             if self.get_model_failed():
@@ -598,7 +599,6 @@ class PSOTrial(Trial):
             
             self.increment_main_counter()
             self.view_update(visualize = True)
-
         self.exit()
         
     ### returns a snapshot of the trial state
@@ -637,7 +637,16 @@ class PSOTrial(Trial):
     ## Helper Methods ##
     ####################
     
-    def checkCollapse(self): 
+    def checkAllParticlesEvaled(self):
+        all_evaled = True
+        for part in self.get_population():
+            all_evaled = self.get_surrogate_model().contains_training_instance(part) and all_evaled
+        
+        if all_evaled: ## randomize population
+            self.set_population(self.toolbox.population(self.get_configuration().population_size))
+            self.toolbox.filter_particles(self.get_population())
+        
+    def checkCollapse(self): #TODO
         ## this method checks if the particls
         ## a) collapsed onto a single point
         ## b) collapsed onto the edge of the search space
@@ -829,9 +838,10 @@ class PSOTrial(Trial):
             perturbed_particle.fitness.values = fitness
             if not self.get_best() or self.fitness.is_better(perturbed_particle.fitness, self.get_best().fitness):
                 self.set_best(perturbed_particle)
-            else:
-                logging.info('Best is within the invalid area ' + str(code[0]) + ', sampling design space')
-                self.sample_design_space()
+            else: ## why do we do this? 
+                if code[0] != 0:
+                    logging.info('Best is within the invalid area ' + str(code[0]) + ', sampling design space')
+                    self.sample_design_space()
         
     def increment_main_counter(self):
         self.get_best_fitness_array().append(self.get_best().fitness.values[0])
@@ -931,7 +941,8 @@ class PSOTrial(Trial):
                                                  mean, variance)):
                 if v > self.get_configuration().max_stdv and c == 0:
                     if eval_counter > self.get_configuration().max_eval:
-                        logging.info("Evalauted mroe fitness functions per generation then max_eval")
+                        logging.info("Evalauted more fitness functions per generation then max_eval")
+                        self.checkAllParticlesEvaled() ## if all the particles have been evalauted 
                         return True
                     p.fitness.values, p.code, cost = self.toolbox.evaluate(p)
                     eval_counter = eval_counter + 1
@@ -1189,7 +1200,8 @@ class PSOTrial_TimeAware(PSOTrial):
                 stdv = self.std_func(p)        
                 if v > stdv and c == 0:
                     if eval_counter > self.get_configuration().max_eval:
-                        logging.info("Evalauted mroe fitness functions per generation then max_eval")
+                        logging.info("Evalauted more fitness functions per generation then max_eval")
+                        self.checkAllParticlesEvaled()
                         return True
                     p.fitness.values, p.code, cost = self.toolbox.evaluate(p)
                     eval_counter = eval_counter + 1

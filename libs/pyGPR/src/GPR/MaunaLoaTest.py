@@ -1,13 +1,10 @@
-import kernels
-import means
 from gp import gp
-from min_wrapper import min_wrapper
-from solve_chol import solve_chol
+from Tools.min_wrapper import min_wrapper
 import Tools.general
 import Tools.nearPD
 import numpy as np
 
-from utils import hyperParameters, plotter, convert_to_array
+from UTIL.utils import hyperParameters, plotter, convert_to_array
 
 if __name__ == '__main__':
     ## DATA (there were 7 samples having value -99.99 which were dropped):
@@ -62,15 +59,15 @@ if __name__ == '__main__':
     xs = np.arange(2004+1./24.,2024-1./24.,1./12.)
     xs = xs.reshape(len(xs),1)
 
-    vargout = gp(hyp,inffunc,meanfunc,covfunc,likfunc,x,y,xs)
-    ym = vargout[0]; ys2 = vargout[1]
-    m  = vargout[2]; s2  = vargout[3]
-    plotter(xs,ym,ys2,x,y)
-    
-    #vargout = min_wrapper(hyp,gp,'CG',inffunc,meanfunc,covfunc,likfunc,x,y,None,None,True)
-    #hyp = vargout[0]
     #vargout = gp(hyp,inffunc,meanfunc,covfunc,likfunc,x,y,xs)
     #ym = vargout[0]; ys2 = vargout[1]
     #m  = vargout[2]; s2  = vargout[3]
     #plotter(xs,ym,ys2,x,y)
+    
+    vargout = min_wrapper(hyp,gp,'CG',inffunc,meanfunc,covfunc,likfunc,x,y,None,None,True)
+    hyp = vargout[0]
+    vargout = gp(hyp,inffunc,meanfunc,covfunc,likfunc,x,y,xs)
+    ym = vargout[0]; ys2 = vargout[1]
+    m  = vargout[2]; s2  = vargout[3]
+    plotter(xs,ym,ys2,x,y)
     

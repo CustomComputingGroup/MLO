@@ -639,7 +639,11 @@ def covSEard(hyp=None, x=None, z=None, der=None):
             if z == 'diag':
                 A = A*0
             elif z == None:
-                A = A * sq_dist(x[:,der].T/ell[der])
+                try:
+                    A = A * sq_dist(np.reshape(x[:,der],(-1,1)).T/ell[der]) 
+                    
+                except Exception,e:
+                    raise Exception(str(e) + " " + str(x[:,der])+ " " + str(x) + " ")
             else:
                 A = A * sq_dist(x[:,der].T/ell[der],z[:,der].T/ell[der])
             # NOTE: ell = 1/exp(hyp) AND sq_dist is written for the transposed input!!!!

@@ -337,7 +337,7 @@ class GaussianProcessRegressor3(Regressor):
         self.adjusted_training_fitness = None
         self.hyp=None
         self.conf = conf
-        self.meanfunc = [ ['means.meanSum'], [ ['means.meanLinear'] , ['means.meanConst'] ] ]
+        self.meanfunc = ['means.meanZero']#[ ['means.meanSum'], [ ['means.meanLinear'] , ['means.meanConst'] ] ]
         self.inffunc  = ['inf.infExact']
         self.likfunc  = ['lik.likGauss']
         self.covfunc = None
@@ -352,7 +352,7 @@ class GaussianProcessRegressor3(Regressor):
         hyp.mean = [0.5 for d in xrange(dimensions)]
         hyp.mean.append(1.0)
         hyp.mean = array(hyp.mean)
-        #hyp.mean = array([])
+        hyp.mean = array([])
          # Scale inputs and particles?
         self.input_scaler = preprocessing.StandardScaler().fit(self.training_set)
         self.scaled_training_set = self.input_scaler.transform(
@@ -368,7 +368,7 @@ class GaussianProcessRegressor3(Regressor):
         for i in xrange(conf.random_start):
             if conf.corr == "isotropic":
                 self.covfunc = [['kernels.covSum'], [['kernels.covSEiso'],['kernels.covNoise']]]
-                hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions)]
+                hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(2)]
             elif conf.corr == "anisotropic":
                 self.covfunc = [['kernels.covSum'], [['kernels.covSEard'],['kernels.covNoise']]]
                 hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions+1)]           
@@ -377,9 +377,17 @@ class GaussianProcessRegressor3(Regressor):
                 hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions)]
                 hyp.cov.append(log(uniform(low=conf.thetaL, high=conf.thetaU)))
                 hyp.cov.append(log(uniform(low=conf.thetaL, high=conf.thetaU)))
-            elif conf.corr == "matern":
+            elif conf.corr == "matern3":
                 self.covfunc = [['kernels.covSum'], [['kernels.covMatern'],['kernels.covNoise']]]
                 hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(2)]
+                hyp.cov.append(log(3))                        
+            elif conf.corr == "matern5":
+                self.covfunc = [['kernels.covSum'], [['kernels.covMatern'],['kernels.covNoise']]]
+                hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(2)]
+                hyp.cov.append(log(5))            
+            elif conf.corr == "special":
+                self.covfunc = [['kernels.covSum'], [['kernels.covSEiso'],['kernels.covSEiso'],['kernels.covSEiso'],['kernels.covMatern'],['kernels.covNoise']]]
+                hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(2+2+2+2)]
                 hyp.cov.append(log(3))
             else:
                 logging.error("The specified kernel function is not supported")
@@ -391,11 +399,11 @@ class GaussianProcessRegressor3(Regressor):
                 hyp = vargout[0]
                 vargout = gp(hyp, self.inffunc,self.meanfunc,self.covfunc,self.likfunc,self.scaled_training_set ,self.adjusted_training_fitness, None,None,False)      
                 nlml = vargout[0]
-                #if hyp.cov[-1] < -2.0 :
-                #logging.info(str(nlml) + " " + str(hyp.cov))
-                if (((not nlml_best) or (nlml < nlml_best))):
-                    self.hyp = hyp
-                    nlml_best = nlml
+                if hyp.cov[-1] < -1.0 :
+                    #logging.info(str(nlml) + " " + str(hyp.cov))
+                    if (((not nlml_best) or (nlml < nlml_best))):
+                        self.hyp = hyp
+                        nlml_best = nlml
             except Exception, e:
                 logging.debug("Regressor training Failed " + str(e))
             
@@ -404,7 +412,7 @@ class GaussianProcessRegressor3(Regressor):
             logging.debug("Regressor training Failed")
             return False
         ## the gp with highest likelihood becomes the new hyperparameter set
-        logging.info('Regressor training successful')
+        logging.info('Regressor training successful ' + str(self.hyp.cov) + " " + str(nlml_best))
         return True
             
     def predict(self, z):

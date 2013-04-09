@@ -46,7 +46,7 @@ KK = 0.73
 a="a1"
 ### Visualisation
 
-vis_every_X_steps = 5 # How often to visualize
+vis_every_X_steps = 50000 # How often to visualize
 counter = 'g'  # The counter that visualization uses as a 'step'
 max_counter = max_iter  # Maximum value of counter
 
@@ -58,9 +58,10 @@ classifier = 'SupportVectorMachine'
 ### GPR Regression settings
 regr = 'linear'
 corr2 = 'squared_exponential'
-corr = 'anisotropic'
+corr = 'special'
 theta0 = 0.01
 thetaL = 0.00001
 thetaU = 3.0
 nugget = 3
-random_start = 25
+random_start = 100
+run_name = "quad_" + corr
