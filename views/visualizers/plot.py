@@ -68,33 +68,39 @@ class MLOImageViewer(ImageViewer):
             npts = 100
 
             ### Initialize some graph points
-            x = linspace(designSpace[0]['min'], designSpace[0]['max'], npts)
-            y = linspace(designSpace[1]['min'], designSpace[1]['max'], npts)
-            x, y = meshgrid(x, y)
-            dictionary['x'] = reshape(x, -1)
-            dictionary['y'] = reshape(y, -1)
-            dictionary['z'] = array([[a, b] for (a, b) in zip(dictionary['x'],
-                                                              dictionary['y'])])
+            dimensions = len(designSpace)
+            if dimensions < 2 :
+                x = linspace(designSpace[0]['min'], designSpace[0]['max'], npts)
+                y = linspace(designSpace[1]['min'], designSpace[1]['max'], npts)
+                x, y = meshgrid(x, y)
+                dictionary['x'] = reshape(x, -1)
+                dictionary['y'] = reshape(y, -1)
+                dictionary['z'] = array([[a, b] for (a, b) in zip(dictionary['x'],
+                                                                  dictionary['y'])])
 
-            ### Define grid
-            dictionary['xi'] = linspace(designSpace[0]['min'] - 0.01,
-                                        designSpace[0]['max'] + 0.01, npts)
-            dictionary['yi'] = linspace(designSpace[1]['min'] - 0.01,
-                                        designSpace[1]['max'] + 0.01, npts)
-            dictionary['X'], dictionary['Y'] = meshgrid(dictionary['xi'],
-                                                        dictionary['yi'])
-
+                ### Define grid
+                dictionary['xi'] = linspace(designSpace[0]['min'] - 0.01,
+                                            designSpace[0]['max'] + 0.01, npts)
+                dictionary['yi'] = linspace(designSpace[1]['min'] - 0.01,
+                                            designSpace[1]['max'] + 0.01, npts)
+                dictionary['X'], dictionary['Y'] = meshgrid(dictionary['xi'],
+                                                            dictionary['yi'])
+            else:
+                logging.info("We only support visualization of 1 and 2 dimensional spaces")
             ### Generate the graphs according to the user's selection
-            if dictionary['all_graph_dicts']['Mean']['generate']:
-                MLOImageViewer.plot_MU(figure, dictionary)
-            if dictionary['all_graph_dicts']['Fitness']['generate']:
-                MLOImageViewer.plot_fitness_function(figure, dictionary)
+            if dimensions < 2 :
+                if dictionary['all_graph_dicts']['Mean']['generate']:
+                    MLOImageViewer.plot_MU(figure, dictionary)
+                if dictionary['all_graph_dicts']['Fitness']['generate']:
+                    MLOImageViewer.plot_fitness_function(figure, dictionary)
             if dictionary['all_graph_dicts']['Progression']['generate']:
                 MLOImageViewer.plot_fitness_progression(figure, dictionary)
-            if dictionary['all_graph_dicts']['DesignSpace']['generate']:
-                MLOImageViewer.plot_design_space(figure, dictionary)
-            if dictionary['all_graph_dicts']['Cost']['generate']:
-                MLOImageViewer.plot_cost_function(figure, dictionary)
+            if dimensions < 2 :
+                if dictionary['all_graph_dicts']['DesignSpace']['generate']:
+                    MLOImageViewer.plot_design_space(figure, dictionary)
+                if dictionary['all_graph_dicts']['Cost']['generate']:
+                    MLOImageViewer.plot_cost_function(figure, dictionary)
+                
             ### Save and exit
             filename = str(dictionary['images_folder']) + '/plot' + str(dictionary['counter']) + '.png'
             if rerender and os.path.isfile(filename):

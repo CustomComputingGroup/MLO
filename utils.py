@@ -45,16 +45,11 @@ def get_trial_type_visualizer(trial_name):
             "Blank" : {"Blank" : None, "default" : None}}[trial_name]
 
 def get_run_type_visualizer(trial_name):
-<<<<<<< Updated upstream
     from views.visualizers.plot import MLORunReportViewer
     return {"PSOTrial" : {"MLOReportViewer" : MLORunReportViewer, "default" : MLORunReportViewer}, 
             "PSOTrial_TimeAware" : {"MLOReportViewer" : MLORunReportViewer, "default" : MLORunReportViewer}, 
-=======
-    from views.visualizers.plot import MLORunReportViewer,MLOAllReportViewer
-    return {"PSOTrial" : {"MLOReportViewer" : MLORunReportViewer, "default" : MLORunReportViewer}, 
-            "PSOTrial_TimeAware" : {"MLOReportViewer" : MLOAllReportViewer, "default" : MLOAllReportViewer}, 
->>>>>>> Stashed changes
             "Blank" : {"Blank" : None, "default" : None}}[trial_name] 
+            
             
 
     
