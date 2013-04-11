@@ -2,6 +2,9 @@ import logging
 import sys
 import copy
 import os
+import io
+import pickle
+
 from time import gmtime, strftime,asctime
 from multiprocessing import Process
 import matplotlib as mpl
@@ -691,7 +694,10 @@ class MLORegressionReportViewer(object):
         data = []
         failurecount=0
         failure_trial=[]
-	#goldenResultsFile = 
+        
+        # set golden file path
+	goldenResultsFile = first_trial_snapshot['configuration_folder_path']+'goldenResult.txt'
+	goldenResult = {}
 
         for trial_snapshot in trial_snapshots:
             ## Display trial timers
@@ -701,28 +707,40 @@ class MLORegressionReportViewer(object):
             trial_timers = [trial_snapshot['timer_dict'][timer_header] for timer_header in timer_headers] 
             data.append(trial_counters + trial_timers)
             
-            ## Initialize all run to be true
-            color='lime'
-            ErrorC = ['0']
+            # create golden file or read from the file
+	    if os.path.exists(goldenResultsFile):
+		#read from file
+		logging.info("Reading golden file...")
+		with open(goldenResultsFile, 'rb') as outfile:
+		        dict = pickle.load(outfile)
+		    	dict['dir'] = goldenResultsFile
+		    	goldenResult = dict
+	    else:
+	    	#create new golden resultfile
+	        logging.info("A new golden result to be created")
+		goldenResult = { 'golden_counters' : trial_counters,
+		                 'golden_timers' : trial_timers,
+		                 'counter_headers' : counter_headers,
+		                 'timer_headers' : timer_headers,
+		                 'dir':goldenResultsFile
+		               }
+		with io.open(self.goldenResult['dir'], 'wb') as outfile:
+                	pickle.dump(self.goldenResult, outfile)            
+
+            compare_dict = {
+            			'trial_snapshot' : trial_snapshot,
+            			'trial_timers': trial_counters, 
+            			'trial_timers' : trial_timers, 
+            			'goldenResult' : goldenResult
+            		}
             
-            ## Tell if one fails
-            if trial_snapshot['counter_dict']['fit']>trial_snapshot['max_fi']:
-            	color = 'red'
-            	ErrorC = ['1']
-            	
-            if trial_snapshot['counter_dict']['g']>trial_snapshot['max_iter']: 
-            	color = 'red'
-            	ErrorC = ['2']
-            	
-            #if not trial_snapshot['new_best']:
-            #	color = 'red'
-            #	ErrorC = ['3']
-            	
+	    color, ErrorCode, message = get_error_code(compare_dict)
+	    
             if color == 'red':
             	failure_trial.append(trial_name)
             	failurecount = failurecount + 1
-            	
-            row = [HTML.TableCell( cell, bgcolor = color) for cell in trial_name + trial_no + trial_counters + trial_timers + ErrorC]
+            row = [HTML.TableCell( cell, bgcolor = color) for cell in trial_name + trial_no + trial_counters + trial_timers + ErrorCode]
+            
             htmlcode1.rows.append( row )
             
         ## Display trial counters
@@ -833,6 +851,59 @@ class MLORegressionReportViewer(object):
 			fr.close()
 	f.close()
 
+    @staticmethod
+    def get_error_code(compare_dict):
+            ## Initialize all run to be true
+            color='lime'
+            ErrorCode = []
+            message = []
+           
+            # read from compare_dict
+            trial_snapshot = compare_dict['trial_snapshot']
+            trial_counters = compare_dict['trial_counters']
+            trial_timers = compare_dict['trial_timers']
+            golden_counters = compare_dict['goldenResult']['golden_counters']
+            golden_timers = compare_dict['goldenResult']['golden_timers']
+            counter_headers = compare_dict['goldenResult']['counter_headers']
+            timer_headers = compare_dict['goldenResult']['timer_headers']
+            
+            ## Tell if one fails and give the errorCode and message
+            if trial_snapshot['counter_dict']['fit']>trial_snapshot['max_fi']:
+            	color = 'red'
+            	ErrorCode.append['1']
+            	message.append['Run out of fitness budget']
+            	
+            if trial_snapshot['counter_dict']['g']>trial_snapshot['max_iter']: 
+            	color = 'red'
+            	ErrorCode.append['2']
+            	message.append['Run out of iteration budget']
+            
+            for (Counter,gCounter,Timer,gTimer,counter_header,timer_header) in zip(trial_counters,golden_counters,trial_timers, golden_timers,counter_headers,timer_headers):
+            	# compare the counters
+            	if int(Counter) > int(gCounter):
+            		color = 'red'
+            		if not '3' in ErrorCode:
+            			ErrorCode.append['3']
+            		outnumber = 100 * (int(Counter) - int(gCounter))/int(gCounter)
+            		message.append("The counter " + counter_header + "has outnumber the golden result by " + outnumber +"%.")
+            	
+            	# compare the timers
+            	if int(Timer) > int(gTimer):
+            		color = 'red'
+            		if not '4' in ErrorCode:
+            			ErrorCode.append['4']
+            		outnumber = 100 * (int(Timer) - int(gTimer))/int(gTimer)
+            		message.append("The timer " + counter_header + "has outnumber the golden result by " + outnumber +"%.")
+            
+            #output the errorCode
+            ErrorC = ''
+            if len(ErrorCode)==0:
+            	ErrorC = ErrorC + '0'
+            else:
+            	for e in ErrorCode:
+            		ErrorC = ErrorC + e
+            		
+            return color, [ErrorC], message
     @staticmethod
     def get_attributes(name):
         return {}
