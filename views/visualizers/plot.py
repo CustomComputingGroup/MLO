@@ -69,7 +69,7 @@ class MLOImageViewer(ImageViewer):
 
             ### Initialize some graph points
             dimensions = len(designSpace)
-            if dimensions < 2 :
+            if dimensions < 3 :
                 x = linspace(designSpace[0]['min'], designSpace[0]['max'], npts)
                 y = linspace(designSpace[1]['min'], designSpace[1]['max'], npts)
                 x, y = meshgrid(x, y)
@@ -88,14 +88,14 @@ class MLOImageViewer(ImageViewer):
             else:
                 logging.info("We only support visualization of 1 and 2 dimensional spaces")
             ### Generate the graphs according to the user's selection
-            if dimensions < 2 :
+            if dimensions < 3 :
                 if dictionary['all_graph_dicts']['Mean']['generate']:
                     MLOImageViewer.plot_MU(figure, dictionary)
                 if dictionary['all_graph_dicts']['Fitness']['generate']:
                     MLOImageViewer.plot_fitness_function(figure, dictionary)
             if dictionary['all_graph_dicts']['Progression']['generate']:
                 MLOImageViewer.plot_fitness_progression(figure, dictionary)
-            if dimensions < 2 :
+            if dimensions < 3 :
                 if dictionary['all_graph_dicts']['DesignSpace']['generate']:
                     MLOImageViewer.plot_design_space(figure, dictionary)
                 if dictionary['all_graph_dicts']['Cost']['generate']:
