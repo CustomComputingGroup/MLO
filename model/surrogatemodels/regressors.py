@@ -405,7 +405,7 @@ class GaussianProcessRegressor3(Regressor):
                         self.hyp = hyp
                         nlml_best = nlml
             except Exception, e:
-                logging.debug("Regressor training Failed " + str(e))
+                logging.debug("Regressor training Failed ")
             
                 
         if (not nlml_best):        

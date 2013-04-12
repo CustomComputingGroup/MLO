@@ -265,16 +265,6 @@ class RunWindow(wx.Frame):
 
     def update_run(self, event):
         try:
-            if not (event.trial is None):
-                trial = event.trial
-                visualize = event.visualize
-                if visualize: ## case when we only want to update run state (possible)
-                        if (trial.get_main_counter() % trial.get_configuration().vis_every_X_steps) == 0: ### TODO - it should really be done a bit differently...
-                             self.visuzalize_trial(trial)
-        except (wx.PyDeadObjectError, AttributeError):
-            pass
-    
-        try:
             if not (event.run is None): 
                 run = event.run
                 drawn = run.get_name() in self.bars
@@ -293,6 +283,17 @@ class RunWindow(wx.Frame):
                         self.visuzalize_run(run)
         except (wx.PyDeadObjectError, AttributeError):
             pass
+            
+        try:
+            if not (event.trial is None):
+                trial = event.trial
+                visualize = event.visualize
+                if visualize: ## case when we only want to update run state (possible)
+                        if (trial.get_main_counter() % trial.get_configuration().vis_every_X_steps) == 0: ### TODO - it should really be done a bit differently...
+                             self.visuzalize_trial(trial)
+        except (wx.PyDeadObjectError, AttributeError):
+            pass
+    
         event.Skip()
         
     def update_bar(self, run):
