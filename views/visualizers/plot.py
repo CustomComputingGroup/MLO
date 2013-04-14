@@ -683,49 +683,49 @@ class MLORegressionReportViewer(object):
             
             ## Tell if one fails and give the errorCode and message
             if trial_snapshot['counter_dict']['fit']>trial_snapshot['max_fitness']:
-            	color = 'red'
-            	ErrorCode.append('1')
-            	message.append('Run out of fitness budget')
-            	
+                color = 'red'
+                ErrorCode.append('1')
+                message.append('Run out of fitness budget')
+           
             if trial_snapshot['counter_dict']['g']>trial_snapshot['max_iter']: 
-            	color = 'red'
-            	ErrorCode.append('2')
-            	message.append('Run out of iteration budget')
+                color = 'red'
+                ErrorCode.append('2')
+                message.append('Run out of iteration budget')
             
             for i, (Counter,gCounter,Timer,gTimer,counter_header,timer_header) in enumerate(zip(trial_counters,golden_counters,trial_timers, golden_timers,counter_headers,timer_headers)):
-            	# compare the counters
-            	if int(Counter) > int(gCounter):
-            		color = 'red'
-            		if not '3' in ErrorCode:
-            			ErrorCode.append('3')
-            		outnumber = 100 * (int(Counter) - int(gCounter))/int(gCounter)
-            		message.append(trial_snapshot["name"]+" -- The counter " + str(counter_header) + " outnumbers the golden result by " + str(outnumber) +"%.")
-            		trial_counters[i] =str(trial_counters[i]) + ' ('+ str(outnumber) + '%)'
-            	# compare the timers
-            	if int(Timer) > int(gTimer):
-            		color = 'red'
-            		if not '4' in ErrorCode:
-            			ErrorCode.append('4')
-            		outnumber = 100 * (int(Timer) - int(gTimer))/int(gTimer)
-            		message.append(trial_snapshot["name"]+" -- The timer " + str(timer_header) + " outnumbers the golden result by " + str(outnumber) +"%.")
-            		trial_timers[i] =str(trial_timers[i]) + ' ('+ str(outnumber) + '%)'
+                # compare the counters
+                if int(Counter) > int(gCounter):
+                    color = 'red'
+                    if not '3' in ErrorCode:
+                        ErrorCode.append('3')
+                    outnumber = 100 * (int(Counter) - int(gCounter))/int(gCounter)
+                    message.append(trial_snapshot["name"]+" -- The counter " + str(counter_header) + " outnumbers the golden result by " + str(outnumber) +"%.")
+                    trial_counters[i] =str(trial_counters[i]) + ' ('+ str(outnumber) + '%)'
+                # compare the timers
+                if int(Timer) > int(gTimer):
+                    color = 'red'
+                    if not '4' in ErrorCode:
+                        ErrorCode.append('4')
+                    outnumber = 100 * (int(Timer) - int(gTimer))/int(gTimer)
+                    message.append(trial_snapshot["name"]+" -- The timer " + str(timer_header) + " outnumbers the golden result by " + str(outnumber) +"%.")
+                    trial_timers[i] =str(trial_timers[i]) + ' ('+ str(outnumber) + '%)'
             
             #output the errorCode
             ErrorC = ''
             if len(ErrorCode)==0:
-            	ErrorC = ErrorC + '0'
+                ErrorC = ErrorC + '0'
             else:
-            	for e in ErrorCode:
-            		ErrorC = ErrorC + e + ' '
+                for e in ErrorCode:
+                    ErrorC = ErrorC + e + ' '
             
             
             return_dictionary = {
-            			 'color': color,
-            			 'ErrorCode' : [ErrorC],
-            			 'trial_counters' : trial_counters,
-            			 'trial_timers' : trial_timers,
-            			 'message' : message
-            			}
+                                 'color': color,
+                                 'ErrorCode' : [ErrorC],
+                                 'trial_counters' : trial_counters,
+                                 'trial_timers' : trial_timers,
+                                 'message' : message
+                                 }
             return return_dictionary
     
     @staticmethod
@@ -758,10 +758,10 @@ class MLORegressionReportViewer(object):
         failure_trial=[]
         
         # set golden file path
-	goldenResultsFile = first_trial_snapshot['configuration_folder_path']+'goldenResult.txt'
-	goldenResult = {}
+        goldenResultsFile = first_trial_snapshot['configuration_folder_path']+'goldenResult.txt'
+        goldenResult = {}
 
-	trial_message = []
+        trial_message = []
         for trial_snapshot in trial_snapshots:
             ## Display trial timers
             trial_name = [trial_snapshot["name"]]
@@ -771,54 +771,52 @@ class MLORegressionReportViewer(object):
             data.append(trial_counters + trial_timers)
             
             # create golden file or read from the file
-	    if os.path.exists(goldenResultsFile):
-		#read from file
-		logging.info("Reading golden file...")
-		with open(goldenResultsFile, 'rb') as outfile:
-		        dict = pickle.load(outfile)
-		    	dict['dir'] = goldenResultsFile
-		    	goldenResult = dict
-	    else:
-	    	#create new golden resultfile
-	        logging.info("A new golden result to be created")
-		goldenResult = { 
-				 'Saved_Time': strftime("%d/%b/%Y %H:%M:%S", gmtime()),
-				 'golden_counters' : trial_counters,
-		                 'golden_timers' : trial_timers,
-		                 'counter_headers' : counter_headers,
-		                 'timer_headers' : timer_headers,
-		                 'dir':goldenResultsFile
-		               }
-		with io.open(goldenResult['dir'], 'wb') as outfile:
-                	pickle.dump(goldenResult, outfile)            
+            if os.path.exists(goldenResultsFile):
+                #read from file
+                logging.info("Reading golden file...")
+                with open(goldenResultsFile, 'rb') as outfile:
+                    dict = pickle.load(outfile)
+                    dict['dir'] = goldenResultsFile
+                    goldenResult = dict
+            else:
+                #create new golden resultfile
+                logging.info("A new golden result to be created")
+                goldenResult = {
+                               'Saved_Time': strftime("%d/%b/%Y %H:%M:%S", gmtime()),
+                               'golden_counters' : trial_counters,
+                               'golden_timers' : trial_timers,
+                               'counter_headers' : counter_headers,
+                               'timer_headers' : timer_headers,
+                               'dir':goldenResultsFile
+                               }
+                with io.open(goldenResult['dir'], 'wb') as outfile:
+                    pickle.dump(goldenResult, outfile)            
 
             compare_dict = {
-            			'trial_snapshot' : trial_snapshot,
-            			'trial_counters': trial_counters, 
-            			'trial_timers' : trial_timers, 
-            			'goldenResult' : goldenResult
-            		}
-            
-	    return_dictionary = MLORegressionReportViewer.get_error_code(compare_dict)
-	    
-	    color = return_dictionary['color']
-	    ErrorCode = return_dictionary['ErrorCode']
-	    trial_counters = return_dictionary['trial_counters']
-	    trial_timers = return_dictionary['trial_timers']
-	    trial_message.append(return_dictionary['message'])
-	    
+                            'trial_snapshot' : trial_snapshot,
+                            'trial_counters': trial_counters, 
+                            'trial_timers' : trial_timers, 
+                            'goldenResult' : goldenResult
+                            }
+            return_dictionary = MLORegressionReportViewer.get_error_code(compare_dict)
+            color = return_dictionary['color']
+            ErrorCode = return_dictionary['ErrorCode']
+            trial_counters = return_dictionary['trial_counters']
+            trial_timers = return_dictionary['trial_timers']
+            trial_message.append(return_dictionary['message'])
+
             if color == 'red':
-            	failure_trial.append(trial_name)
-            	failurecount = failurecount + 1
+                failure_trial.append(trial_name)
+                failurecount = failurecount + 1
             row = [HTML.TableCell( cell, bgcolor = color) for cell in trial_name + trial_no + trial_counters + trial_timers + ErrorCode]
             
             htmlcode1.rows.append( row )
             
         repo_message = ""
         for m in trial_message:
-        	if len(m)>0:
-        		for ms in m:
-        			repo_message = repo_message + ms + '<br>'
+            if len(m)>0:
+                for ms in m:
+                    repo_message = repo_message + ms + '<br>'
         ## statistics
         header = ['Statistics', 'Total Trials']  
         ## get counter names
@@ -834,8 +832,8 @@ class MLORegressionReportViewer(object):
         statistics = ["mean","std","max","min"]
         data = array(data)
         htmlcode2 = HTML.Table(header_row=header)
-	total_trials=len(trial_snapshots)
-	
+        total_trials=len(trial_snapshots)
+
         for statistic in statistics:
             statistic_name = statistic
             result = [str(elem) for elem in eval("data." + statistic + "(axis=0)")]
@@ -851,30 +849,29 @@ class MLORegressionReportViewer(object):
         # generate git information
         repo = git.Repo( os.getcwd() )
         headcommit = repo.head.commit
-	headlist.append("Git Committer :  " + str(headcommit.committer))
-	headlist.append("Commit Date : " + asctime(gmtime(headcommit.committed_date)))
-	
-	# generate run information
-	headlist.append("Run Name: "+ run_name)
-	
-	# generate the regressor name and classifier name
-	reg = str(trial_snapshots[0]['regressor'])
-	cla = str(trial_snapshots[0]['classifier'])
-	headlist.append("Regressor:     " + reg[34:reg.find("object")])
-	headlist.append("Classifier:     " + cla[35:cla.find("object")])
-	
-	## generate the trial information: fail or not?
-	headlist.append( "Total Trials :  " + str(len(trial_snapshots)) )
-	headlist.append( "Total Fails : " + str(failurecount))
-	if failurecount>0:
-		headlist.append("Fail trials: " + str(failure_trial))
-	
-	html_list = HTML.list(headlist)
-	
-	# create the report contents
-	htmlcode1 = str( htmlcode1 )
-	htmlcode2 = str( htmlcode2 )
-	htmlcode3 = str ( html_list )
+        headlist.append("Git Committer :  " + str(headcommit.committer))
+        headlist.append("Commit Date : " + asctime(gmtime(headcommit.committed_date)))
+
+        # generate run information
+        headlist.append("Run Name: "+ run_name)
+        
+        # generate the regressor name and classifier name
+        reg = str(trial_snapshots[0]['regressor'])
+        cla = str(trial_snapshots[0]['classifier'])
+        headlist.append("Regressor:     " + reg[34:reg.find("object")])
+        headlist.append("Classifier:     " + cla[35:cla.find("object")])
+        
+        ## generate the trial information: fail or not?
+        headlist.append( "Total Trials :  " + str(len(trial_snapshots)) )
+        headlist.append( "Total Fails : " + str(failurecount))
+        if failurecount>0:
+            headlist.append("Fail trials: " + str(failure_trial))
+
+        html_list = HTML.list(headlist)
+        # create the report contents
+        htmlcode1 = str( htmlcode1 )
+        htmlcode2 = str( htmlcode2 )
+        htmlcode3 = str ( html_list )
         repocontent = htmlcode3 + '<center> <b><font size="5">Trial information:</font></b> '+'<br>'+'[( ) shows how many percent it exceed the golden results]'+'<br>' + htmlcode1 +'<b>Regression Message from trials: </b>'+'<br>'+ repo_message +'</center><br>' + '<center><b><font size="5">Statistics:</font></b> ' + htmlcode2 + '</center><br>'
         
             
@@ -907,22 +904,22 @@ class MLORegressionReportViewer(object):
 
         except Exception, e:
             logging.error('could not create a report for {}'.format(str(e)))
-	
-	# save the report for all the runs in the folder
+
+        # save the report for all the runs in the folder
         loglist=os.listdir(first_trial_snapshot["run_folders_path"])
         reportfile=[]
-	for i in range(0,len(loglist)):
-		reportfile.append(first_trial_snapshot["run_folders_path"]+"/"+loglist[i]+"/run_report.html")
-	f = file(filename3, 'w' )
-	f.write("<hgroup> <center> <h2> MLO Report </h2> </center> </hgroup>")
-	f.write("<center> (Error Code:  0 - No Error; 1 - Exceed Max Fitness, 2 - Exceed Max Generation, 3- Exceed the golden counters, 4 - Exceed the golden timers) </center>")
-	for e in reportfile:
-		if os.path.exists(e):
-			fr = file(e,'r')
-			temp = fr.readlines()
-			f.writelines(temp)
-			fr.close()
-	f.close()
+        for i in range(0,len(loglist)):
+            reportfile.append(first_trial_snapshot["run_folders_path"]+"/"+loglist[i]+"/run_report.html")
+        f = file(filename3, 'w' )
+        f.write("<hgroup> <center> <h2> MLO Report </h2> </center> </hgroup>")
+        f.write("<center> (Error Code:  0 - No Error; 1 - Exceed Max Fitness, 2 - Exceed Max Generation, 3- Exceed the golden counters, 4 - Exceed the golden timers) </center>")
+        for e in reportfile:
+            if os.path.exists(e):
+                fr = file(e,'r')
+                temp = fr.readlines()
+                f.writelines(temp)
+                fr.close()
+        f.close()
 
     @staticmethod
     def get_attributes(name):
