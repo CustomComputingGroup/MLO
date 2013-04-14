@@ -1,3 +1,4 @@
+import os
 results_folder_path = '/mnt/data/cccad3/mk306/logxin'
 configuration_folder_path = os.path.split(os.path.realpath(__file__))[0]+"/"
 ##set to wherever you want the images to be stored

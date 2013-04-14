@@ -1,3 +1,4 @@
+import os
 #results_folder_path = '/mnt/data/cccad3/mk306/log'
 results_folder_path = '/homes/mk306/log'
 configuration_folder_path = os.path.split(os.path.realpath(__file__))[0]+"/"
