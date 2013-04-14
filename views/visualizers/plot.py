@@ -685,29 +685,30 @@ class MLORegressionReportViewer(object):
             if trial_snapshot['counter_dict']['fit']>trial_snapshot['max_fitness']:
             	color = 'red'
             	ErrorCode.append('1')
-            	message.append['Run out of fitness budget']
+            	message.append('Run out of fitness budget')
             	
             if trial_snapshot['counter_dict']['g']>trial_snapshot['max_iter']: 
             	color = 'red'
             	ErrorCode.append('2')
-            	message.append['Run out of iteration budget']
+            	message.append('Run out of iteration budget')
             
-            for (Counter,gCounter,Timer,gTimer,counter_header,timer_header) in zip(trial_counters,golden_counters,trial_timers, golden_timers,counter_headers,timer_headers):
+            for i, (Counter,gCounter,Timer,gTimer,counter_header,timer_header) in enumerate(zip(trial_counters,golden_counters,trial_timers, golden_timers,counter_headers,timer_headers)):
             	# compare the counters
             	if int(Counter) > int(gCounter):
             		color = 'red'
             		if not '3' in ErrorCode:
             			ErrorCode.append('3')
             		outnumber = 100 * (int(Counter) - int(gCounter))/int(gCounter)
-            		message.append("The counter " + str(counter_header) + "has outnumber the golden result by " + str(outnumber) +"%.")
-            	
+            		message.append(trial_snapshot["name"]+" -- The counter " + str(counter_header) + " outnumbers the golden result by " + str(outnumber) +"%.")
+            		trial_counters[i] =str(trial_counters[i]) + ' ('+ str(outnumber) + '%)'
             	# compare the timers
             	if int(Timer) > int(gTimer):
             		color = 'red'
             		if not '4' in ErrorCode:
             			ErrorCode.append('4')
             		outnumber = 100 * (int(Timer) - int(gTimer))/int(gTimer)
-            		message.append("The timer " + str(timer_header) + "has outnumber the golden result by " + str(outnumber) +"%.")
+            		message.append(trial_snapshot["name"]+" -- The timer " + str(timer_header) + " outnumbers the golden result by " + str(outnumber) +"%.")
+            		trial_timers[i] =str(trial_timers[i]) + ' ('+ str(outnumber) + '%)'
             
             #output the errorCode
             ErrorC = ''
@@ -716,8 +717,16 @@ class MLORegressionReportViewer(object):
             else:
             	for e in ErrorCode:
             		ErrorC = ErrorC + e + ' '
-            		
-            return color, [ErrorC], message
+            
+            
+            return_dictionary = {
+            			 'color': color,
+            			 'ErrorCode' : [ErrorC],
+            			 'trial_counters' : trial_counters,
+            			 'trial_timers' : trial_timers,
+            			 'message' : message
+            			}
+            return return_dictionary
     
     @staticmethod
     def render(dictionary):
@@ -752,6 +761,7 @@ class MLORegressionReportViewer(object):
 	goldenResultsFile = first_trial_snapshot['configuration_folder_path']+'goldenResult.txt'
 	goldenResult = {}
 
+	trial_message = []
         for trial_snapshot in trial_snapshots:
             ## Display trial timers
             trial_name = [trial_snapshot["name"]]
@@ -771,7 +781,9 @@ class MLORegressionReportViewer(object):
 	    else:
 	    	#create new golden resultfile
 	        logging.info("A new golden result to be created")
-		goldenResult = { 'golden_counters' : trial_counters,
+		goldenResult = { 
+				 'Saved_Time': strftime("%d/%b/%Y %H:%M:%S", gmtime()),
+				 'golden_counters' : trial_counters,
 		                 'golden_timers' : trial_timers,
 		                 'counter_headers' : counter_headers,
 		                 'timer_headers' : timer_headers,
@@ -787,7 +799,13 @@ class MLORegressionReportViewer(object):
             			'goldenResult' : goldenResult
             		}
             
-	    color, ErrorCode, message = MLORegressionReportViewer.get_error_code(compare_dict)
+	    return_dictionary = MLORegressionReportViewer.get_error_code(compare_dict)
+	    
+	    color = return_dictionary['color']
+	    ErrorCode = return_dictionary['ErrorCode']
+	    trial_counters = return_dictionary['trial_counters']
+	    trial_timers = return_dictionary['trial_timers']
+	    trial_message.append(return_dictionary['message'])
 	    
             if color == 'red':
             	failure_trial.append(trial_name)
@@ -796,9 +814,11 @@ class MLORegressionReportViewer(object):
             
             htmlcode1.rows.append( row )
             
-        ## Display trial counters
-
-    
+        repo_message = ""
+        for m in trial_message:
+        	if len(m)>0:
+        		for ms in m:
+        			repo_message = repo_message + ms + '<br>'
         ## statistics
         header = ['Statistics', 'Total Trials']  
         ## get counter names
@@ -855,13 +875,13 @@ class MLORegressionReportViewer(object):
 	htmlcode1 = str( htmlcode1 )
 	htmlcode2 = str( htmlcode2 )
 	htmlcode3 = str ( html_list )
-        repocontent = htmlcode3 + '<center> <b><font size="5">Trial information:</font></b> '+'<br>' + htmlcode1 + '</center><br>' + '<center><b><font size="5">Statistics:</font></b> ' + htmlcode2 + '</center><br>'
+        repocontent = htmlcode3 + '<center> <b><font size="5">Trial information:</font></b> '+'<br>'+'[( ) shows how many percent it exceed the golden results]'+'<br>' + htmlcode1 +'<b>Regression Message from trials: </b>'+'<br>'+ repo_message +'</center><br>' + '<center><b><font size="5">Statistics:</font></b> ' + htmlcode2 + '</center><br>'
         
             
         ### Save and exit
         filename1 = dictionary["results_folder_path"] + "/run_report.pdf"
         filename2 = dictionary["results_folder_path"] + "/run_report.html"
-        filename3 = first_trial_snapshot["run_folders_path"] + "/report_all.html"
+        filename3 = first_trial_snapshot["run_folders_path"] + "/regression_report.html"
         
         # save pdf report 
         if os.path.isfile(filename1):
@@ -895,7 +915,7 @@ class MLORegressionReportViewer(object):
 		reportfile.append(first_trial_snapshot["run_folders_path"]+"/"+loglist[i]+"/run_report.html")
 	f = file(filename3, 'w' )
 	f.write("<hgroup> <center> <h2> MLO Report </h2> </center> </hgroup>")
-	f.write("<center> (Error Code:  0 - No Error; 1 - Exceed Max Fitness, 2 - Exceed Max Generation, 3- Didn't find new best) </center>")
+	f.write("<center> (Error Code:  0 - No Error; 1 - Exceed Max Fitness, 2 - Exceed Max Generation, 3- Exceed the golden counters, 4 - Exceed the golden timers) </center>")
 	for e in reportfile:
 		if os.path.exists(e):
 			fr = file(e,'r')

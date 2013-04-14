@@ -1,5 +1,5 @@
 results_folder_path = '/data/log'
-
+configuration_folder_path = os.path.split(os.path.realpath(__file__))[0]+"/"
 ##set to wherever you want the images to be stored
 #images_folder_path = 
 enable_traceback = True

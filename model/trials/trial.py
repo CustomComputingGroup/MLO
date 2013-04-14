@@ -184,7 +184,79 @@ class Trial(Thread):
             return fitness, code, cost
         else:
             return array([self.fitness.worst_value]), code, cost
-   
+            
+    # for MOPSOTrial
+    def fitness_function1(self, part):
+        ##this bit traverses the particle set and checks if it has already been evaluated. 
+        if self.surrogate_model.contains_training_instance(part):
+        
+            code, fitness = self.surrogate_model.get_training_instance(part)
+            cost = self.cost_model.get_training_instance(part)
+            if (fitness is None) or (code is None):
+                fitness = array([self.fitness.worst_value])
+            return fitness, code, cost
+        self.increment_counter('fit')
+        
+        try:
+            results, state = self.fitness.fitnessFunc1(part, self.get_fitness_state())
+            self.set_fitness_state(state)
+        except Exception,e:          
+            logging.info(str(e))
+            results = self.fitness.fitnessFunc(part) ## fitness function doesnt have state
+        fitness = results[0]
+        code = results[1]
+        addReturn = results[2]
+        logging.info("Evaled " + str(part) + " fitness:" + str(fitness) + " code:" + str(code))
+        try: ## not all fitness functions return benchmark exectuion cost
+            cost = results[3][0]
+        except:
+            cost = 1.0 ## just keep it constant for all points
+        self.set_counter_dictionary("cost", self.get_counter_dictionary("cost") + cost)
+        self.surrogate_model.add_training_instance(part, code, fitness, addReturn)
+        self.cost_model.add_training_instance(part, cost)
+        self.set_retrain_model(True)
+        
+        if code[0] == 0:
+            self.set_terminating_condition(fitness) 
+            return fitness, code, cost
+        else:
+            return array([self.fitness.worst_value]), code, cost
+    def fitness_function2(self, part):
+        ##this bit traverses the particle set and checks if it has already been evaluated. 
+        if self.surrogate_model.contains_training_instance(part):
+        
+            code, fitness = self.surrogate_model.get_training_instance(part)
+            cost = self.cost_model.get_training_instance(part)
+            if (fitness is None) or (code is None):
+                fitness = array([self.fitness.worst_value])
+            return fitness, code, cost
+        self.increment_counter('fit')
+        
+        try:
+            results, state = self.fitness.fitnessFunc2(part, self.get_fitness_state())
+            self.set_fitness_state(state)
+        except Exception,e:          
+            logging.info(str(e))
+            results = self.fitness.fitnessFunc(part) ## fitness function doesnt have state
+        fitness = results[0]
+        code = results[1]
+        addReturn = results[2]
+        logging.info("Evaled " + str(part) + " fitness:" + str(fitness) + " code:" + str(code))
+        try: ## not all fitness functions return benchmark exectuion cost
+            cost = results[3][0]
+        except:
+            cost = 1.0 ## just keep it constant for all points
+        self.set_counter_dictionary("cost", self.get_counter_dictionary("cost") + cost)
+        self.surrogate_model.add_training_instance(part, code, fitness, addReturn)
+        self.cost_model.add_training_instance(part, cost)
+        self.set_retrain_model(True)
+        
+        if code[0] == 0:
+            self.set_terminating_condition(fitness) 
+            return fitness, code, cost
+        else:
+            return array([self.fitness.worst_value]), code, cost
+            
     ## indicator for the controller and viewer that the state has changed. 
     def view_update(self, visualize=False):
         self.current_time = datetime.now()
@@ -1054,7 +1126,7 @@ class MOPSOTrial(Trial):
         return True
         
     def run_initialize(self):
-        logging.info("Initialize MOPSOTrial no:" + str(self.get_trial_no()))
+        logging.info("Initialize Multi-Objective PSOTrial no:" + str(self.get_trial_no()))
         self.cost_model = DummyCostModel(self.configuration, self.controller, self.fitness)
         design_space = self.fitness.designSpace
         self.toolbox = copy(base.Toolbox())
@@ -1091,14 +1163,15 @@ class MOPSOTrial(Trial):
         self.toolbox.register('update', self.updateParticle, 
                               conf=self.get_configuration(),
                               designSpace=design_space)
-        self.toolbox.register('evaluate', self.fitness_function)
+        self.toolbox.register('evaluate1', self.fitness_function1)
+        self.toolbox.register('evaluate2', self.fitness_function2)
         self.new_best=False
         
     def run(self):
         self.state_dictionary['generate'] = True
         
         logging.info(str(self.get_name()) + ' started')
-        logging.info('Trial prepared... executing')
+        logging.info('Multi-Objective Trial prepared... executing')
         self.save() ## training might take a bit...
         # Initialise termination check
         
@@ -1121,7 +1194,7 @@ class MOPSOTrial(Trial):
 
             # termination condition - we put it here so that when the trial is reloaded
             # it wont run if the run has terminated already
-        # see this
+
             if self.get_terminating_condition(): 
                 logging.info('Terminating condition reached...')
                 break
@@ -1357,7 +1430,8 @@ class MOPSOTrial(Trial):
                     self.fitness.alwaysCorrect())  # This will break
             for i, part in enumerate(self.get_population()):
                 if i < F:
-                    part.fitness.values, part.code, cost = self.toolbox.evaluate(part)
+                    part.fitness.values, part.code, cost = self.toolbox.evaluate1(part)
+                    part.fitness.values, part.code, cost = self.toolbox.evaluate1(part)
                     self.set_at_least_one_in_valid_region((part.code == 0) or self.get_at_least_one_in_valid_region())
                     if not self.get_best() or self.fitness.is_better(part.fitness, self.get_best().fitness):
                         particle = self.create_particle(part)
@@ -1396,7 +1470,8 @@ class MOPSOTrial(Trial):
    
     def evaluate_best(self):        
         if self.new_best:
-            self.fitness_function(self.get_best())
+            self.fitness_function1(self.get_best())
+            
             logging.info('New best was found after M :' + str(self.get_best()))
         else:
             ## TODO - clean it up...  messy

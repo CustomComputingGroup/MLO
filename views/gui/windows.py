@@ -21,7 +21,7 @@ class RunWindow(wx.Frame):
 
         self.GetEventHandler().Bind(EVT_UPDATE, self.update_run)
         self.plot_view = MLOImageViewer
-        self.run_view = MLORunReportViewer
+        self.run_view = MLORegressionReportViewer
         self.controller = controller
 
         ### Set up display

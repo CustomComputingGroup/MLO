@@ -28,8 +28,9 @@ def numpy_array_index(multi_array, array):
 ##returns class constructor     
 
 def get_trial_dict():
-    from model.trials.trial import PSOTrial, PSOTrial_TimeAware 
+    from model.trials.trial import PSOTrial, MOPSOTrial, PSOTrial_TimeAware 
     return {"PSOTrial" : PSOTrial, 
+            "MOPSOTrial" : MOPSOTrial,
             "PSOTrial_TimeAware" : PSOTrial_TimeAware,
             "Blank" : None} 
 
