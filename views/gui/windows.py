@@ -7,7 +7,7 @@ from wx.lib.newevent import NewEvent
 from datetime import datetime
 
 
-from ..visualizers.plot import MLOImageViewer, MLORunReportViewer,MLORegressionReportViewer
+from ..visualizers.plot import MLOImageViewer, MOMLOImageViewer, MLORunReportViewer,MLORegressionReportViewer
 from utils import get_trial_constructor
 UpdateEvent, EVT_UPDATE = NewEvent()
 UpdateEvent2, EVT_UPDATE2 = NewEvent()
@@ -20,7 +20,7 @@ class RunWindow(wx.Frame):
                                         size=(1100, 500))
 
         self.GetEventHandler().Bind(EVT_UPDATE, self.update_run)
-        self.plot_view = MLOImageViewer
+        self.plot_view = MOMLOImageViewer
         self.run_view = MLORegressionReportViewer
         self.controller = controller
 
@@ -286,7 +286,9 @@ class RunWindow(wx.Frame):
             
         try:
             if not (event.trial is None):
+
                 trial = event.trial
+
                 visualize = event.visualize
                 if visualize: ## case when we only want to update run state (possible)
                         if (trial.get_main_counter() % trial.get_configuration().vis_every_X_steps) == 0: ### TODO - it should really be done a bit differently...
@@ -323,7 +325,7 @@ class TrialWindow(wx.Frame):
 
         parent.GetEventHandler().Bind(EVT_UPDATE, self.update_trial)
         self.controller = controller
-        self.plot_view = MLOImageViewer
+        self.plot_view = MOMLOImageViewer
         self.run = run
         ### Set up display
         self.panel = wx.Panel(self, wx.ID_ANY)

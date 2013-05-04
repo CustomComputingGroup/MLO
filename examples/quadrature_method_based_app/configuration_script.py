@@ -11,7 +11,7 @@ max_eval = 1
 ### Basic setup
 
 trials_count = 10
-population_size = 30
+population_size = 50
 
 max_fitness = 150.0
 max_iter = 5000

@@ -405,11 +405,12 @@ class GaussianProcessRegressor3(Regressor):
                         self.hyp = hyp
                         nlml_best = nlml
             except Exception, e:
-                logging.debug("Regressor training Failed ")
+                pass
+                #logging.debug("Regressor training Failed ")
             
                 
         if (not nlml_best):        
-            logging.debug("Regressor training Failed")
+            logging.debug("Regressor training Failed"+str(e))
             return False
         ## the gp with highest likelihood becomes the new hyperparameter set
         logging.info('Regressor training successful ' + str(self.hyp.cov) + " " + str(nlml_best))

@@ -38,6 +38,8 @@ from numpy import *
 initMin = -1
 initMax = 1
 
+objectives = 1
+
 #aecc or execution time -- when error correction applied
 #### [ 15.   6.]   75.3885409418 0.1
 #### [ 20.  11.]   11.1996923818 0.05
@@ -51,6 +53,14 @@ initMax = 1
 ##maximization
 def is_better(a, b):
     return a > b
+# Defines the problem to be maximization or minimization
+def dominate(a, b):
+    bo = bool(1)
+    for (ai,bi) in zip(a,b):
+    	if ai<bi: # < if maximization, > if minimization 
+    		bo = bool(0)
+    return bo
+
 
 cost_maxVal = 15000.0
 cost_minVal = 0.0

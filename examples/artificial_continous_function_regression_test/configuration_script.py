@@ -1,6 +1,7 @@
 import os
-results_folder_path = '/homes/mk306/log'
+results_folder_path = os.getcwd()+'/data/log'
 configuration_folder_path = os.path.split(os.path.realpath(__file__))[0]+"/"
+
 ##set to wherever you want the images to be stored
 #images_folder_path = 
 enable_traceback = True
@@ -9,11 +10,11 @@ eval_correct = False
 
 ### Basic setup
 
-trials_count = 1
-population_size = 50
+trials_count = 3
+population_size = 20
 
-max_fitness = 100.0
-max_iter = 5000
+max_fitness = 50.0
+max_iter = 2000
 max_speed = 0.01
 max_stdv = 0.05
 
@@ -59,9 +60,9 @@ classifier = 'SupportVectorMachine'
 ### GPR Regression settings
 regr = 'quadratic'
 corr2 = 'squared_exponential'
-corr = 'anisotropic'
+corr = 'isotropic'
 theta0 = 0.01
 thetaL = 0.00001
 thetaU = 3.0
 nugget = 5
-random_start = 100
+random_start = 50

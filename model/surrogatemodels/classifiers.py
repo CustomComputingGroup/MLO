@@ -41,7 +41,6 @@ class Classifier(object):
                 self.training_set = append(self.training_set, [part], axis=0)
                 self.training_labels = append(self.training_labels, [label],
                                               axis=0)
-                                          
     def contains_training_instance(self, part):
         contains, index = numpy_array_index(self.training_set, part)
         return contains
@@ -74,11 +73,12 @@ class SupportVectorMachineClassifier(Classifier):
 
     def train(self):
         try:
+
             inputScaler = preprocessing.StandardScaler().fit(self.training_set)
             scaledSvcTrainingSet = inputScaler.transform(self.training_set)
 
             if len(unique(asarray(self.training_labels))) < 2:
-                logging.info('Only one class encountered, we do not need to use a classifier')
+                #logging.info('Only one class encountered, we do not need to use a classifier')
                 #self.clf = svm.OneClassSVM()
                 #self.clf.fit(scaledSvcTrainingSet)
                 self.oneclass = True

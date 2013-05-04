@@ -9,8 +9,8 @@ from copy import copy, deepcopy
 import io
 import pickle
 import re
-from numpy import multiply, array, ceil, floor, maximum, minimum, mean, min, max
-from numpy.random import uniform, rand
+from numpy import multiply, array, ceil, floor, maximum, minimum, mean, min, max, sqrt, square, transpose
+from numpy.random import uniform, rand , random
 from numpy.linalg import norm
 import operator
 
@@ -28,16 +28,31 @@ class Trial(Thread):
         Thread.__init__(self)
         self.fitness = fitness
         self.controller = controller
+        
+        # now it is a list
+        self.surrogate_model = []
         # True if the user has selected to pause the trial
         
         if configuration.surrogate_type == "dummy":
-            self.surrogate_model = DummySurrogateModel(configuration,
+            if self.fitness.objectives>1:
+                for i in range(self.fitness.objectives):
+                    self.surrogate_model.append(DummySurrogateModel(configuration,self.controller))
+            else:
+                self.surrogate_model = DummySurrogateModel(configuration,
                                                        self.controller)
         elif configuration.surrogate_type == "local":
-            self.surrogate_model = LocalSurrogateModel(configuration,
+            if self.fitness.objectives>1:
+                for i in range(self.fitness.objectives):
+                    self.surrogate_model.append(LocalSurrogateModel(configuration,self.controller))
+            else:
+                self.surrogate_model = LocalSurrogateModel(configuration,
                                                        self.controller)
         else:
-            self.surrogate_model = ProperSurrogateModel(configuration,
+            if self.fitness.objectives>1:
+                for i in range(self.fitness.objectives):
+                    self.surrogate_model.append(ProperSurrogateModel(configuration,self.controller))
+            else:
+                self.surrogate_model = ProperSurrogateModel(configuration,
                                                         self.controller)
         # Contains all the counter variables that may be used for visualization
         counter_dictionary = {}
@@ -101,9 +116,16 @@ class Trial(Thread):
     def train_surrogate_model(self, population):
         logging.info('Training surrogate model')
         start = datetime.now()
-        self.set_model_failed(self.surrogate_model.train(self.hypercube()))
+        if self.fitness.objectives>1:
+            for i in range(self.fitness.objectives):
+                logging.info("Training model for fitness function "+ str(i+1))
+                self.set_model_failed(self.surrogate_model[i].train(self.hypercube()))
+        else:
+            self.set_model_failed(self.surrogate_model.train(self.hypercube()))
         diff = datetime.now() - start
         self.add_train_surrogate_model_time(diff)
+    
+    # for only one objective
         
     def predict_surrogate_model(self, population):
         start = datetime.now()
@@ -112,6 +134,51 @@ class Trial(Thread):
         self.add_predict_surrogate_model_time(diff)
         return prediction
         
+    
+    def predict_surrogate_mo_model(self, population):
+        start = datetime.now()
+        prediction = []
+        try:
+            for i in range(self.fitness.objectives):
+                prediction.append(self.surrogate_model[i].predict(population))
+        except:
+            logging.error("Prediction fails..")
+        diff = datetime.now() - start
+        self.add_predict_surrogate_model_time(diff)
+        if self.fitness.objectives==1:
+            return prediction[0]
+        
+        # process the prediction 
+        else:
+
+            Code = [] 
+            MU = []
+            S2 = []
+            for i in range(len(prediction[0][0])):
+                Code.append(0)
+                S2.append(0)
+            
+            MU_list = []
+            for p,(code,mu,s2) in enumerate(prediction):
+                for i,(c,m,s) in enumerate( zip(code,mu,s2) ):
+                    if c == 1:
+                        Code[i] = 1
+                    if S2[i] < s:
+                        S2[i] = s
+                MU_list.append(mu)
+            MU_array = array(MU_list)
+            MU_array = transpose(MU_array)[0]
+            try : 
+            
+                for i in range(len(MU_array)):
+                    tuplelet = ()
+                    for j in range(self.fitness.objectives):
+                        tuplelet = tuplelet + (MU_array[i][j],)
+                    MU.append(tuplelet)
+            except:
+                pass
+            return Code, MU, S2
+    
     def train_cost_model(self, population):
         logging.info('Training cost model')
         start = datetime.now()
@@ -185,24 +252,24 @@ class Trial(Thread):
         else:
             return array([self.fitness.worst_value]), code, cost
             
-    # for MOPSOTrial
-    def fitness_function1(self, part):
+    def fitness_function_mo(self, part):
         ##this bit traverses the particle set and checks if it has already been evaluated. 
-        if self.surrogate_model.contains_training_instance(part):
-        
-            code, fitness = self.surrogate_model.get_training_instance(part)
-            cost = self.cost_model.get_training_instance(part)
-            if (fitness is None) or (code is None):
-                fitness = array([self.fitness.worst_value])
-            return fitness, code, cost
-        self.increment_counter('fit')
-        
+
+        for i in range(len(self.surrogate_model)):
+                if self.surrogate_model[i].contains_training_instance(part):
+                    code, fitness = self.surrogate_model[i].get_training_instance(part)
+                    cost = self.cost_model.get_training_instance(part)
+                    if (fitness is None) or (code is None):
+                        fitness = array([self.fitness.worst_value])
+                    return fitness, code, cost
+                self.increment_counter('fit')
+                
         try:
-            results, state = self.fitness.fitnessFunc1(part, self.get_fitness_state())
+            results, state = self.fitness.MOFitnessFunc(part, self.get_fitness_state())
             self.set_fitness_state(state)
-        except Exception,e:          
+        except Exception,e:
             logging.info(str(e))
-            results = self.fitness.fitnessFunc(part) ## fitness function doesnt have state
+            results = self.fitness.MOFitnessFunc(part) ## fitness function doesnt have state
         fitness = results[0]
         code = results[1]
         addReturn = results[2]
@@ -212,50 +279,17 @@ class Trial(Thread):
         except:
             cost = 1.0 ## just keep it constant for all points
         self.set_counter_dictionary("cost", self.get_counter_dictionary("cost") + cost)
-        self.surrogate_model.add_training_instance(part, code, fitness, addReturn)
-        self.cost_model.add_training_instance(part, cost)
-        self.set_retrain_model(True)
         
+        for i in range(self.fitness.objectives):
+                self.surrogate_model[i].add_training_instance(part, code, (fitness[i],), addReturn)
+                self.cost_model.add_training_instance(part, cost)
+                self.set_retrain_model(True)
+                
         if code[0] == 0:
             self.set_terminating_condition(fitness) 
             return fitness, code, cost
         else:
-            return array([self.fitness.worst_value]), code, cost
-    def fitness_function2(self, part):
-        ##this bit traverses the particle set and checks if it has already been evaluated. 
-        if self.surrogate_model.contains_training_instance(part):
-        
-            code, fitness = self.surrogate_model.get_training_instance(part)
-            cost = self.cost_model.get_training_instance(part)
-            if (fitness is None) or (code is None):
-                fitness = array([self.fitness.worst_value])
-            return fitness, code, cost
-        self.increment_counter('fit')
-        
-        try:
-            results, state = self.fitness.fitnessFunc2(part, self.get_fitness_state())
-            self.set_fitness_state(state)
-        except Exception,e:          
-            logging.info(str(e))
-            results = self.fitness.fitnessFunc(part) ## fitness function doesnt have state
-        fitness = results[0]
-        code = results[1]
-        addReturn = results[2]
-        logging.info("Evaled " + str(part) + " fitness:" + str(fitness) + " code:" + str(code))
-        try: ## not all fitness functions return benchmark exectuion cost
-            cost = results[3][0]
-        except:
-            cost = 1.0 ## just keep it constant for all points
-        self.set_counter_dictionary("cost", self.get_counter_dictionary("cost") + cost)
-        self.surrogate_model.add_training_instance(part, code, fitness, addReturn)
-        self.cost_model.add_training_instance(part, cost)
-        self.set_retrain_model(True)
-        
-        if code[0] == 0:
-            self.set_terminating_condition(fitness) 
-            return fitness, code, cost
-        else:
-            return array([self.fitness.worst_value]), code, cost
+            return self.fitness.worst_value, code, cost
             
     ## indicator for the controller and viewer that the state has changed. 
     def view_update(self, visualize=False):
@@ -273,10 +307,14 @@ class Trial(Thread):
         try:
             trial_file = str(self.get_results_folder()) + '/' +  str(self.get_counter_dictionary('g')) + '.txt'
             dict = self.state_dictionary
-            surrogate_model_state_dict = self.surrogate_model.get_state_dictionary()
-            dict['surrogate_model_state_dict'] = surrogate_model_state_dict
-            cost_model_state_dict = self.cost_model.get_state_dictionary()
-            dict['cost_model_state_dict'] = cost_model_state_dict
+            for i in range(self.fitness.objectives):
+                    surrogate_model_state_dict = self.surrogate_model[i].get_state_dictionary()
+                    dict_name = 'surrogate_model_state_dict_' + str(i)
+                    dict[dict_name] = surrogate_model_state_dict
+                    cost_model_state_dict = self.cost_model.get_state_dictionary()
+                    
+                    dict_name = 'cost_model_state_dict_' + str(i)
+                    dict[dict_name] = cost_model_state_dict
             with io.open(trial_file, 'wb') as outfile:
                 pickle.dump(dict, outfile)  
                 if self.kill:
@@ -312,8 +350,11 @@ class Trial(Thread):
             self.set_state_dictionary(dict)
             self.state_dictionary["generate"] = False
             self.kill = False
-            self.surrogate_model.set_state_dictionary(dict['surrogate_model_state_dict'])
-            self.cost_model.set_state_dictionary(dict['cost_model_state_dict'])
+            for i in range(self.fitness.objectives):
+                dict_name = 'surrogate_model_state_dict_' + str(i)
+                self.surrogate_model[i].set_state_dictionary(dict[dict_name])
+                dict_name = 'cost_model_state_dict_' + str(i)
+                self.cost_model.set_state_dictionary(dict[dict_name])
             self.previous_time = datetime.now()
             logging.info("Loaded Trial")
             return True
@@ -433,7 +474,8 @@ class Trial(Thread):
         self.state_dictionary['best'] = new_best
         logging.info('New global best found' + str(new_best) + ' fitness:'+ str(new_best.fitness.values))
         
-        
+    def set_best_mo(self, new_best):
+        self.state_dictionary['best'] = new_best
     def get_counter_dictionary(self, counter):
         return self.state_dictionary['counter_dictionary'][counter]
         
@@ -1096,7 +1138,6 @@ class PSOTrial(Trial):
     
     
 class MOPSOTrial(Trial):
-
     #######################
     ## Abstract Methods  ##
     #######################
@@ -1106,6 +1147,7 @@ class MOPSOTrial(Trial):
         Initialises the trial and returns True if everything went OK,
         False otherwise.
         """
+        results_folder, images_folder = self.create_results_folder()
         self.run_initialize()
         self.state_dictionary['best'] = None
         self.state_dictionary['fitness_evaluated'] = False
@@ -1114,10 +1156,11 @@ class MOPSOTrial(Trial):
         self.state_dictionary['population'] = None
         self.state_dictionary['best_fitness_array'] = []
         self.state_dictionary['generations_array'] = []
-        self.set_main_counter_name("g")
-        self.set_counter_dictionary("g",0)
-        self.initialize_population()    
-        results_folder, images_folder = self.create_results_folder()
+        self.state_dictionary['particle_speed_array'] = []
+        self.set_main_counter_name('g')
+        self.set_counter_dictionary('g',0)
+        self.initialize_population()
+
         if not results_folder or not images_folder:
             # Results folder could not be created
             logging.error('Results and images folders cound not be created, terminating.')
@@ -1126,7 +1169,7 @@ class MOPSOTrial(Trial):
         return True
         
     def run_initialize(self):
-        logging.info("Initialize Multi-Objective PSOTrial no:" + str(self.get_trial_no()))
+        logging.info("Initialize Multi Objective PSOTrial no:" + str(self.get_trial_no()))
         self.cost_model = DummyCostModel(self.configuration, self.controller, self.fitness)
         design_space = self.fitness.designSpace
         self.toolbox = copy(base.Toolbox())
@@ -1141,7 +1184,10 @@ class MOPSOTrial(Trial):
             eval('creator.Particle' + str(self.my_run.get_name()))
             logging.debug("Particle class for this run already exists")
         except AttributeError:
-            creator.create('FitnessMax' + str(self.my_run.get_name()), base.Fitness, weights=(1.0,))
+            weight = ()
+            for i in range(self.fitness.objectives):
+                weight = weight + (1.0,)
+            creator.create('FitnessMax' + str(self.my_run.get_name()), base.Fitness, weights= weight)
             ### we got to add specific names, otherwise the classes are going to be visible for all
             ### modules which use deap...
             
@@ -1163,10 +1209,360 @@ class MOPSOTrial(Trial):
         self.toolbox.register('update', self.updateParticle, 
                               conf=self.get_configuration(),
                               designSpace=design_space)
-        self.toolbox.register('evaluate1', self.fitness_function1)
-        self.toolbox.register('evaluate2', self.fitness_function2)
+        self.toolbox.register('evaluate1', self.fitness_function_mo)
         self.new_best=False
         
+    def initialize_population(self):
+        ## the while loop exists, as meta-heuristic makes no sense till we find at least one particle that is within valid region...
+        
+        self.set_at_least_one_in_valid_region(False)
+        F = copy(self.get_configuration().F)
+        ## get objectives
+        objectives = self.fitness.objectives
+        
+        while (not self.get_at_least_one_in_valid_region()):
+            self.set_population(self.toolbox.population(self.get_configuration().population_size))
+            self.toolbox.filter_particles(self.get_population())
+            
+            # create particles
+            if self.get_configuration().eval_correct:
+                self.get_population()[0] = self.create_particle(
+                    self.fitness.alwaysCorrect())  # This will break
+            
+            for i, part in enumerate(self.get_population()):
+                if i < F:
+                    part.fitness.values, part.code, cost = self.toolbox.evaluate1(part)
+
+                    self.set_at_least_one_in_valid_region((part.code == 0) or self.get_at_least_one_in_valid_region())
+                    
+                    flag = self.update_nondominate_archive(part)
+                    best = self.select_best()
+                    if not self.get_best() or self.get_best() != best:
+                            if best != 'null':
+                                    self.set_best_mo(best)
+                            else:
+                                    self.set_best_mo(part)
+                    #if not self.get_best() or self.fitness.dominates(part.fitness.values, self.get_best().fitness.values):
+                        #particle = self.create_particle(part)
+                        #particle.fitness.values = part.fitness.values
+                        #self.set_best(part)
+                        
+            ## add one example till we find something that works
+            F = 1
+            
+        self.state_dictionary["fresh_run"] = True
+    
+    # display pareto points, for testing
+    def display_pareto(self, pareto_dict):
+        L = []
+        for k in pareto_dict.keys():
+            if pareto_dict[k] != 'null':
+                L.append(pareto_dict[k]['position'])
+        logging.info("Currently Pareto Front points: "+ str(L))
+    
+    # update the external achive
+    def update_nondominate_archive(self, part):
+        filepath = self.get_results_folder() + "/pareto_front.txt"
+        if os.path.exists(filepath):
+        #read from file
+            pareto_dict = {}
+            with open(filepath, 'rb') as outfile:
+                dict = pickle.load(outfile)
+                pareto_dict = dict
+
+            if self.nondominated(pareto_dict, part.fitness.values):
+                distance = self.distance_measure(pareto_dict,part.fitness.values)
+                part_dict = {
+                         'position': part.fitness.values,
+                         'particle': part,
+                         'density': sys.maxint if distance==0 else 1/distance,
+                         'sparse' : distance
+                        }
+                pareto_dict,irregular = self.check_update_density(pareto_dict,part_dict['position'])
+                
+                # if irregular, do nothing and return 
+                if irregular == True: 
+                    logging.info("Irregular point "+ str(part_dict['position'])+", not added")
+                    return False
+                
+                # else add it into pareto_dict 
+                # measure distance from 
+                
+                pareto_dict = self.remove_dominated(pareto_dict, part.fitness.values)
+                
+                full = 1
+                for k in pareto_dict.keys():
+                    if pareto_dict[k] == 'null':
+                        pareto_dict[k] = part_dict
+                        full = 0
+                        break
+                        
+                # if the dict is full
+                if full == 1:
+                    pareto_dict = self.replace_most_density(pareto_dict,part_dict)
+                logging.info("New particle with position "+ str(part_dict['position']) +" added to Pareto front set.")
+                pareto_dict=self.update_density(pareto_dict)
+                with io.open(filepath, 'wb') as outfile:
+                    pickle.dump(pareto_dict, outfile)
+                #self.display_pareto(pareto_dict)
+                return True
+            else:
+                return False        
+        else:
+            #create new golden resultfile
+            logging.info("New pareto front file to be created")
+            part_dict = {
+                         'particle': part,
+                         'position': part.fitness.values,
+                         'density': 0,
+                         'sparse': sys.maxint
+                        }
+            pareto_dict = {'0': part_dict}
+            for i in range(1,self.fitness.pareto_amount):
+                dict_s = str(i)
+                pareto_dict[dict_s] = 'null'
+            with io.open(filepath, 'wb') as outfile:
+                pickle.dump(pareto_dict, outfile)
+                return True            
+ 
+    ## check if pareticle is non-dominated on the external archive
+    def nondominated(self, pareto_dict, values):
+        bo = True
+        for k in pareto_dict.keys():
+            if pareto_dict[k] != 'null':
+                if self.fitness.dominate(pareto_dict[k]['position'],values):
+                    bo = False
+        
+        return bo
+        
+    ## remove the dominated particle by the new adder
+    def remove_dominated(self, pareto_dict, values):
+        for k in pareto_dict.keys():
+            if pareto_dict[k] != 'null':
+                if self.fitness.dominate(values, pareto_dict[k]['position']):
+                    #logging.info("XXXXXXXXX"+str(values)+"Dominate "+str(pareto_dict[k]['position']))
+                    logging.info("Dominated pareto point"+ str(pareto_dict[k]['position'])+ " removed ")
+                    pareto_dict[k] = 'null'
+        #self.display_pareto(pareto_dict)
+        
+        
+        # update density
+        pareto_dict = self.update_density(pareto_dict)
+        
+        return pareto_dict
+   
+    ## check the density of the particle
+    def distance_measure(self, pareto_dict, values): 
+        nearest_1 = sys.maxint
+        nearest_2 = sys.maxint
+
+        for k in pareto_dict.keys():
+             if pareto_dict[k] != 'null':
+                 Euclidean = 0.0
+                 for (a,b) in zip(pareto_dict[k]['position'],values):
+                     Euclidean = Euclidean + square(a-b)
+                 Euclidean = sqrt(Euclidean)
+                 if Euclidean < nearest_1:
+                     nearest_1 = Euclidean 
+                 else:
+                     if Euclidean < nearest_2:
+                         nearest_2 = Euclidean
+        if nearest_2 == sys.maxint:
+            nearest_2 = 0.0
+        
+        return nearest_1 + nearest_2
+    
+    
+    # update density for whole pareto dict
+    def update_density(self, pareto_dict):
+        for k in pareto_dict.keys():
+            if pareto_dict[k] != 'null':
+                first,nearest_1,second,nearest_2,irregular = self.get_nearest_2(pareto_dict,pareto_dict[k]['position'])
+                if first == 'null':
+                    pareto_dict[k]['density'] = 0
+                    pareto_dict[k]['sparse'] = sys.maxint
+                else:
+                    if second == 'null':
+                        pareto_dict[k]['density'] = 1/nearest_1
+                        pareto_dict[k]['sparse'] = nearest_1
+                        
+                    else:
+                        if irregular != True:
+                            pareto_dict[k]['density'] = 1/(nearest_1+nearest_2)
+                            pareto_dict[k]['sparse'] = nearest_1 + nearest_2
+        return pareto_dict
+    
+    # get nearest 2 points in the pareto dict, for the measure of density and sparse 
+    def get_nearest_2(self, pareto_dict, values):
+        nearest_1 = sys.maxint
+        nearest_2 = sys.maxint
+        first = 'null'
+        second ='null'
+        irregular = False
+        irregular_count = 0
+        #max_distance = self.select_least_density()['sparse']
+#        logging.info("*****max_distance now is "+ str(max_distance))
+        local_sum = 0.0
+        pareto_population = self.get_pareto_population(pareto_dict)
+        for k in pareto_dict.keys():
+            if pareto_dict[k] != 'null':
+                Euclidean = 0.0
+                for (a,b) in zip(pareto_dict[k]['position'],values):
+                    Euclidean = Euclidean + square(a-b)
+                Euclidean = sqrt(Euclidean)
+                if Euclidean != 0:
+                    local_sum = local_sum + Euclidean
+                    if Euclidean < nearest_1:
+                        nearest_1 = Euclidean
+                        first = k
+                    else:
+                        if Euclidean < nearest_2:
+                            nearest_2 = Euclidean
+                            second = k
+ #       logging.info("*****population now is "+ str(pareto_population))
+ #       logging.info("*****local_sum now is "+ str(local_sum))
+
+        # filter irregular points
+#        if pareto_population > 0:
+#            logging.info("*****divide now is "+ str(local_sum/pareto_population))
+#            if local_sum/pareto_population >= 5*max_distance:
+#                irregular = True
+#               return pareto_dict, irregular
+        return first,nearest_1,second,nearest_2,irregular
+        
+    
+    ## update density of pareto dict with one particle and check if it is a regular point
+    def check_update_density(self, pareto_dict, values):  
+        first,nearest_1,second,nearest_2,irregular = self.get_nearest_2(pareto_dict,values)
+        if first == 'null':
+            return pareto_dict,True
+        else:
+            if second == 'null':
+                nearest_2 = 0
+                pareto_dict[first]['density'] = 1/nearest_1
+                pareto_dict[first]['sparse'] = nearest_1
+                return pareto_dict, False
+            else: 
+                if irregular != True:
+                    nearest_1_1 = self.get_nearest_1(pareto_dict, pareto_dict[first])
+                    pareto_dict[first]['density'] = 1/(nearest_1_1 + nearest_1)
+                    pareto_dict[first]['sparse'] = nearest_1_1 + nearest_1
+                    nearest_2_1 = self.get_nearest_1(pareto_dict, pareto_dict[second])
+                    pareto_dict[second]['density'] = 1/(nearest_2_1 + nearest_2)
+                    pareto_dict[first]['sparse'] = nearest_2_1 + nearest_2
+                
+                return pareto_dict,irregular
+    
+    # get population now 
+    def get_pareto_population(self, pareto_dict):
+        population = 0
+        for k in pareto_dict.keys():
+            if pareto_dict[k] != 'null':
+                population = population + 1
+        return population
+    
+    # find the nearest particle in the pareto front dict 
+    def get_nearest_1(self, pareto_dict,part_dict):
+        nearest = sys.maxint
+        for k in pareto_dict.keys():
+            if pareto_dict[k] != 'null':
+                Euclidean = 0.0
+                for (a,b) in zip(pareto_dict[k]['position'],part_dict['position']):
+                    Euclidean = Euclidean + square(a-b)
+                Euclidean = sqrt(Euclidean)
+                if Euclidean !=0 and Euclidean < nearest:
+                    nearest = Euclidean
+        return nearest
+        
+    ## replace the most density one with the current part when full 
+    def replace_most_density(self, pareto_dict, part_dict):
+        most_density = 0
+        key = '0'
+        for k in pareto_dict.keys():
+            if pareto_dict[k]['density'] > most_density:
+                most_density = pareto_dict[k]['density']
+                key = k
+
+        if (most_density > part_dict['density']):
+            pareto_dict[key] = part_dict
+        #self.display_pareto(pareto_dict)
+        pareto_dict = self.update_density(pareto_dict)
+        return pareto_dict
+    
+    # simly select the least density point in the least density point 
+    def select_least_density(self):
+        filepath = self.get_results_folder() + "/pareto_front.txt"
+        if os.path.exists(filepath):
+            #read from file
+            pareto_dict = {}
+            density_list = []
+            with open(filepath, 'rb') as outfile:
+                dict = pickle.load(outfile)
+                pareto_dict = dict
+            pareto_dict=self.update_density(pareto_dict)
+            
+            key = 'null'
+            density = sys.maxint
+            for k in pareto_dict.keys():
+                if pareto_dict[k] != 'null':
+                    density_list.append(pareto_dict[k]['density'])
+                    #logging.info(str(pareto_dict[key]['density'])+"&&&&")
+                    if pareto_dict[k]['density'] < density:
+                        key = k
+                        density = pareto_dict[k]['density']
+            
+            #logging.info(" *** *** **Best point selected "+ str(pareto_dict[key]['position'])+" with density "+ str(pareto_dict[key]['density'])+" Others are "+str(density_list))
+            
+            if key == 'null':
+                return 'null'
+            else:
+                return pareto_dict[key]['particle']
+        else:
+            logging.error("No pareto file exists.")
+            return 'null'
+        
+        
+    # select best from pareto front achive use roulette, less density point with large sparse messure get more change to be selected
+    def select_best(self):
+        filepath = self.get_results_folder() + "/pareto_front.txt"
+        if os.path.exists(filepath):
+            #read from file
+            pareto_dict = {}
+            with open(filepath, 'rb') as outfile:
+                dict = pickle.load(outfile)
+                pareto_dict = dict
+                #self.display_pareto(pareto_dict)
+            pareto_dict=self.update_density(pareto_dict)
+            density = []
+            # roulette choose the best
+            sum_sparse = 0.0
+            for k in pareto_dict.keys():
+                if pareto_dict[k] != 'null':
+                    sum_sparse = sum_sparse + pareto_dict[k]['sparse']
+                    density.append(pareto_dict[k]['density'])
+            pivot = 0.0
+            for k in pareto_dict.keys():
+                if pareto_dict[k] != 'null':
+                    pareto_dict[k]['lower'] = pivot
+                    pivot = pivot + pareto_dict[k]['sparse']/sum_sparse
+                    pareto_dict[k]['upper'] = pivot
+            random_num = random()
+                
+            key = 'null'
+            for k in pareto_dict.keys():
+                if pareto_dict[k] != 'null':
+                    if random_num >= pareto_dict[k]['lower'] and random_num <= pareto_dict[k]['upper']:
+                        key = k
+            if key != 'null':
+                #logging.info(" ^^^ ^^ ^^Best point selected with density "+ str(pareto_dict[key]['density'])+"Others are "+str(density))
+                return pareto_dict[key]['particle']
+            else:
+                return 'null'
+        else:
+            logging.error("No pareto file exists.")
+            return 'null'
+                
+                
     def run(self):
         self.state_dictionary['generate'] = True
         
@@ -1181,23 +1577,35 @@ class MOPSOTrial(Trial):
         reevalute = False
         if self.state_dictionary["fresh_run"]: ## we need this as we only want to do it for initial generation because the view
             ## the problem is that we cannot
-            self.train_surrogate_model(self.get_population())
-            self.train_cost_model(self.get_population())
+
+            try:
+                self.train_surrogate_model(self.get_population())
+                self.train_cost_model(self.get_population())
+            except:
+                logging.error("Cannot train the model")
+            #logging.info("@@@nima Snapshot:::::"+str(self.snapshot()))
             self.view_update(visualize = True)
             self.state_dictionary["fresh_run"] = False
             self.save()
             
         while self.get_counter_dictionary('g') < self.get_configuration().max_iter + 1:
-            
+            filepath = self.get_results_folder() + "/pareto_front.txt"
+            if os.path.exists(filepath):
+                #read from file
+                pareto_dict = {}
+                with open(filepath, 'rb') as outfile:
+                    dict = pickle.load(outfile)
+                    pareto_dict = dict
+            logging.info('------------------New Generation-----------------')
             logging.info('[' + str(self.get_name()) + '] Generation ' + str(self.get_counter_dictionary('g')))
             logging.info('[' + str(self.get_name()) + '] Fitness ' + str(self.get_counter_dictionary('fit')))
-
+            self.display_pareto(pareto_dict)
             # termination condition - we put it here so that when the trial is reloaded
             # it wont run if the run has terminated already
 
-            if self.get_terminating_condition(): 
-                logging.info('Terminating condition reached...')
-                break
+            #if self.get_terminating_condition(): 
+             #   logging.info('Terminating condition reached...')
+              #  break
             
             # Roll population
             first_pop = self.get_population().pop(0)
@@ -1207,13 +1615,20 @@ class MOPSOTrial(Trial):
                 logging.info('Fitness counter exceeded the limit... exiting')
                 break
             reevalute = False
-            # Train surrogate model
+            
+            # if training set_updated Train surrogate model
             if self.training_set_updated():
-                self.train_surrogate_model(self.get_population())
-                self.train_cost_model(self.get_population())
+                try:
+                    self.train_surrogate_model(self.get_population())
+                    self.train_cost_model(self.get_population())
+                except:
+                    logging.error("Cannot train the model")
                 reevalute = True
             ##print self.get_population()
-            code, mu, variance = self.predict_surrogate_model(self.get_population())
+            try:
+                code, mu, variance = self.predict_surrogate_mo_model(self.get_population())
+            except:
+                logging.error("Cannot predict")
             reloop = False
             if (mu is None) or (variance is None):
                 logging.info("Prediction Failed")
@@ -1222,8 +1637,10 @@ class MOPSOTrial(Trial):
                 logging.info("mean S2 " + str(mean(variance)))
                 logging.info("max S2  " + str(max(variance)))
                 logging.info("min S2  " + str(min(variance)))
-                logging.info("over 0.05  " + str(min(len([v for v in variance if v > 0.05]))))
+                logging.info("over " + str(self.get_configuration().max_stdv) + ': ' + str(min(len([v for v in variance if v > self.get_configuration().max_stdv]))))
                 logging.info("over 0.01  " + str(min(len([v for v in variance if v > 0.01]))))
+                
+                # check if we should re evaluate and retrain
                 reloop = self.post_model_filter(code, mu, variance)
             ##
             if self.get_model_failed():
@@ -1255,6 +1672,14 @@ class MOPSOTrial(Trial):
     def snapshot(self):
         fitness = self.fitness
         best_fitness_array = copy(self.get_best_fitness_array())
+        filepath = self.get_results_folder() + "/pareto_front.txt"
+        pareto_dict = {}
+        if os.path.exists(filepath):
+            #read from file
+            with open(filepath, 'rb') as outfile:
+                dict = pickle.load(outfile)
+                pareto_dict = dict
+        
         generations_array = copy(self.get_generations_array())
         results_folder = copy(self.get_results_folder())
         images_folder = copy(self.get_images_folder())
@@ -1263,7 +1688,9 @@ class MOPSOTrial(Trial):
         return_dictionary = {
             'fitness': fitness,
             'best_fitness_array': best_fitness_array,
+            'pareto_dict' : pareto_dict,
             'generations_array': generations_array,
+            'speed_array' : self.state_dictionary['particle_speed_array'],
             'configuration_folder_path':self.configuration.configuration_folder_path,
             'run_folders_path':self.configuration.results_folder_path,
             'results_folder': results_folder,
@@ -1274,8 +1701,10 @@ class MOPSOTrial(Trial):
             'name': name,
             'fitness_state': self.get_fitness_state(),
             'run_name': self.my_run.get_name(),
-            'classifier': self.get_surrogate_model().classifier, ## return a copy! 
-            'regressor': self.get_surrogate_model().regressor, ## return a copy!
+            'classifier1': self.get_surrogate_model()[0].classifier, ## return a copy! 
+            'regressor1': self.get_surrogate_model()[0].regressor, ## return a copy!
+            'classifier2': self.get_surrogate_model()[1].classifier, ## return a copy! 
+            'regressor2': self.get_surrogate_model()[1].regressor, ## return a copy!
             'cost_model': self.get_cost_model(), ## return a copy!
             'meta_plot': {"particles":{'marker':"o",'data':self.get_population()}},
             'generate' : self.state_dictionary['generate'],
@@ -1291,7 +1720,7 @@ class MOPSOTrial(Trial):
     def checkAllParticlesEvaled(self):
         all_evaled = True
         for part in self.get_population():
-            all_evaled = self.get_surrogate_model().contains_training_instance(part) and all_evaled
+            all_evaled = self.get_surrogate_model()[0].contains_training_instance(part) and all_evaled
         
         if all_evaled: ## randomize population
             self.set_population(self.toolbox.population(self.get_configuration().population_size))
@@ -1351,8 +1780,45 @@ class MOPSOTrial(Trial):
         particle = self.create_particle(particle)
         return particle
 
-	# update the position of the particles
-	# should change this part in order to change the leader election strategy
+        # update the position of the particles
+        # should change this part in order to change the leader election strategy
+        
+    def meta_iterate(self):
+        #TODO - reavluate one random particle... do it.. very important!
+        ##while(self.get_at_least_one_in_valid_region()):
+        ##    logging.info("All particles within invalid area... have to randomly sample the design space to find one that is OK...")             
+            
+        #Update Bests
+        logging.info("Meta Iteration")
+        for part in self.get_population():
+            
+            # personal best
+            if not part.best or self.fitness.dominate(part.fitness.values, part.best.fitness.values):
+                part.best = self.create_particle(part)
+                part.best.fitness.values = part.fitness.values
+            #if not part.best or self.fitness.dominate(part.fitness.values, part.best.fitness.values):
+             #   part.best = self.create_particle(part)
+              #  part.best.fitness.values = part.fitness.values
+            
+            # global best
+            flag = self.update_nondominate_archive(part)
+            best = self.select_best()
+            if not self.get_best() or self.get_best() != best:
+                best = self.select_best()
+                if best != 'null':
+                    self.set_best_mo(best)
+                else:
+                    self.set_best_mo(part)
+            #if not self.get_best() or self.fitness.dominate(part.fitness.values, self.get_best().fitness.values):
+             #   particle = self.create_particle(part)
+              #  particle.fitness.values = part.fitness.values
+               # self.set_best(particle)
+                #self.new_best = True
+                                
+        #PSO
+        for part in self.get_population():
+            self.toolbox.update(part, self.get_counter_dictionary('g'))
+
     def updateParticle(self,  part, generation, conf, designSpace):
         if conf.admode == 'fitness':
             fraction = self.fitness_counter / conf.max_fitness
@@ -1365,12 +1831,14 @@ class MOPSOTrial(Trial):
         u2 = [uniform(0, conf.phi2) for _ in range(len(part))]
         
         ##########   this part particulately, leader election for every particle
+        leader = self.get_best()
+        #logging.info("^^ ^^In updating, the best is " + str(leader))
         v_u1 = map(operator.mul, u1, map(operator.sub, part.best, part))
         v_u2 = map(operator.mul, u2, map(operator.sub, self.get_best(), part))
+        
         weight = 1.0
         if conf.weight_mode == 'linear':
-            weight = conf.max_weight - (conf.max_weight -
-                                        conf.min_weight) * fraction
+            weight = conf.max_weight - (conf.max_weight - conf.min_weight) * fraction
         elif conf.weight_mode == 'norm':
             weight = conf.weight
         else:
@@ -1380,15 +1848,16 @@ class MOPSOTrial(Trial):
                          map(operator.mul, part.speed, weightVector),
                          map(operator.add, v_u1, v_u2))
 
-	# what's this mean?
+        
+        # what's this mean?
         if conf.applyK is True:
             phi = array(u1) + array(u1)
 
             XVector = (2.0 * conf.KK) / abs(2.0 - phi -
                                             sqrt(pow(phi, 2.0) - 4.0 * phi))
             part.speed = map(operator.mul, part.speed, XVector)
-
-	# what's the difference between these modes?
+       
+        # what's the difference between these modes?
         if conf.mode == 'vp':
             for i, speed in enumerate(part.speed):
                 speedCoeff = (conf.K - pow(fraction, conf.p)) * part.smax[i]
@@ -1415,62 +1884,28 @@ class MOPSOTrial(Trial):
             pass
         else:
             raise('[updateParticle]: mode unknown.. ')
+        
+        absolute_velocity = 0
+        for e in part.speed:
+            absolute_velocity = absolute_velocity + float(e) * float(e)
+        if len(self.state_dictionary['particle_speed_array'])>200:
+            self.state_dictionary['particle_speed_array'] = []
+        if absolute_velocity>0:
+            self.state_dictionary['particle_speed_array'].append(sqrt(absolute_velocity))
+        else:
+            self.state_dictionary['particle_speed_array'].append(0)
+        #part.speedList.append(part.speed)
+        #logging.info("Speed List "+ str(part.speedList))
         part[:] = map(operator.add, part, part.speed)
+        
 
-    def initialize_population(self):
-        ## the while loop exists, as meta-heuristic makes no sense till we find at least one particle that is within valid region...
-        
-        self.set_at_least_one_in_valid_region(False)
-        F = copy(self.get_configuration().F)
-        while (not self.get_at_least_one_in_valid_region()):
-            self.set_population(self.toolbox.population(self.get_configuration().population_size))
-            self.toolbox.filter_particles(self.get_population())
-            if self.get_configuration().eval_correct:
-                self.get_population()[0] = self.create_particle(
-                    self.fitness.alwaysCorrect())  # This will break
-            for i, part in enumerate(self.get_population()):
-                if i < F:
-                    part.fitness.values, part.code, cost = self.toolbox.evaluate1(part)
-                    part.fitness.values, part.code, cost = self.toolbox.evaluate1(part)
-                    self.set_at_least_one_in_valid_region((part.code == 0) or self.get_at_least_one_in_valid_region())
-                    if not self.get_best() or self.fitness.is_better(part.fitness, self.get_best().fitness):
-                        particle = self.create_particle(part)
-                        particle.fitness.values = part.fitness.values
-                        self.set_best(particle)
-                        
-            ## add one example till we find something that works
-            F = 1
-            
-        self.state_dictionary["fresh_run"] = True
-        
-        #what's this function do?
-    def meta_iterate(self):
-        #TODO - reavluate one random particle... do it.. very important!
-        ##while(self.get_at_least_one_in_valid_region()):
-        ##    logging.info("All particles within invalid area... have to randomly sample the design space to find one that is OK...")             
-            
-        #Update Bests
-        logging.info("Meta Iteration")
-        for part in self.get_population():
-            if not part.best or self.fitness.is_better(part.fitness, part.best.fitness):
-                part.best = self.create_particle(part)
-                part.best.fitness.values = part.fitness.values
-            if not self.get_best() or self.fitness.is_better(part.fitness, self.get_best().fitness):
-                particle = self.create_particle(part)
-                particle.fitness.values = part.fitness.values
-                self.set_best(particle)
-                self.new_best = True
-                                
-        #PSO
-        for part in self.get_population():
-            self.toolbox.update(part, self.get_counter_dictionary('g'))
 
     def filter_population(self):
         self.toolbox.filter_particles(self.get_population())
    
     def evaluate_best(self):        
         if self.new_best:
-            self.fitness_function1(self.get_best())
+            self.fitness_function_mo(self.get_best())
             
             logging.info('New best was found after M :' + str(self.get_best()))
         else:
@@ -1478,7 +1913,7 @@ class MOPSOTrial(Trial):
             perturbation = self.perturbation(radius = 100.0)                        
             logging.info('Best was already evalauted.. adding perturbation ' + str(perturbation))
             perturbed_particle = self.create_particle(self.get_best())
-            code, mean, variance = self.predict_surrogate_model([perturbed_particle])
+            code, mean, variance = self.predict_surrogate_mo_model([perturbed_particle])
             if code is None:
                 logging.debug("Code is none..watch out")
             if code is None or code[0] == 0:
@@ -1486,11 +1921,20 @@ class MOPSOTrial(Trial):
             for i,val in enumerate(perturbation):
                 perturbed_particle[i] = perturbed_particle[i] + val       
             self.toolbox.filter_particle(perturbed_particle)
-            fitness, code, cost = self.fitness_function(perturbed_particle) 
+            fitness, code, cost = self.fitness_function_mo(perturbed_particle) 
             ##check if the value is not a new best
             perturbed_particle.fitness.values = fitness
-            if not self.get_best() or self.fitness.is_better(perturbed_particle.fitness, self.get_best().fitness):
-                self.set_best(perturbed_particle)
+            
+            flag = self.update_nondominate_archive(perturbed_particle)
+            best = self.select_best()
+            if not self.get_best() or self.get_best() != best:
+                best = self.select_best()
+                if best != 'null':
+                    self.set_best_mo(best)
+                else:
+                    self.set_best_mo(part)
+            #if not self.get_best() or self.fitness.dominate(perturbed_particle.fitness.values, self.get_best().fitness.values):
+                #self.set_best(perturbed_particle)
             else: ## why do we do this? 
                 if code[0] != 0:
                     logging.info('Best is within the invalid area ' + str(code[0]) + ', sampling design space')
@@ -1506,7 +1950,7 @@ class MOPSOTrial(Trial):
         logging.info('Evaluating best perturbation')
         perturbation = self.perturbation(radius = 10.0)                        
         hypercube = self.hypercube()
-        particle = self.surrogate_model.max_uncertainty(designSpace=self.fitness.designSpace, hypercube = hypercube)
+        particle = self.surrogate_model[0].max_uncertainty(designSpace=self.fitness.designSpace, hypercube = hypercube)
         if particle is None:
             logging.info('Evaluating a perturbation of a random particle')
             particle = self.toolbox.particle()
@@ -1514,9 +1958,17 @@ class MOPSOTrial(Trial):
         for i,val in enumerate(perturbation):
             perturbedParticle[i] = perturbedParticle[i] + val       
         self.toolbox.filter_particle(perturbedParticle)
-        perturbedParticle.fitness.values, code, cost = self.fitness_function(perturbedParticle) 
-        if not self.get_best() or self.fitness.is_better(perturbedParticle.fitness, self.get_best().fitness):
-            self.set_best(perturbedParticle)
+        perturbedParticle.fitness.values, code, cost = self.fitness_function_mo(perturbedParticle) 
+        flag = self.update_nondominate_archive(perturbedParticle)
+        best = self.select_best()
+        if not self.get_best() or self.get_best() != best:
+            best = self.select_best()
+            if best != 'null':
+                self.set_best_mo(best)
+            else:
+                self.set_best_mo(part)
+            #if not self.get_best() or self.fitness.dominate(perturbed_particle.fitness.values, self.get_best().fitness.values):
+                #self.set_best(perturbed_particle)
         
     ## not used currently
     # def get_perturbation_dist(self):
@@ -1581,7 +2033,7 @@ class MOPSOTrial(Trial):
         self.set_retrain_model(False)
         return retrain_model_temp
     
-    ### TODO - its just copy and pasted ciode now..w could rewrite it realyl
+    ### TODO - its just copy and pasted code now..we could rewrite it really
     def post_model_filter(self, code, mean, variance):
         eval_counter = 1
         self.set_model_failed(not (False in [self.get_configuration().max_stdv < pred for pred in variance]))
@@ -1594,10 +2046,10 @@ class MOPSOTrial(Trial):
                                                  mean, variance)):
                 if v > self.get_configuration().max_stdv and c == 0:
                     if eval_counter > self.get_configuration().max_eval:
-                        logging.info("Evalauted more fitness functions per generation then max_eval")
+                        logging.info("Evalauted more fitness functions per generation than max_eval")
                         self.checkAllParticlesEvaled() ## if all the particles have been evalauted 
                         return True
-                    p.fitness.values, p.code, cost = self.toolbox.evaluate(p)
+                    p.fitness.values, p.code, cost = self.toolbox.evaluate1(p)
                     eval_counter = eval_counter + 1
                 else:
                     try:
@@ -1606,7 +2058,7 @@ class MOPSOTrial(Trial):
                         else:
                             p.fitness.values = [self.fitness.worst_value]
                     except:
-                        p.fitness.values, p.code, cost = self.toolbox.evaluate(p)
+                        p.fitness.values, p.code, cost = self.toolbox.evaluate1(p)
                         logging.info("KURWA Start")
                         logging.info("KURWA End")
             ## at least one particle has to have std smaller then max_stdv
@@ -1619,7 +2071,7 @@ class MOPSOTrial(Trial):
             bests_to_model.append(self.get_best())
         if bests_to_model:
             logging.info("Reevaluating")
-            code, bests_to_fitness, variance = self.surrogate_model.predict(bests_to_model)
+            code, bests_to_fitness, variance = self.predict_surrogate_mo_model(bests_to_model)
             if (code is None) or (bests_to_fitness is None) or (variance is None):
                 logging.info("Prediction failed during reevaluation... omitting")
             else:
@@ -1634,7 +2086,9 @@ class MOPSOTrial(Trial):
                         best.fitness.values = bests_to_fitness[-1]
                     else:
                         best.fitness.values = [self.fitness.worst_value]
-                    self.set_best(best)
+                    self.set_best_mo(best)
+    
+    
     #######################
     ### GET/SET METHODS ###
     #######################
@@ -1665,8 +2119,10 @@ class MOPSOTrial(Trial):
         return self.state_dictionary['at_least_one_in_valid_region']
         
     def get_surrogate_model(self): ## returns a copy of the model... quite important not to return the model itself as ll might get F up
-        model = ProperSurrogateModel(self.get_configuration(), self.controller)
-        model.set_state_dictionary(self.surrogate_model.get_state_dictionary())
+        model = []
+        for i in range(len(self.surrogate_model)):
+            model.append( ProperSurrogateModel(self.get_configuration(), self.controller) )
+            model[i].set_state_dictionary(self.surrogate_model[i].get_state_dictionary())
         return model
 
     def get_cost_model(self): ## returns a copy of the model... quite important not to return the model itself as ll might get F up

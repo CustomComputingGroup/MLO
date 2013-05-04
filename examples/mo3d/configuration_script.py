@@ -1,6 +1,7 @@
 import os
-results_folder_path = '/homes/mk306/log'
+results_folder_path = os.getcwd()+'/data/log'
 configuration_folder_path = os.path.split(os.path.realpath(__file__))[0]+"/"
+
 ##set to wherever you want the images to be stored
 #images_folder_path = 
 enable_traceback = True
@@ -10,21 +11,21 @@ eval_correct = False
 ### Basic setup
 
 trials_count = 1
-population_size = 50
+population_size = 100
 
-max_fitness = 100.0
-max_iter = 5000
-max_speed = 0.01
-max_stdv = 0.05
+max_fitness = 200.0
+max_iter = 2000
+max_speed = 0.5
+max_stdv = 1
 
 surrogate_type = 'local'  # Can be proper or dummy
-F = 10  # The size of the initial training set
-M = 20  # How often to perturb the population, used in discrete problems
+F = 15  # The size of the initial training set
+M = 10  # How often to perturb the population, used in discrete problems
 max_eval = 1
 
 ### Trial-specific variables
 
-trials_type = 'PSOTrial'
+trials_type = 'MOPSOTrial'
 
 phi1 = 2.0
 phi2 = 2.0
@@ -59,7 +60,8 @@ classifier = 'SupportVectorMachine'
 ### GPR Regression settings
 regr = 'quadratic'
 corr2 = 'squared_exponential'
-corr = 'anisotropic'
+#corr = 'matern3'
+corr = 'isotropic'
 theta0 = 0.01
 thetaL = 0.00001
 thetaU = 3.0
