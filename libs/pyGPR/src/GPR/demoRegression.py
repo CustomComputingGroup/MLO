@@ -17,6 +17,7 @@ if __name__ == '__main__':
                   0.588852784375935,  -0.832982214438054,  -0.512106527960363,   0.277883144210116,\
                   -0.065870426922211,  -0.821412363806325,   0.185399443778088,  -0.858296174995998,\
                    0.370786630037059,  -1.409869162416639,-0.144668412325022,-0.553299615220374]);
+    x.sort()
     x = np.reshape(x,(n,D))
     ### GENERATE sample observations from the GP
     y = np.array([4.549203746331698,   0.371985574437271,   0.711307965514790,  -0.013212893618430,   2.255473255338191,\
@@ -24,6 +25,9 @@ if __name__ == '__main__':
                   0.267229130945574,   2.200112286723833,   1.200609983308969,   0.439971697236094,   2.628580433511255,\
                   0.503774817336353,   1.942525313820564,   0.579133950013327,   0.670874423968554,   0.377353755100965]);
     y = np.reshape(y,(n,D))
+    y[0:12] = x[0:12] * x[0:12]
+    y[12:n] = -x[12:n] * 0.5 + 2
+    y = y  
 
     plt.plot(x,y,'b+',markersize=12)
     plt.axis([-1.9,1.9,-0.9,3.9])
@@ -56,6 +60,22 @@ if __name__ == '__main__':
     m  = vargout[2]; s2 = vargout[3]
     ## Plot results
     plotter(z,ym,ys2,x,y,[-1.9, 1.9, -0.9, 3.9])
+    
+    print "pre" + str(x)
+    x = np.delete(x, 0, 0)
+    x = np.delete(x, 5, 0)
+    print "post" + str(x)
+    y = np.delete(y, 0, 0)
+    y = np.delete(y, 5, 0)
+    vargout = gp(hyp,inffunc,meanfunc,covfunc,likfunc,x,y,None,None,False)
+    print "nlml = ",vargout[0]
+    vargout = gp(hyp,inffunc,meanfunc,covfunc,likfunc,x,y,z)
+    ym = vargout[0]; ys2 = vargout[1]
+    m  = vargout[2]; s2 = vargout[3]
+    ## Plot results
+    plotter(z,ym,ys2,x,y,[-1.9, 1.9, -0.9, 3.9])
+    
+    '''
     ###########################################################
     covfunc = [['kernels.covSum'], [['kernels.covSEard'],['kernels.covNoise']]]
     ## SET (hyper)parameters
@@ -94,7 +114,7 @@ if __name__ == '__main__':
 
     ## Plot results
     plotter(z,ym,ys2,x,y,[-1.9, 1.9, -0.9, 3.9])
-    '''
+    
     ###########################################################
     covfunc = [ ['kernels.covSEiso'] ]
     hyp = hyperParameters()

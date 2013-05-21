@@ -3,6 +3,9 @@ import logging
 import sys
 from numpy import array_equal
 
+LOG_FORMAT = '%(asctime)s|[%(process)d_%(thread)d] - [%(module)s][%(funcName)s][%(lineno)d] %(levelname)s: %(message)s'
+LOG_LEVEL = logging.DEBUG
+
 def load_script(filename, script_type):
     """
     Loads a fitness or configuration script. script_type is either

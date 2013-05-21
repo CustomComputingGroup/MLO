@@ -1,12 +1,12 @@
 import os
-results_folder_path = '/homes/mk306/log'
+results_folder_path = os.getcwd()+'/data/log'
 configuration_folder_path = os.path.split(os.path.realpath(__file__))[0]+"/"
 ##set to wherever you want the images to be stored
 #images_folder_path = 
 enable_traceback = True
 eval_correct = False
 
-
+goal = "min"
 ### Basic setup
 
 trials_count = 1
@@ -17,8 +17,8 @@ max_iter = 5000
 max_speed = 0.01
 max_stdv = 0.05
 
-surrogate_type = 'local'  # Can be proper or dummy
-F = 10  # The size of the initial training set
+surrogate_type = 'proper'  # Can be proper or dummy
+F = (population_size/2)  # The size of the initial training set
 M = 20  # How often to perturb the population, used in discrete problems
 max_eval = 1
 
@@ -61,7 +61,7 @@ regr = 'quadratic'
 corr2 = 'squared_exponential'
 corr = 'anisotropic'
 theta0 = 0.01
-thetaL = 0.00001
+thetaL = 0.0001
 thetaU = 3.0
 nugget = 5
 random_start = 100

@@ -160,7 +160,7 @@ def gp(hyp, inffunc, meanfunc, covfunc, likfunc, x, y, xs=None, ys=None, der=Non
             try:
                 ys2[id] = np.reshape( np.reshape(Ys2,(np.prod(Ys2.shape),N)).sum(axis=1)/N , (len(id),1) ) # .. variance
             except ValueError,e:
-                raise Exception(str(e) + " " + str((len(id),1)) + " " + str(Ys2.shape) + " " + str((np.prod(Ys2.shape),N)) + " " + str((np.reshape(Ys2,(np.prod(Ys2.shape),N)).sum(axis=1)/N).shape) + " " + str(np.reshape( np.reshape(Ys2,(np.prod(Ys2.shape),N)).sum(axis=1)/N , (len(id),1) )))
+                raise Exception(str(e) + " " + str((len(id),1)) + " " + str(Ys2.shape) + " " + str((np.prod(Ys2.shape),N)) + " " + str((np.reshape(Ys2,(np.prod(Ys2.shape),N)).sum(axis=1)/N).shape))
             nact = id[-1]          # set counter to index of last processed data point
         #end
        

@@ -3,12 +3,14 @@ from scipy.interpolate import griddata
 from numpy import linspace, meshgrid, reshape, array, argmax, delete
 
 from utils import numpy_array_index
-from regressors import Regressor, GaussianProcessRegressor
+from copy import deepcopy, copy
+from regressors import Regressor, GaussianProcessRegressor, GaussianProcessRegressor3
 
 class CostModel(object):
 
     def __init__(self, configuration, controller, fitness):
         self.configuration = configuration
+        self.controller = controller
         self.fitness = fitness
         self.was_trained = False
         self.total_cost = 0.0
@@ -61,6 +63,10 @@ class CostModel(object):
                                   
     def get_total_cost(self, dict):
         raise NotImplementedError('Trial is an abstract class, '
+                                  'this should not be called.')    
+                                  
+    def get_copy(self):
+        raise NotImplementedError('Trial is an abstract class, '
                                   'this should not be called.')
         
 class DummyCostModel(CostModel):
@@ -88,34 +94,47 @@ class DummyCostModel(CostModel):
     def set_state_dictionary(self, dict):
         self.total_cost = dict["total_cost"]
         
+    def get_copy(self):
+        model = DummyCostModel(self.configuration, self.controller, self.fitness)
+        model.set_state_dictionary(self.cost_model.get_state_dictionary())
+        return model
+        
 class ProperCostModel(CostModel):
 
     def __init__(self, configuration, controller, fitness):
         super(ProperCostModel, self).__init__(configuration,controller,fitness)
         self.fitness = fitness
-        self.soft_regressor = GaussianProcessRegressor(controller, configuration)
-        self.hard_regressor = GaussianProcessRegressor(controller, configuration)
+        #self.configuration = deepcopy(self.configuration)
+        #self.configuration.corr = "isotropic"
+        #self.configuration.random_start = 10
+        self.soft_regressor = GaussianProcessRegressor3(controller, configuration)
+        self.hard_regressor = GaussianProcessRegressor3(controller, configuration)
                 
     def no_software_param(self):
         software_axis = [i for i, dimension in enumerate(self.fitness.designSpace) if dimension["set"] == "s"]
         return software_axis == []
                 
+    def get_copy(self):
+        model = ProperCostModel(self.configuration, self.controller, self.fitness)
+        model.set_state_dictionary(self.get_state_dictionary())
+        return model
+        
     def predict(self, part):
         hard = 0.0
         soft = 0.0
         if not self.bitstream_was_generated(part):
-            hard, S2 = self.hard_regressor.predict(array([part]))
+            hard, S2, EI, P = self.hard_regressor.predict(array([part]))
         if not self.no_software_param():
-            soft, S2 = self.soft_regressor.predict(array([part]))
+            soft, S2, EI, P = self.soft_regressor.predict(array([part]))
         ## prediction has to be corrected for software models
         #logging.debug(str(hard + soft))
         return hard + soft
         
     def predict_raw(self, part):
-        hard, S2 = self.hard_regressor.predict(array([part]))
+        hard, S2, EI, P = self.hard_regressor.predict(array([part]))
         soft = 0.0
         if not self.no_software_param():
-            soft, S2 = self.soft_regressor.predict(array([part]))
+            soft, S2, EI, P = self.soft_regressor.predict(array([part]))
         ## prediction has to be corrected for software models
         #logging.debug(str(hard + soft))
         return hard + soft
@@ -134,7 +153,6 @@ class ProperCostModel(CostModel):
         return self.was_trained
         
     def add_training_instance(self, part, cost):
-        self.total_cost = cost + self.total_cost
         if self.bitstream_was_generated(part):
             self.soft_regressor.add_training_instance(part, cost)
         else:
@@ -144,7 +162,8 @@ class ProperCostModel(CostModel):
                 logging.info("Software has not been evaluted yet, using assumption that hardware cost >> software cost")
                 software_c_prediction = 0.0
             self.hard_regressor.add_training_instance(part, cost - software_c_prediction)
-            
+                
+                
     def contains_training_instance(self, part):
         return self.hard_regressor.contains_training_instance(part) or  self.soft_regressor.contains_training_instance(part)
 

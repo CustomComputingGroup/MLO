@@ -21,7 +21,7 @@ def min_wrapper(hyp, F, Flag, *varargin):
 
     elif Flag == 'BFGS':
         # Use BFGS
-        aa = bfgs(nlml, x, dnlml, (F,hyp,varargin), maxiter=100, disp=True, full_output=True)
+        aa = bfgs(nlml, x, dnlml, (F,hyp,varargin), maxiter=100, disp=False, full_output=True)
         x = aa[0]; fvals = aa[1]; gvals = aa[2]; Bopt = aa[3]; funcCalls = aa[4]; gradcalls = aa[5]
         if aa[6] == 1:
             print "Maximum number of iterations exceeded."

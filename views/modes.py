@@ -1,4 +1,4 @@
-from visualizers.plot import MLOImageViewer, MLORunReportViewer
+from utils import get_run_type_visualizer, get_trial_type_visualizer
 
 import logging
 import os
@@ -24,9 +24,7 @@ class TerminalView(View):
     """
 
     def initialize(self, controller):
-        self.controller = controller       
-        self.plot_view = MLOImageViewer
-        self.run_view = MLORunReportViewer
+        self.controller = controller
         
         if not self.controller.restart and not (self.controller.fitness and  self.controller.configuration):
             logging.error('Benchmark and/or configuration script not '
@@ -44,13 +42,15 @@ class TerminalView(View):
     ## Print out run statistics, define a new stats printer
     def update(self, trial=None, run=None, visualize=None):
         if visualize:
-            if not (trial is None): 
+            if not (trial is None):
+                self.plot_view = get_trial_type_visualizer(trial.get_trial_type())["default"] 
                 if trial.get_main_counter() % trial.get_configuration().vis_every_X_steps == 0: ## TODO - its not ideal... rethink it... 
                     snapshot = trial.snapshot()
                     graphdict = self.controller.get_trial_visualization_dict(trial.get_trial_type())
                     snapshot.update(graphdict)
                     self.controller.visualize(snapshot, self.plot_view.render)
-            if not (run is None): 
+            if not (run is None):
+                self.run_view = get_run_type_visualizer(run.get_trial_type())["default"] 
                 logging.info("Generating Report")
                 snapshot = run.snapshot()
                 snapshot.update(self.controller.get_run_visualization_dict(run.get_run_type()))

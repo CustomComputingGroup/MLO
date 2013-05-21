@@ -64,8 +64,8 @@ if __name__ == '__main__':
     #m  = vargout[2]; s2  = vargout[3]
     #plotter(xs,ym,ys2,x,y)
     
-    vargout = min_wrapper(hyp,gp,'CG',inffunc,meanfunc,covfunc,likfunc,x,y,None,None,True)
-    hyp = vargout[0]
+    #vargout = min_wrapper(hyp,gp,'CG',inffunc,meanfunc,covfunc,likfunc,x,y,None,None,True)
+    #hyp = vargout[0]
     vargout = gp(hyp,inffunc,meanfunc,covfunc,likfunc,x,y,xs)
     ym = vargout[0]; ys2 = vargout[1]
     m  = vargout[2]; s2  = vargout[3]

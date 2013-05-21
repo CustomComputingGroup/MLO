@@ -12,6 +12,7 @@ import re
 from numpy import multiply, array, ceil, floor, maximum, minimum, mean, min, max, sqrt, square, transpose
 from numpy.random import uniform, rand , random
 from numpy.linalg import norm
+from scipy.stats import uniform as scipy_uniform
 import operator
 
 from deap import base, creator, tools
@@ -20,11 +21,11 @@ toolbox = base.Toolbox()
 
 from ..surrogatemodels.surrogatemodel import DummySurrogateModel, ProperSurrogateModel, LocalSurrogateModel
 from ..surrogatemodels.costmodel import DummyCostModel, ProperCostModel
+import lhs 
 
 class Trial(Thread):
 
-    def __init__(self, trial_no, my_run, fitness, configuration, controller,
-                 run_results_folder_path):
+    def __init__(self, trial_no, my_run, fitness, configuration, controller, run_results_folder_path):
         Thread.__init__(self)
         self.fitness = fitness
         self.controller = controller
@@ -36,24 +37,23 @@ class Trial(Thread):
         if configuration.surrogate_type == "dummy":
             if self.fitness.objectives>1:
                 for i in range(self.fitness.objectives):
-                    self.surrogate_model.append(DummySurrogateModel(configuration,self.controller))
+                    self.surrogate_model.append(DummySurrogateModel(configuration,self.controller,self.fitness))
             else:
                 self.surrogate_model = DummySurrogateModel(configuration,
-                                                       self.controller)
+                                                       self.controller,self.fitness)
         elif configuration.surrogate_type == "local":
             if self.fitness.objectives>1:
                 for i in range(self.fitness.objectives):
-                    self.surrogate_model.append(LocalSurrogateModel(configuration,self.controller))
+                    self.surrogate_model.append(LocalSurrogateModel(configuration,self.controller,self.fitness))
             else:
                 self.surrogate_model = LocalSurrogateModel(configuration,
-                                                       self.controller)
+                                                       self.controller,self.fitness)
         else:
             if self.fitness.objectives>1:
                 for i in range(self.fitness.objectives):
-                    self.surrogate_model.append(ProperSurrogateModel(configuration,self.controller))
+                    self.surrogate_model.append(ProperSurrogateModel(configuration,self.controller,self.fitness))
             else:
-                self.surrogate_model = ProperSurrogateModel(configuration,
-                                                        self.controller)
+                self.surrogate_model = ProperSurrogateModel(configuration,self.controller,self.fitness)
         # Contains all the counter variables that may be used for visualization
         counter_dictionary = {}
         counter_dictionary['fit'] = 0 ## we always want to record fitness of the best configurations
@@ -101,6 +101,24 @@ class Trial(Thread):
     ####################
     ## Helper Methods ##
     ####################
+    def training_set_updated(self):
+        retrain_model_temp = self.get_retrain_model()
+        self.set_retrain_model(False)
+        return retrain_model_temp
+        
+    def is_better(self, a, b):
+        try:
+            if self.configuration.goal == "min":
+                return a < b
+            elif self.configuration.goal == "max":
+                return a > b
+            else:
+                logging.info("configuration.goal attribute has an invalid value:" + str( self.configuration.goal))
+        except:
+            logging.info("configuration.goal has not been defined")
+        logging.info("configuration.goal is assumed to be minimization")
+        self.configuration.goal = "min"
+        return a < b
     
     def hypercube(self):
         #find maximum
@@ -559,7 +577,400 @@ class Trial(Thread):
         
     def get_trial_type(self):
         return self.state_dictionary["trial_type"]
+    def get_design_space(self):
+        return self.fitness.designSpace
         
+    def get_best_fitness_array(self):
+        return self.state_dictionary['best_fitness_array']
+        
+    def get_generations_array(self):
+        return self.state_dictionary['generations_array']
+        
+    def set_at_least_one_in_valid_region(self, state):
+        if self.state_dictionary.has_key('at_least_one_in_valid_region'):
+            self.state_dictionary['at_least_one_in_valid_region'] = state
+        else:
+            self.state_dictionary['at_least_one_in_valid_region'] = False
+
+    def get_at_least_one_in_valid_region(self):
+        return self.state_dictionary['at_least_one_in_valid_region']
+
+class MonteCarloTrial(Trial):
+
+    def initialise(self):
+        """
+        Initialises the trial and returns True if everything went OK,
+        False otherwise.
+        """
+        self.run_initialize()
+        self.cost_model = ProperCostModel(self.configuration, self.controller, self.fitness)
+        self.state_dictionary['best'] = None
+        self.state_dictionary['model_failed'] = False
+        self.state_dictionary['best_fitness_array'] = []
+        self.state_dictionary['generations_array'] = []
+        self.set_main_counter_name("i")
+        self.set_counter_dictionary("i",0)
+
+        ### Intial design space Latin hyper cube based sampling
+        self.set_at_least_one_in_valid_region(False)
+                
+        design_space = self.get_design_space()
+        D = len(design_space)
+        F = D * 10
+        latin_hypercube_samples = lhs.lhs(scipy_uniform,[0,1],(F,D))
+        max_bounds = [d["max"] for d in design_space]
+        latin_hypercube_samples = latin_hypercube_samples * max_bounds
+        min_bounds = [d["min"] for d in design_space]
+        latin_hypercube_samples = latin_hypercube_samples + min_bounds
+        for part in latin_hypercube_samples:
+            part = self.toolbox.filter_particle(self.create_particle(part))
+            part.fitness.values, code, cost = self.toolbox.evaluate(part)
+            self.set_at_least_one_in_valid_region((code == 0) or self.get_at_least_one_in_valid_region())
+            self.update_best(part)
+        F = 1 ## we got to sample the design space randomly and hope to find a valid region of space...
+        while (not self.get_at_least_one_in_valid_region()):
+            if self.get_configuration().eval_correct:
+                part = self.filter_particle(self.create_particle(part))
+                part.fitness.values, code, cost = self.toolbox.evaluate(part)
+                self.set_at_least_one_in_valid_region((part.code == 0) or self.get_at_least_one_in_valid_region())
+                self.update_best(part)
+        self.state_dictionary["fresh_run"] = True
+                
+        ### generate folders
+        results_folder, images_folder = self.create_results_folder()
+        if not results_folder or not images_folder:
+            # Results folder could not be created
+            logging.error('Results and images folders cound not be created, terminating.')
+            return False
+        return True
+    
+    def run_initialize(self):
+        logging.info("Initialize MonteCarloTrial no:" + str(self.get_trial_no()))
+        design_space = self.get_design_space()
+        try:
+            eval('creator.Particle' + str(self.my_run.get_name()))
+            logging.debug("Particle class for this run already exists")
+        except AttributeError:
+            creator.create('FitnessMax' + str(self.my_run.get_name()), base.Fitness, weights=(1.0,))
+            ### we got to add specific names, otherwise the classes are going to be visible for all
+            ### modules which use deap...
+            
+            creator.create(str('Particle' + self.my_run.get_name()), list, fitness=eval('creator.FitnessMax' + str(self.my_run.get_name())),
+                           pmin=[dimSetting['max'] for dimSetting in design_space],
+                           pmax=[dimSetting['min'] for dimSetting in design_space])
+        self.toolbox = copy(base.Toolbox())
+        self.toolbox.register('particle', self.generate, designSpace=design_space)
+        self.toolbox.register('filter_particle', self.filter_particle)
+        self.toolbox.register('evaluate', self.fitness_function)
+        self.new_best=False
+                                  
+    ## main computation loop goes here
+    def run(self):
+        self.state_dictionary['generate'] = True
+        logging.info(str(self.get_name()) + ' started')
+        logging.info('Trial prepared... executing')
+        
+        if self.state_dictionary["fresh_run"]: ## we need this as we only want to do it for initial generation because the view
+            ## the problem is that we cannot
+            self.train_surrogate_model()
+            self.train_cost_model()
+            self.view_update(visualize = True)
+            self.state_dictionary["fresh_run"] = False
+            self.save()
+        
+        while self.get_counter_dictionary('fit') < self.get_configuration().max_iter + 1:
+            
+            logging.info('[' + str(self.get_name()) + '] Iteration ' + str(self.get_counter_dictionary('i')))
+            logging.info('[' + str(self.get_name()) + '] Fitness ' + str(self.get_counter_dictionary('fit')))
+            
+            # termination condition - we put it here so that when the trial is reloaded
+            # it wont run if the run has terminated already
+            if self.get_terminating_condition(): 
+                logging.info('Terminating condition reached...')
+                break
+            sample_x_times = 1
+            budget = 50000.0 ## revise budget
+            ## add proper copy
+            best_action, best_action_function = self.farsee(self.get_surrogate_model(), self.get_cost_model(), budget, sample_x_times)
+            best_x = best_action_function(self.get_surrogate_model())
+            best_x = self.toolbox.filter_particle(self.create_particle(best_x))
+            best_x.fitness.values, code, cost = self.toolbox.evaluate(best_x)
+            self.update_best(best_x)
+            
+            if self.training_set_updated():
+                self.train_surrogate_model()
+                self.train_cost_model()
+            self.view_update(visualize = True)
+    #######################
+    ### GET/SET METHODS ###
+    #######################
+    
+    def generate(self,  designSpace):
+        particle = [uniform(dimSetting['min'], dimSetting['max'])
+                    for dimSetting
+                    in designSpace]
+        particle = self.create_particle(particle)
+        return particle
+    
+    def get_predicted_time(self):
+        raise NotImplementedError('Trial is an abstract class, '
+                                  'this should not be called.')
+    
+    def get_cost_model(self): ## returns a copy of the model... quite important not to return the model itself as ll might get F up
+        model = ProperCostModel(self.get_configuration(), self.controller, self.fitness)
+        model.set_state_dictionary(self.cost_model.get_state_dictionary())
+        return model
+                                  
+    def snapshot(self):
+        fitness = self.fitness
+        best_fitness_array = copy(self.get_best_fitness_array())
+        generations_array = copy(self.get_generations_array())
+        results_folder = copy(self.get_results_folder())
+        images_folder = copy(self.get_images_folder())
+        counter = copy(self.get_counter_dictionary('i'))
+        name = self.get_name()
+        return_dictionary = {
+            'fitness': fitness,
+            'best_fitness_array': best_fitness_array,
+            'generations_array': generations_array,
+            'configuration_folder_path':self.configuration.configuration_folder_path,
+            'run_folders_path':self.configuration.results_folder_path,
+            'results_folder': results_folder,
+            'images_folder': images_folder,
+            'counter': counter,
+            'counter_dict':  self.state_dictionary['counter_dictionary'] ,
+            'timer_dict':  self.state_dictionary['timer_dict'] ,
+            'name': name,
+            'fitness_state': self.get_fitness_state(),
+            'run_name': self.my_run.get_name(),
+            'classifier': self.get_classifier(), ## return a copy! 
+            'regressor': self.get_regressor(), ## return a copy!
+            'cost_model': self.get_cost_model(), ## return a copy!
+            'generate' : self.state_dictionary['generate'],
+            'max_iter' : self.configuration.max_iter,
+            'max_fitness' : self.configuration.max_fitness,
+            'best': {"data":self.get_best()}
+        }
+        return return_dictionary
+        
+    def save(self):
+        try:
+            trial_file = str(self.get_results_folder()) + '/' +  str(self.get_counter_dictionary('i')) + '.txt'
+            dict = self.state_dictionary
+            surrogate_model_state_dict = self.surrogate_model.get_state_dictionary()
+            dict['surrogate_model_state_dict'] = surrogate_model_state_dict
+            cost_model_state_dict = self.cost_model.get_state_dictionary()
+            dict['cost_model_state_dict'] = cost_model_state_dict
+            with io.open(trial_file, 'wb') as outfile:
+                pickle.dump(dict, outfile)  
+                if self.kill:
+                    sys.exit(0)
+        except Exception, e:
+            logging.error(str(e))
+            if self.kill:
+                sys.exit(0)
+            return False
+            
+    ## by default find the latest iteration
+    def load(self, iteration = None):
+        try:
+            if iteration is None:
+                # Figure out what the last iteration before crash was
+                found = False
+                for filename in reversed(os.listdir(self.get_results_folder())):
+                    match = re.search(r'^(\d+)\.txt', filename)
+                    if match:
+                        # Found the last iteration
+                        iteration = int(match.group(1))
+                        found = True
+                        break
+
+                if not found:
+                    return False
+                    
+            iteration_file = str(iteration)
+            trial_file = str(self.get_results_folder()) + '/' + str(iteration_file) + '.txt'
+            
+            with open(trial_file, 'rb') as outfile:
+                dict = pickle.load(outfile)
+            self.set_state_dictionary(dict)
+            self.state_dictionary["generate"] = False
+            self.kill = False
+            self.surrogate_model.set_state_dictionary(dict['surrogate_model_state_dict'])
+            self.cost_model.set_state_dictionary(dict['cost_model_state_dict'])
+            self.previous_time = datetime.now()
+            logging.info("Loaded Trial")
+            return True
+        except Exception, e:
+            logging.error("Loading error" + str(e))
+            return False
+        
+    ## actions and wrapper methods
+        
+    def all_actions(self):
+        return {#"max_ei": self.max_ei
+                "max_ei_cost": self.max_ei_cost
+                }
+        
+    def max_ei(self, surrogate_model):
+        hypercube = self.hypercube()
+        particle = surrogate_model.max_ei(designSpace=self.get_design_space(), hypercube = hypercube) ## NOT SELF
+        particle = self.toolbox.filter_particle(self.create_particle(particle))
+        return particle
+        
+    def max_ei_cost(self, surrogate_model):
+        hypercube = self.hypercube()
+        particle = surrogate_model.max_ei_cost(designSpace=self.get_design_space(), hypercube = hypercube, cost_func = self.predict_cost) ## NOT SELF
+        particle = self.toolbox.filter_particle(self.create_particle(particle))
+        return particle
+        
+    def keywithmaxval(self, d):
+        """ a) create a list of the dict's keys and values; 
+            b) return the key with the max value"""  
+        v=list(d.values())
+        k=list(d.keys())
+        return k[v.index(max(v))]
+     
+    def keywithminval(self, d):
+        """ a) create a list of the dict's keys and values; 
+            b) return the key with the max value"""  
+        v=list(d.values())
+        k=list(d.keys())
+        return k[v.index(min(v))]
+        
+    def farsee(self, surrogate_model, cost_model, budget, sample_x_times):
+        rewards = dict([(action, 0.0) for action in self.all_actions().keys()])
+        for i in range(sample_x_times):
+            #best_action, reward = self.reward_function(surrogate_model, cost_model, budget)
+            best_action, reward = self.reward_function_v1(surrogate_model, cost_model, 0.0,0.0)
+            rewards[best_action] += reward
+        if self.configuration.goal == "max":
+            best_action = self.keywithmaxval(rewards)
+            return best_action, self.all_actions()[best_action]
+        else:
+            best_action = self.keywithminval(rewards)
+            return best_action, self.all_actions()[best_action]
+            
+    ## finds the best action that offers best result within reaching budget
+    ## might have to be adjusted... add a decay element? more then 3-4 samples away 
+    ## is just pointless
+    ## to evalaute the tree up to for example 50% of the budget simply change what you feed in to 10..20..50 or so %
+    def reward_function(self, surrogate_model, cost_model, budget):
+        reward = {}
+        for action, action_function in self.all_actions().items():
+            logging.info("Looking into future.. action:" + action)
+            surrogate_model_copy = surrogate_model.get_copy()
+            cost_model_copy = cost_model.get_copy()
+            best_x = action_function(surrogate_model_copy)
+            code, MU, S2, EI, P = surrogate_model_copy.predict([best_x])
+            fitness = P[0] ## sampled from the distribution
+            cost = cost_model_copy.predict([best_x])[0]
+            surrogate_model_copy.add_training_instance(best_x, code, fitness, [0.0]) ## always add
+            if cost <= 0.0: ## for some of the regressors 
+                logging.debug("detected negative cost... probably small value")
+            cost_model_copy.add_training_instance(best_x, cost)
+            #surrogate_model_copy.train(self.hypercube())
+            #cost_model_copy.train()
+            my_budget = budget - cost
+            logging.info("Budget left: " + str(my_budget))
+            if my_budget > 0.0:
+                best_action, reward[action] = self.reward_function(surrogate_model_copy, cost_model_copy, my_budget)
+                try:
+                    if self.configuration.goal == "max":
+                        reward[action] = max(fitness, reward[action])
+                    else:
+                        reward[action] = min(fitness, reward[action])
+                except ValueError:
+                    logging.info("kurwo..." + str(fitness) + " " + str(reward) + " " + str(reward[action]))
+            else:
+                reward[action] = fitness
+                
+        if self.configuration.goal == "max":
+            best_action = self.keywithmaxval(reward)
+            return best_action, reward[best_action]
+        else:
+            best_action = self.keywithminval(reward)
+            return best_action, reward[best_action]
+    
+    ## favors fast convergence (what about local minimias?
+    ## It cuts of the tree at one point and reports the budget used so far..
+    ## the reward is calculated based on the mean best result / budget used value 
+    ## obviously depends on whether we faces min/max problems
+    def reward_function_v1(self, surrogate_model, cost_model, horizont, budget_used):
+        reward = {}
+        logging.info("Investigating horizont level: " + str(horizont))
+        for action, action_function in self.all_actions().items():
+            surrogate_model_copy = surrogate_model.get_copy()
+            cost_model_copy = cost_model.get_copy()
+            best_x = action_function(surrogate_model_copy)
+            code, MU, S2, EI, P = surrogate_model_copy.predict([best_x])
+            fitness = P[0] ## sampled from the distribution
+            cost = cost_model_copy.predict([best_x])[0]
+            surrogate_model_copy.add_training_instance(best_x, code, fitness, [0.0]) ## always add
+            cost_model_copy.add_training_instance(best_x, cost)
+            new_budget_used = cost + budget_used
+            if horizont > 0.0:
+                best_action, reward[action] = self.reward_function_v1(surrogate_model_copy, cost_model_copy, horizont-1.0, new_budget_used)
+                if self.configuration.goal == "max":
+                    reward[action] = max(fitness, reward[action])
+                else:
+                    reward[action] = min(fitness, reward[action])
+            else:
+                if self.configuration.goal == "max":
+                    reward[action] = fitness / new_budget_used
+                else:
+                    reward[action] = fitness * new_budget_used
+                    
+        if self.configuration.goal == "max":
+            best_action = self.keywithmaxval(reward)
+            return best_action, reward[best_action]
+        else:
+            best_action = self.keywithminval(reward)
+            return best_action, reward[best_action]
+        
+    def filter_particle(self, p):#
+        design_space = self.get_design_space()  
+        pmin = [dimSetting['min'] for dimSetting in design_space]
+        pmax = [dimSetting['max'] for dimSetting in design_space]
+        for i, val in enumerate(p):
+            #dithering
+            if design_space[i]['type'] == 'discrete':
+                if uniform(0.0, 1.0) < (p[i] - floor(p[i])):
+                    p[i] = ceil(p[i])  # + designSpace[i]['step']
+                else:
+                    p[i] = floor(p[i])
+
+            #dont allow particles to take the same value
+            p[i] = minimum(pmax[i], p[i])
+            p[i] = maximum(pmin[i], p[i])
+        return p
+    ## return hypercube spanning the whole of the design space
+    def hypercube(self): ##rectangle rather
+        design_space = self.get_design_space()  
+        max_diag = [dimSetting['max'] for dimSetting in design_space]
+        min_diag = [dimSetting['min'] for dimSetting in design_space]
+        #find maximum
+        return [max_diag,min_diag]
+        
+    def update_best(self, part):
+        if not self.get_best() or self.is_better(part.fitness, self.get_best().fitness):
+            best = self.create_particle(part)
+            best.fitness.values = part.fitness.values
+            self.set_best(best)
+            
+    def create_particle(self, particle):
+        return eval('creator.Particle' + self.my_run.get_name())(particle)
+            
+    def predict_cost(self, particle):
+        try:
+            return self.cost_model.predict(particle)
+        except Exception,e:
+            logging.debug("Cost model is still not avaiable: " + str(e))
+            "a" + 1 
+            return 1.0 ## model has not been created yet
+            
+
+
 class PSOTrial(Trial):
 
     #######################
@@ -677,7 +1088,7 @@ class PSOTrial(Trial):
                 self.train_cost_model(self.get_population())
                 reevalute = True
             ##print self.get_population()
-            code, mu, variance = self.predict_surrogate_model(self.get_population())
+            code, mu, variance, ei, p = self.predict_surrogate_model(self.get_population())
             reloop = False
             if (mu is None) or (variance is None):
                 logging.info("Prediction Failed")
@@ -688,6 +1099,14 @@ class PSOTrial(Trial):
                 logging.info("min S2  " + str(min(variance)))
                 logging.info("over 0.05  " + str(min(len([v for v in variance if v > 0.05]))))
                 logging.info("over 0.01  " + str(min(len([v for v in variance if v > 0.01]))))
+                logging.info("mean p " + str(mean(p)))
+                logging.info("max p  " + str(max(p)))
+                logging.info("min p  " + str(min(p)))
+                logging.info("over 0.05  " + str(min(len([v for v in p if v > 0.05]))))
+                logging.info("over 0.1  " + str(min(len([v for v in p if v > 0.01]))))
+                logging.info("mean ei " + str(mean(ei)))
+                logging.info("max ei  " + str(max(ei)))
+                logging.info("min ei  " + str(min(ei)))
                 reloop = self.post_model_filter(code, mu, variance)
             ##
             if self.get_model_failed():
@@ -884,25 +1303,51 @@ class PSOTrial(Trial):
     def initialize_population(self):
         ## the while loop exists, as meta-heuristic makes no sense till we find at least one particle that is within valid region...
         
+        try:
+            part = self.create_particle(self.get_configuration().always_valid)
+            self.toolbox.filter_particle(part)
+            part.fitness.values, part.code, cost = self.fitness_function(part)
+            if not self.get_best() or self.is_better(part.fitness, self.get_best().fitness):
+                particle = self.create_particle(part)
+                particle.fitness.values = part.fitness.values
+                self.set_best(particle)
+            logging.info("Always valid configuration present, evaluated")
+        except:
+            logging.info("Always valid configuration not-present, make sure that the valid design space is large enough so that at least one valid design is initially evalauted")
+            
         self.set_at_least_one_in_valid_region(False)
-        F = copy(self.get_configuration().F)
+        #F = copy(self.get_configuration().F)
+        designSpace = self.fitness.designSpace
+        D = len(designSpace)
+        latin_hypercube_samples = lhs.lhs(scipy_uniform,[0,1],(self.get_configuration().population_size,D))
+        max_bounds = array([d["max"] for d in designSpace])
+        min_bounds = array([d["min"] for d in designSpace])
+        latin_hypercube_samples = latin_hypercube_samples * (max_bounds - min_bounds)
+        latin_hypercube_samples = latin_hypercube_samples + min_bounds
+        population = []
+        f_counter = 0
+        for part in latin_hypercube_samples:
+            part = self.create_particle(part)
+            self.toolbox.filter_particle(part)
+           # if f_counter < self.get_configuration().population_size/2.:
+            part.fitness.values, part.code, cost = self.fitness_function(part)
+            self.set_at_least_one_in_valid_region((part.code == 0) or self.get_at_least_one_in_valid_region())
+            if not self.get_best() or self.is_better(part.fitness, self.get_best().fitness):
+                particle = self.create_particle(part)
+                particle.fitness.values = part.fitness.values
+                self.set_best(particle)
+            population.append(part)
+            f_counter = f_counter + 1
+        self.set_population(population)
         while (not self.get_at_least_one_in_valid_region()):
-            self.set_population(self.toolbox.population(self.get_configuration().population_size))
-            self.toolbox.filter_particles(self.get_population())
-            if self.get_configuration().eval_correct:
-                self.get_population()[0] = self.create_particle(
-                    self.fitness.alwaysCorrect())  # This will break
-            for i, part in enumerate(self.get_population()):
-                if i < F:
-                    part.fitness.values, part.code, cost = self.toolbox.evaluate(part)
-                    self.set_at_least_one_in_valid_region((part.code == 0) or self.get_at_least_one_in_valid_region())
-                    if not self.get_best() or self.fitness.is_better(part.fitness, self.get_best().fitness):
-                        particle = self.create_particle(part)
-                        particle.fitness.values = part.fitness.values
-                        self.set_best(particle)
-                        
-            ## add one example till we find something that works
-            F = 1
+            part = self.toolbox.particle() ## a random particle
+            logging.info("All particles within invalid search space.. Evaluating extra examples: " + str(part))
+            part.fitness.values, part.code, cost = self.toolbox.evaluate(part)
+            self.set_at_least_one_in_valid_region((part.code == 0) or self.get_at_least_one_in_valid_region())
+            if not self.get_best() or self.is_better(part.fitness, self.get_best().fitness):
+                particle = self.create_particle(part)
+                particle.fitness.values = part.fitness.values
+                self.set_best(particle)
             
         self.state_dictionary["fresh_run"] = True
         
@@ -936,7 +1381,8 @@ class PSOTrial(Trial):
             self.fitness_function(self.get_best())
             logging.info('New best was found after M :' + str(self.get_best()))
         else:
-            ## TODO - clean it up...  messy
+            self.sample_design_space()
+            '''
             perturbation = self.perturbation(radius = 100.0)                        
             logging.info('Best was already evalauted.. adding perturbation ' + str(perturbation))
             perturbed_particle = self.create_particle(self.get_best())
@@ -957,6 +1403,7 @@ class PSOTrial(Trial):
                 if code[0] != 0:
                     logging.info('Best is within the invalid area ' + str(code[0]) + ', sampling design space')
                     self.sample_design_space()
+            '''
         
     def increment_main_counter(self):
         self.get_best_fitness_array().append(self.get_best().fitness.values[0])
@@ -965,20 +1412,19 @@ class PSOTrial(Trial):
         self.increment_counter(self.get_main_counter_name())
 
     def sample_design_space(self):
-        logging.info('Evaluating best perturbation')
-        perturbation = self.perturbation(radius = 10.0)                        
-        hypercube = self.hypercube()
-        particle = self.surrogate_model.max_uncertainty(designSpace=self.fitness.designSpace, hypercube = hypercube)
+        #logging.info('Evaluating best perturbation')
+        particle = self.surrogate_model.max_ei(designSpace=self.fitness.designSpace, hypercube = self.hypercube())
         if particle is None:
-            logging.info('Evaluating a perturbation of a random particle')
-            particle = self.toolbox.particle()
-        perturbedParticle = self.create_particle(particle)
-        for i,val in enumerate(perturbation):
-            perturbedParticle[i] = perturbedParticle[i] + val       
-        self.toolbox.filter_particle(perturbedParticle)
-        perturbedParticle.fitness.values, code, cost = self.fitness_function(perturbedParticle) 
-        if not self.get_best() or self.fitness.is_better(perturbedParticle.fitness, self.get_best().fitness):
-            self.set_best(perturbedParticle)
+            logging.info("Local sampling has failed, probably all of the particles are within invalid region")
+            particle = self.surrogate_model.max_ei(designSpace=self.fitness.designSpace)
+            if particle is None:
+                particle = self.toolbox.particle()
+                logging.info("Global sampling failed as well.. Evaluating a random particle"  + str(particle))
+        particle = self.create_particle(particle)   
+        self.toolbox.filter_particle(particle)
+        particle.fitness.values, code, cost = self.fitness_function(particle) 
+        if not self.get_best() or self.is_better(particle.fitness, self.get_best().fitness):
+            self.set_best(particle)
         
     ## not used currently
     # def get_perturbation_dist(self):
@@ -1018,11 +1464,28 @@ class PSOTrial(Trial):
         #find maximum
         max_diag = deepcopy(self.get_population()[0])
         for part in self.get_population():
-            max_diag = maximum(part,max_diag)
+            max_diag = maximum(part,max_diag) 
         ###find minimum vectors
         min_diag = deepcopy(self.get_population()[0])
         for part in self.get_population():
             min_diag = minimum(part,min_diag)
+            
+        ## we always ensure that the hypercube allows particles to maintain velocity components in all directions
+        
+        for i,dd in enumerate(max_diag):
+            if self.fitness.designSpace[i]["type"] == "discrete":
+                max_diag[i] = minimum(dd + self.fitness.designSpace[i]["step"],self.fitness.designSpace[i]["max"])
+            elif self.fitness.designSpace[i]["type"] == "continuous":
+                small_fraction = ((self.fitness.designSpace[i]["max"] - self.fitness.designSpace[i]["min"]) / 100.)
+                max_diag[i] = minimum(dd + small_fraction, self.fitness.designSpace[i]["max"])
+                
+        for i,dd in enumerate(min_diag):
+            if self.fitness.designSpace[i]["type"] == "discrete":
+                min_diag[i] = maximum(dd - self.fitness.designSpace[i]["step"],self.fitness.designSpace[i]["min"])
+            elif self.fitness.designSpace[i]["type"] == "continuous":
+                small_fraction = ((self.fitness.designSpace[i]["max"] - self.fitness.designSpace[i]["min"]) / 100.)
+                min_diag[i] = maximum(dd - small_fraction, self.fitness.designSpace[i]["min"])
+        logging.info("hypecube: " + str([max_diag,min_diag]))
         return [max_diag,min_diag]
         
     def perturbation(self, radius = 10.0):
@@ -1032,7 +1495,8 @@ class PSOTrial(Trial):
             if self.fitness.designSpace[i]["type"] == "discrete":
                 d[i] = maximum(dd,self.fitness.designSpace[i]["step"])
             elif self.fitness.designSpace[i]["type"] == "continuous":
-                d[i] = maximum(dd,self.smax[i])
+                small_fraction = ((self.fitness.designSpace[i]["max"] - self.fitness.designSpace[i]["min"]) / 100.)
+                d[i] = maximum(dd,small_fraction)
         dimensions = len(self.fitness.designSpace)
         pertubation =  multiply(((rand(1,dimensions)-0.5)*2.0),d)[0] #TODO add the dimensions
         return pertubation
@@ -1057,7 +1521,7 @@ class PSOTrial(Trial):
                 if v > self.get_configuration().max_stdv and c == 0:
                     if eval_counter > self.get_configuration().max_eval:
                         logging.info("Evalauted more fitness functions per generation then max_eval")
-                        self.checkAllParticlesEvaled() ## if all the particles have been evalauted 
+                        #self.checkAllParticlesEvaled() ## if all the particles have been evalauted 
                         return True
                     p.fitness.values, p.code, cost = self.toolbox.evaluate(p)
                     eval_counter = eval_counter + 1
@@ -1069,8 +1533,6 @@ class PSOTrial(Trial):
                             p.fitness.values = [self.fitness.worst_value]
                     except:
                         p.fitness.values, p.code, cost = self.toolbox.evaluate(p)
-                        logging.info("KURWA Start")
-                        logging.info("KURWA End")
             ## at least one particle has to have std smaller then max_stdv
             ## if all particles are in invalid zone
         return False
@@ -1081,7 +1543,7 @@ class PSOTrial(Trial):
             bests_to_model.append(self.get_best())
         if bests_to_model:
             logging.info("Reevaluating")
-            code, bests_to_fitness, variance = self.surrogate_model.predict(bests_to_model)
+            code, bests_to_fitness, variance, ei, p = self.predict_surrogate_model(bests_to_model)
             if (code is None) or (bests_to_fitness is None) or (variance is None):
                 logging.info("Prediction failed during reevaluation... omitting")
             else:
@@ -1127,7 +1589,7 @@ class PSOTrial(Trial):
         return self.state_dictionary['at_least_one_in_valid_region']
         
     def get_surrogate_model(self): ## returns a copy of the model... quite important not to return the model itself as ll might get F up
-        model = ProperSurrogateModel(self.get_configuration(), self.controller)
+        model = ProperSurrogateModel(self.get_configuration(), self.controller, self.fitness)
         model.set_state_dictionary(self.surrogate_model.get_state_dictionary())
         return model
 
@@ -1135,7 +1597,12 @@ class PSOTrial(Trial):
         model = DummyCostModel(self.get_configuration(), self.controller, self.fitness)
         model.set_state_dictionary(self.cost_model.get_state_dictionary())
         return model
-    
+        
+    def get_classifier(self):
+        return self.get_surrogate_model().get_classifier() 
+        
+    def get_regressor(self):
+        return self.get_surrogate_model().get_regressor()
     
 class MOPSOTrial(Trial):
     #######################
@@ -1214,41 +1681,63 @@ class MOPSOTrial(Trial):
         
     def initialize_population(self):
         ## the while loop exists, as meta-heuristic makes no sense till we find at least one particle that is within valid region...
-        
+        try:
+            part = self.create_particle(self.get_configuration().always_valid)
+            self.toolbox.filter_particle(part)
+            part.fitness.values, part.code, cost = self.fitness_function(part)
+            if not self.get_best() or self.is_better(part.fitness, self.get_best().fitness):
+                particle = self.create_particle(part)
+                particle.fitness.values = part.fitness.values
+                self.set_best(particle)
+            logging.info("Always valid configuration present, evaluated")
+        except:
+            logging.info("Always valid configuration not-present, make sure that the valid design space is large enough so that at least one valid design is initially evalauted")
+            
         self.set_at_least_one_in_valid_region(False)
-        F = copy(self.get_configuration().F)
+        #F = copy(self.get_configuration().F)
+        designSpace = self.fitness.designSpace
+        D = len(designSpace)
+        latin_hypercube_samples = lhs.lhs(scipy_uniform,[0,1],(self.get_configuration().population_size,D))
+        max_bounds = array([d["max"] for d in designSpace])
+        min_bounds = array([d["min"] for d in designSpace])
+        latin_hypercube_samples = latin_hypercube_samples * (max_bounds - min_bounds)
+        latin_hypercube_samples = latin_hypercube_samples + min_bounds
+        population = []
+        f_counter = 0
+        for part in latin_hypercube_samples:
+            part = self.create_particle(part)
+            self.toolbox.filter_particle(part)
+           # if f_counter < self.get_configuration().population_size/2.:
+            part.fitness.values, part.code, cost = self.fitness_function(part)
+            self.set_at_least_one_in_valid_region((part.code == 0) or self.get_at_least_one_in_valid_region())
+            if not self.get_best() or self.is_better(part.fitness, self.get_best().fitness):
+                particle = self.create_particle(part)
+                particle.fitness.values = part.fitness.values
+                self.set_best(particle)
+            population.append(part)
+            f_counter = f_counter + 1
+        self.set_population(population)
         ## get objectives
         objectives = self.fitness.objectives
         
         while (not self.get_at_least_one_in_valid_region()):
-            self.set_population(self.toolbox.population(self.get_configuration().population_size))
-            self.toolbox.filter_particles(self.get_population())
-            
-            # create particles
-            if self.get_configuration().eval_correct:
-                self.get_population()[0] = self.create_particle(
-                    self.fitness.alwaysCorrect())  # This will break
-            
-            for i, part in enumerate(self.get_population()):
-                if i < F:
-                    part.fitness.values, part.code, cost = self.toolbox.evaluate1(part)
+            part = self.toolbox.particle() ## a random particle
+            logging.info("All particles within invalid search space.. Evaluating extra examples: " + str(part))
+            part.fitness.values, part.code, cost = self.toolbox.evaluate1(part)
 
-                    self.set_at_least_one_in_valid_region((part.code == 0) or self.get_at_least_one_in_valid_region())
-                    
-                    flag = self.update_nondominate_archive(part)
-                    best = self.select_best()
-                    if not self.get_best() or self.get_best() != best:
-                            if best != 'null':
-                                    self.set_best_mo(best)
-                            else:
-                                    self.set_best_mo(part)
+            self.set_at_least_one_in_valid_region((part.code == 0) or self.get_at_least_one_in_valid_region())
+            flag = self.update_nondominate_archive(part)
+            best = self.select_best()
+            if not self.get_best() or self.get_best() != best:
+                if best != 'null':
+                    self.set_best_mo(best)
+                else:
+                    self.set_best_mo(part)
                     #if not self.get_best() or self.fitness.dominates(part.fitness.values, self.get_best().fitness.values):
                         #particle = self.create_particle(part)
                         #particle.fitness.values = part.fitness.values
                         #self.set_best(part)
-                        
-            ## add one example till we find something that works
-            F = 1
+                       
             
         self.state_dictionary["fresh_run"] = True
     
@@ -1626,7 +2115,7 @@ class MOPSOTrial(Trial):
                 reevalute = True
             ##print self.get_population()
             try:
-                code, mu, variance = self.predict_surrogate_mo_model(self.get_population())
+                code, mu, variance, ei, p = self.predict_surrogate_mo_model(self.get_population())
             except:
                 logging.error("Cannot predict")
             reloop = False
@@ -1639,6 +2128,14 @@ class MOPSOTrial(Trial):
                 logging.info("min S2  " + str(min(variance)))
                 logging.info("over " + str(self.get_configuration().max_stdv) + ': ' + str(min(len([v for v in variance if v > self.get_configuration().max_stdv]))))
                 logging.info("over 0.01  " + str(min(len([v for v in variance if v > 0.01]))))
+                logging.info("mean p " + str(mean(p)))
+                logging.info("max p  " + str(max(p)))
+                logging.info("min p  " + str(min(p)))
+                logging.info("over 0.05  " + str(min(len([v for v in p if v > 0.05]))))
+                logging.info("over 0.1  " + str(min(len([v for v in p if v > 0.01]))))
+                logging.info("mean ei " + str(mean(ei)))
+                logging.info("max ei  " + str(max(ei)))
+                logging.info("min ei  " + str(min(ei)))
                 
                 # check if we should re evaluate and retrain
                 reloop = self.post_model_filter(code, mu, variance)
@@ -1909,11 +2406,13 @@ class MOPSOTrial(Trial):
             
             logging.info('New best was found after M :' + str(self.get_best()))
         else:
+            self.sample_design_space()
+            '''
             ## TODO - clean it up...  messy
             perturbation = self.perturbation(radius = 100.0)                        
             logging.info('Best was already evalauted.. adding perturbation ' + str(perturbation))
             perturbed_particle = self.create_particle(self.get_best())
-            code, mean, variance = self.predict_surrogate_mo_model([perturbed_particle])
+            code, mean, variance, ei, p = self.predict_surrogate_mo_model([perturbed_particle])
             if code is None:
                 logging.debug("Code is none..watch out")
             if code is None or code[0] == 0:
@@ -1939,6 +2438,7 @@ class MOPSOTrial(Trial):
                 if code[0] != 0:
                     logging.info('Best is within the invalid area ' + str(code[0]) + ', sampling design space')
                     self.sample_design_space()
+            '''
         
     def increment_main_counter(self):
         self.get_best_fitness_array().append(self.get_best().fitness.values[0])
@@ -1948,18 +2448,18 @@ class MOPSOTrial(Trial):
 
     def sample_design_space(self):
         logging.info('Evaluating best perturbation')
-        perturbation = self.perturbation(radius = 10.0)                        
-        hypercube = self.hypercube()
-        particle = self.surrogate_model[0].max_uncertainty(designSpace=self.fitness.designSpace, hypercube = hypercube)
+        particle = self.surrogate_model.max_ei(designSpace=self.fitness.designSpace, hypercube = self.hypercube())
         if particle is None:
-            logging.info('Evaluating a perturbation of a random particle')
-            particle = self.toolbox.particle()
-        perturbedParticle = self.create_particle(particle)
-        for i,val in enumerate(perturbation):
-            perturbedParticle[i] = perturbedParticle[i] + val       
-        self.toolbox.filter_particle(perturbedParticle)
-        perturbedParticle.fitness.values, code, cost = self.fitness_function_mo(perturbedParticle) 
-        flag = self.update_nondominate_archive(perturbedParticle)
+            logging.info("Local sampling has failed, probably all of the particles are within invalid region")
+            particle = self.surrogate_model.max_ei(designSpace=self.fitness.designSpace)
+            if particle is None:
+                particle = self.toolbox.particle()
+                logging.info("Global sampling failed as well.. Evaluating a random particle"  + str(particle))
+        particle = self.create_particle(particle)   
+        
+        self.toolbox.filter_particle(particle)
+        particle.fitness.values, code, cost = self.fitness_function_mo(particle) 
+        flag = self.update_nondominate_archive(particle)
         best = self.select_best()
         if not self.get_best() or self.get_best() != best:
             best = self.select_best()
@@ -2008,11 +2508,28 @@ class MOPSOTrial(Trial):
         #find maximum
         max_diag = deepcopy(self.get_population()[0])
         for part in self.get_population():
-            max_diag = maximum(part,max_diag)
+            max_diag = maximum(part,max_diag) 
         ###find minimum vectors
         min_diag = deepcopy(self.get_population()[0])
         for part in self.get_population():
             min_diag = minimum(part,min_diag)
+            
+        ## we always ensure that the hypercube allows particles to maintain velocity components in all directions
+        
+        for i,dd in enumerate(max_diag):
+            if self.fitness.designSpace[i]["type"] == "discrete":
+                max_diag[i] = minimum(dd + self.fitness.designSpace[i]["step"],self.fitness.designSpace[i]["max"])
+            elif self.fitness.designSpace[i]["type"] == "continuous":
+                small_fraction = ((self.fitness.designSpace[i]["max"] - self.fitness.designSpace[i]["min"]) / 100.)
+                max_diag[i] = minimum(dd + small_fraction, self.fitness.designSpace[i]["max"])
+                
+        for i,dd in enumerate(min_diag):
+            if self.fitness.designSpace[i]["type"] == "discrete":
+                min_diag[i] = maximum(dd - self.fitness.designSpace[i]["step"],self.fitness.designSpace[i]["min"])
+            elif self.fitness.designSpace[i]["type"] == "continuous":
+                small_fraction = ((self.fitness.designSpace[i]["max"] - self.fitness.designSpace[i]["min"]) / 100.)
+                min_diag[i] = maximum(dd - small_fraction, self.fitness.designSpace[i]["min"])
+        logging.info("hypecube: " + str([max_diag,min_diag]))
         return [max_diag,min_diag]
         
     def perturbation(self, radius = 10.0):
@@ -2042,8 +2559,7 @@ class MOPSOTrial(Trial):
         if (code is None) or (mean is None) or (variance is None):
             self.set_model_failed(False)
         else:
-            for i, (p, c, m, v) in enumerate(zip(self.get_population(), code,
-                                                 mean, variance)):
+            for i, (p, c, m, v) in enumerate(zip(self.get_population(), code, mean, variance)):
                 if v > self.get_configuration().max_stdv and c == 0:
                     if eval_counter > self.get_configuration().max_eval:
                         logging.info("Evalauted more fitness functions per generation than max_eval")
@@ -2059,8 +2575,6 @@ class MOPSOTrial(Trial):
                             p.fitness.values = [self.fitness.worst_value]
                     except:
                         p.fitness.values, p.code, cost = self.toolbox.evaluate1(p)
-                        logging.info("KURWA Start")
-                        logging.info("KURWA End")
             ## at least one particle has to have std smaller then max_stdv
             ## if all particles are in invalid zone
         return False
@@ -2071,7 +2585,7 @@ class MOPSOTrial(Trial):
             bests_to_model.append(self.get_best())
         if bests_to_model:
             logging.info("Reevaluating")
-            code, bests_to_fitness, variance = self.predict_surrogate_mo_model(bests_to_model)
+            code, bests_to_fitness, variance, ei, p = self.predict_surrogate_model(bests_to_model)
             if (code is None) or (bests_to_fitness is None) or (variance is None):
                 logging.info("Prediction failed during reevaluation... omitting")
             else:
@@ -2129,6 +2643,11 @@ class MOPSOTrial(Trial):
         model = DummyCostModel(self.get_configuration(), self.controller, self.fitness)
         model.set_state_dictionary(self.cost_model.get_state_dictionary())
         return model
+    def get_classifier(self):
+        return self.get_surrogate_model().get_classifier() 
+        
+    def get_regressor(self):
+        return self.get_surrogate_model().get_regressor()
     
 class PSOTrial_TimeAware(PSOTrial):
         

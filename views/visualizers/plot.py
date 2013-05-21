@@ -11,9 +11,10 @@ import matplotlib as mpl
 # Force matplotlib to not use any Xwindows backend.
 mpl.use('Agg')
 from matplotlib import pyplot
+from mpl_toolkits.axes_grid1 import ImageGrid
 from matplotlib.ticker import LinearLocator, FormatStrFormatter, MaxNLocator
 from mpl_toolkits.mplot3d import axes3d, Axes3D
-from numpy import array, linspace, meshgrid, reshape, argmin
+from numpy import array, linspace, meshgrid, reshape, argmin, arange, append, zeros
 from scipy.interpolate import griddata
 
 import HTML
@@ -46,24 +47,102 @@ class ImageViewer(object):
 ## This class containts 
 class MLOImageViewer(ImageViewer):
 
-    DPI = 400
-    LABEL_FONT_SIZE = 10
-    TITLE_FONT_SIZE = 10
+    DPI = 1500
+
+    LABEL_FONT_SIZE = 5
+    TITLE_FONT_SIZE = 5
+    def render_2d(figure, info, d, graph_dict, title, data=None, fitness=None):
+        logging.debug(info)
+        plot = figure.add_subplot(int(graph_dict['position']),
+                                  projection='3d', elev=20)
+
+        ### User settings
+        font_size = int(graph_dict['font size'])
+        plot.set_title(title,
+                       fontsize=MLOImageViewer.TITLE_FONT_SIZE)
+        plot.set_ylabel('\n' + graph_dict['y-axis'], linespacing=3,
+                        fontsize=font_size)
+        plot.set_xlabel('\n' + graph_dict['x-axis'], linespacing=3,
+                        fontsize=font_size)
+        plot.set_zlabel('\n' + graph_dict['z-axis'], linespacing=3,
+                        fontsize=font_size)
+        colour_map = mpl.pyplot.get_cmap(graph_dict['colour map'])
+
+        ### Other settings
+        plot.w_xaxis.set_major_locator(MaxNLocator(5))
+        plot.w_zaxis.set_major_locator(MaxNLocator(5))
+        plot.w_yaxis.set_major_locator(MaxNLocator(5))
+        if fitness:
+            plot.set_zlim3d(fitness.minVal, fitness.maxVal)
+
+        ### Data
+        if not (data is None):        
+            logging.debug("Data passed...")
+            logging.debug("Prediction done passed...")
+            try:
+                zi = griddata((d['x'], d['y']), data,
+                              (d['xi'][None, :], d['yi'][:, None]), method='nearest')
+
+                norm = mpl.pyplot.matplotlib.colors.Normalize(data)
+                surf = plot.plot_surface(d['X'], d['Y'], zi, rstride=1, cstride=1,
+                                         linewidth=0.05, antialiased=True,
+                                         cmap=colour_map)
+            except TypeError,e:
+                logging.error('Could not create ' + str(title) + ' plot for the GPR plot: ' + str(e))
+
+    @staticmethod
+    def render_3_4d(figure, info, d, graph_dict, title, data=None):
+        plot = figure #figure.add_subplot(int(graph_dict['position']))
+
+        ### User settings
+        font_size = int(graph_dict['font size'])
+        #plot.set_title(title,
+        #               fontsize=MLOImageViewer.TITLE_FONT_SIZE)
+        D_0 = len(data)
+        D_1 = len(data[0])
+        colour_map = mpl.cm.get_cmap("gist_gray")#graph_dict['colour map'])
+        data_max = array(data).max()
+        ### Data
+        data_min = array(data).min()
+        if not (data is None):        
+            logging.debug("Data passed...")
+            try:
+                grid = ImageGrid(plot, 111, # similar to subplot(111)
+                                nrows_ncols = (D_1, D_0), # creates D_0xD_1 grid of axes
+                             #   axes_pad=0.1, # pad between axes in inch.
+                              #  label_mode = "L",
+                                cbar_mode = "single"
+                                )
+                for i in range(D_0):
+                    for j in range(D_1):
+                        zi = griddata((d['x'], d['y']), data[i][j],
+                                  (d['xi'][None, :], d['yi'][:, None]), method='nearest')
+                        CS = grid[i*D_1 + j].contour(d['X'], d['Y'], zi,colors='k',vmin=data_min,vmax=data_max)                        
+                        CS = grid[i*D_1 + j].contourf(d['X'], d['Y'], zi,cmap=colour_map,vmin=data_min,vmax=data_max)
+                        
+                #### save grid 
+                filename = str(d['images_folder']) + '/plot' + str(d['counter']) + "_" + info + '.png'
+                if os.path.isfile(filename):
+                    os.remove(filename)
+                try:
+                    MLOImageViewer.save_fig(plot, filename, MLOImageViewer.DPI)
+                except:
+                    logging.error('MLOImageViewer could not render a plot',exc_info=sys.exc_info())
+                mpl.pyplot.close(plot)
+            except TypeError,e:
+                logging.error('Could not create ' + str(title) + ' plot for the GPR plot: ' + str(e))
+    
 
     @staticmethod
     def render(input_dictionary):
+        logging.info("Rendering...")
         if input_dictionary["generate"]:
             dictionary = MLOImageViewer.get_default_attributes() ##this way the default view will be used if different one was not supplied
-            dictionary.update(input_dictionary)
             figure = mpl.pyplot.figure()
-            figure.subplots_adjust(wspace=0.35, hspace=0.35)
+            dictionary.update(input_dictionary)
+            figure.subplots_adjust(wspace=0.25, hspace=0.35)
             counter_headers = []
             header = []
-            #counters = first_trial_snapshot['counter_dict'].keys()
-            #for counter in counters: ## list of names of Counters
-            #    header.append('Counter "' + counter + '"')
-            #    counter_headers.append(counter)
-            #[trial_snapshot['counter_dict'][counter_header] for counter_header in counter_headers] 
             figure.suptitle(dictionary['graph_title'])
 
             rerender = True ## pointless... remove
@@ -72,7 +151,7 @@ class MLOImageViewer(ImageViewer):
 
             ### Initialize some graph points
             dimensions = len(designSpace)
-            if dimensions < 3 :
+            if dimensions == 2 :
                 x = linspace(designSpace[0]['min'], designSpace[0]['max'], npts)
                 y = linspace(designSpace[1]['min'], designSpace[1]['max'], npts)
                 x, y = meshgrid(x, y)
@@ -88,36 +167,82 @@ class MLOImageViewer(ImageViewer):
                                             designSpace[1]['max'] + 0.01, npts)
                 dictionary['X'], dictionary['Y'] = meshgrid(dictionary['xi'],
                                                             dictionary['yi'])
-            else:
-                logging.info("We only support visualization of 1 and 2 dimensional spaces")
-            ### Generate the graphs according to the user's selection
-            if dimensions < 3 :
                 if dictionary['all_graph_dicts']['Mean']['generate']:
                     MLOImageViewer.plot_MU(figure, dictionary)
                 if dictionary['all_graph_dicts']['Fitness']['generate']:
                     MLOImageViewer.plot_fitness_function(figure, dictionary)
-            if dictionary['all_graph_dicts']['Progression']['generate']:
-                MLOImageViewer.plot_fitness_progression(figure, dictionary)
-            if dimensions < 3 :
                 if dictionary['all_graph_dicts']['DesignSpace']['generate']:
                     MLOImageViewer.plot_design_space(figure, dictionary)
                 if dictionary['all_graph_dicts']['Cost']['generate']:
                     MLOImageViewer.plot_cost_function(figure, dictionary)
+                if dictionary['all_graph_dicts']['EI']['generate']:
+                    MLOImageViewer.plot_EI(figure, dictionary)
+                if dictionary['all_graph_dicts']['S2']['generate']:
+                    MLOImageViewer.plot_S2(figure, dictionary)
+                if dictionary['all_graph_dicts']['Progression']['generate']:
+                    MLOImageViewer.plot_fitness_progression(figure, dictionary)
+                ### Save and exit
+                filename = str(dictionary['images_folder']) + '/plot' + str(dictionary['counter']) + '.png'
+                if rerender and os.path.isfile(filename):
+                    os.remove(filename)
+                try:
+                    #P = Process(target=Plot_View.save_fig, args=(figure, filename,
+                    #                                             Plot_View.DPI))
+                    MLOImageViewer.save_fig(figure, filename, MLOImageViewer.DPI)
+                except:
+                    logging.error(
+                        'MLOImageViewer could not render a plot',exc_info=sys.exc_info())
+                mpl.pyplot.close(figure)
+            elif (dimensions == 3) or (dimensions == 4):
+                ## we define a grid 
+                '''
+                if designSpace[0]['type'] == "discrete":
+                    x = arange(designSpace[0]['min'], designSpace[0]['max'] + designSpace[0]['step'], designSpace[0]['step'])
+                else:
+                    x = linspace(designSpace[0]['min'], designSpace[0]['max'], npts)
+                    
+                if designSpace[1]['type'] == "discrete":
+                    y = arange(designSpace[1]['min'], designSpace[1]['max'] + designSpace[1]['step'], designSpace[1]['step'])
+                else:
+                    y = linspace(designSpace[1]['min'], designSpace[1]['max'], npts)
+                dim_grid =[None,None]
+                if designSpace[2]['type'] == "discrete":
+                    dim_grid[0] = arange(designSpace[2]['min'], designSpace[2]['max'] + designSpace[2]['step'], designSpace[2]['step'])
+                else: # continous
+                    dim_grid[0] = linspace(designSpace[2]['min'], designSpace[2]['max'], npts)
+                    
+                if dimensions == 4:
+                    if  designSpace[3]['type'] == "discrete":
+                        dim_grid[0] = arange(designSpace[3]['min'], designSpace[3]['max'] + designSpace[3]['step'], designSpace[3]['step'])
+                    else:
+                        dim_grid[1] = linspace(designSpace[3]['min'], designSpace[3]['max'], npts)
+                dictionary["dim_grid"] = dim_grid
+                x, y = meshgrid(x, y)
+                dictionary['x'] = reshape(x, -1)
+                dictionary['y'] = reshape(y, -1)
+                dictionary['z'] = array([[a, b] for (a, b) in zip(dictionary['x'],
+                                                                  dictionary['y'])])
+
+                ### Define grid
+                dictionary['xi'] = linspace(designSpace[0]['min'] - 0.01,
+                                            designSpace[0]['max'] + 0.01, npts)
+                dictionary['yi'] = linspace(designSpace[1]['min'] - 0.01,
+                                            designSpace[1]['max'] + 0.01, npts)
                 
-            ### Save and exit
-            filename = str(dictionary['images_folder']) + '/plot' + str(dictionary['counter']) + '.png'
-            if rerender and os.path.isfile(filename):
-                os.remove(filename)
-            try:
-                #P = Process(target=Plot_View.save_fig, args=(figure, filename,
-                #                                             Plot_View.DPI))
-                MLOImageViewer.save_fig(figure, filename, MLOImageViewer.DPI)
-            except:
-                logging.error(
-                    'MLOImageViewer could not render a plot for ' + str(name),
-                    exc_info=sys.exc_info())
-            mpl.pyplot.close(figure)
-            #sys.exit(0) ## I let it as a reminder... do NOT uncomment this! will get the applciation to get stuck
+                                            
+                dictionary['X'], dictionary['Y'] = meshgrid(dictionary['xi'],
+                                                            dictionary['yi'])
+            
+                if dictionary['all_graph_dicts']['Fitness']['generate']:
+                    MLOImageViewer.plot_fitness_function_grid(figure, dictionary)
+                if dictionary['all_graph_dicts']['DesignSpace']['generate']:
+                    MLOImageViewer.plot_design_space_grid(figure, dictionary)
+                if dictionary['all_graph_dicts']['Mean']['generate'] or dictionary['all_graph_dicts']['EI']['generate'] or dictionary['all_graph_dicts']['S2']['generate']:
+                    MLOImageViewer.plot_MU_S2_EI_grid(figure, dictionary)
+                ## ADD COST
+                '''
+            else:
+                logging.info("We only support visualization of 2, 3 and 4 dimensional spaces")
         else: ## do not regenerate
             pass
         
@@ -125,12 +250,44 @@ class MLOImageViewer(ImageViewer):
     def save_fig(figure, filename, DPI):
         logging.info('Save fig ' + str(filename))
         figure.savefig(filename, dpi=DPI)
+    @staticmethod
+    def plot_MU_S2_EI_grid(figure, d):
+        dim_grid = d["dim_grid"]
+        fitness = d['fitness']
+        D_0 = len(dim_grid[0])
+        
+        if dim_grid[1]:
+            D_1 = len(dim_grid[1])
+            data = [[[0.0] * D_1 for i in range(D_0)] for ii in range(3)]
+            for i in range(D_0):
+                for j in range(D_1):
+                    results = d['regressor'].predict([append(a,[dim_grid[0][i],dim_grid[1][j]]) for a in d['z']])
+                    for k in range(3):
+                        data[k][i][j] = array([item[0] for item in results[k]])
+        else:
+            D_1 = 1
+            data = [[[0.0] * D_1 for i in range(D_0)] for ii in range(3)]
+            for i in range(D_0):
+                results = d['regressor'].predict([append(a,[dim_grid[0][i]]) for a in d['z']])
+                for k in range(3):
+                    data[k][i][0] = array([item[0] for item in results[k]])  
+                        
+        logging.debug("Prediction done passed...")
+                    
+        logging.info("Data for MU, S2, EI prepared")        
+        graph_dict = d['all_graph_dicts']['Fitness']
+        MLOImageViewer.render_3_4d(figure, "Mean", d, graph_dict, "Mean", data[0])
+        MLOImageViewer.render_3_4d(figure, "S2", d, graph_dict, "S2", data[1])
+        MLOImageViewer.render_3_4d(figure, "EI", d, graph_dict, "EI", data[2])
+        
+    
 
     @staticmethod
     def plot_MU(figure, d):
+        logging.debug("Plotting Mean...")
         graph_dict = d['all_graph_dicts']['Mean']
         plot = figure.add_subplot(int(graph_dict['position']),
-                                  projection='3d', elev=60)
+                                  projection='3d', elev=20)
 
         ### User settings
         font_size = int(graph_dict['font size'])
@@ -152,11 +309,14 @@ class MLOImageViewer(ImageViewer):
         plot.set_zlim3d(fitness.minVal, fitness.maxVal)
 
         ### Data
-        if not (d['regressor'] is None):
+        if not (d['regressor'] is None):        
+            plot.set_title(d['regressor'].get_parameter_string(), fontsize=MLOImageViewer.TITLE_FONT_SIZE)
+            logging.debug("Regressor passed...")
+            MU, S2, EI, P = d['regressor'].predict(d['z'])
+            logging.debug("Prediction done passed...")
+            MU_z = MU
+            MU_z = array([item[0] for item in MU_z])
             try:
-                MU, S2 = d['regressor'].predict(d['z'])
-                MU_z = MU
-                MU_z = array([item[0] for item in MU_z])
                 zi = griddata((d['x'], d['y']), MU_z,
                               (d['xi'][None, :], d['yi'][:, None]), method='nearest')
 
@@ -165,13 +325,44 @@ class MLOImageViewer(ImageViewer):
                                          linewidth=0.05, antialiased=True,
                                          cmap=colour_map)
             except TypeError,e:
-                logging.error('Could not create MU plot for the GPR plot')
+                logging.error('Could not create MU plot for the GPR plot: ' + str(e) + " " + str(MU_z))
+
+    @staticmethod
+    def plot_fitness_function_grid(figure, d):
+        
+        dim_grid = d["dim_grid"]
+        fitness = d['fitness']
+        D_0 = len(dim_grid[0])
+        
+        ###we duplicate a lot of stuff cause of speed...
+        if dim_grid[1]:
+            D_1 = len(dim_grid[1])
+            data = [[0.0] * D_1 for i in range(D_0)]
+            for i in range(D_0):
+                for j in range(D_1):
+                    try: 
+                        data[i][j] = array([fitness.fitnessFunc(append(a,[dim_grid[0][i],dim_grid[1][j]]), d['fitness_state'])[0][0][0] for a in d['z']])
+                    except:
+                        data[i][j] = array([fitness.fitnessFunc(append(a,[dim_grid[0][i],dim_grid[1][j]]))[0][0] for a in d['z']]) ###no fitness state
+        else:
+            D_1 = 1
+            data = [[0.0] * D_1 for i in range(D_0)]
+            for i in range(D_0):
+                data[i][0] = array([fitness.fitnessFunc(append(a,[dim_grid[0][i]]), d['fitness_state'])[0][0][0] for a in d['z']])
+                try: 
+                    data[i][0] = array([fitness.fitnessFunc(append(a,[dim_grid[0][i]]), d['fitness_state'])[0][0][0] for a in d['z']])
+                except Exception,e:
+                    data[i][0] = array([fitness.fitnessFunc(append(a,[dim_grid[0][i]]))[0][0] for a in d['z']]) ###no fitness state
+        logging.info("Fitness prepared")        
+        graph_dict = d['all_graph_dicts']['Fitness']
+        MLOImageViewer.render_3_4d(figure, "Plotting MU grid", d, graph_dict, "MU", data)    
 
     @staticmethod
     def plot_fitness_function(figure, d):
+        logging.info("Plotting Fitness...")
         graph_dict = d['all_graph_dicts']['Fitness']
         plot = figure.add_subplot(int(graph_dict['position']),
-                                  projection='3d', elev=60)
+                                  projection='3d', elev=20)
 
         ### User settings
         font_size = int(graph_dict['font size'])
@@ -219,6 +410,7 @@ class MLOImageViewer(ImageViewer):
 
     @staticmethod
     def plot_fitness_progression(figure, d):
+        logging.info("Plotting Fitness Progression...")
         graph_dict = d['all_graph_dicts']['Progression']
         plot = figure.add_subplot(int(graph_dict['position']))
 
@@ -267,6 +459,7 @@ class MLOImageViewer(ImageViewer):
         ### Data
         fitness = d['fitness']
         if not (d['classifier'] is None):
+            plot.set_title(d['classifier'].get_parameter_string(), fontsize=MLOImageViewer.TITLE_FONT_SIZE)
             zClass = d['classifier'].predict(d['z'])
             zi3 = griddata((d['x'], d['y']), zClass,
                            (d['xi'][None, :], d['yi'][:, None]), method='nearest')
@@ -302,7 +495,37 @@ class MLOImageViewer(ImageViewer):
             for key in d['meta_plot'].keys():
                 data = d['meta_plot'][key]["data"]
                 plot.scatter(array([item[0] for item in data]),array([item[1] for item in data]), c="white",marker=d['meta_plot'][key]["marker"])
-        
+    
+    
+    @staticmethod
+    def plot_design_space_grid(figure, d):
+        dim_grid = d["dim_grid"]
+        fitness = d['fitness']
+        D_0 = len(dim_grid[0])
+        ###we duplicate a lot of stuff cause of speed...
+        if dim_grid[1]:
+            D_1 = len(dim_grid[1])
+            data = [[0.0] * D_1 for i in range(D_0)]
+            for i in range(D_0):
+                for j in range(D_1):
+                    data[i][j] = d['classifier'].predict([append(a,[dim_grid[0][i],dim_grid[1][j]]) for a in d['z']])
+        else:
+            D_1 = 1
+            data = [[0.0] * D_1 for i in range(D_0)]
+            for i in range(D_0):
+                data[i][0] = d['classifier'].predict([append(a,[dim_grid[0][i]]) for a in d['z']])
+                    
+        #levels = [k for k, v in fitness.error_labels.items()]
+        #levels = [l-0.1 for l in levels]
+        #levels.append(levels[-1]+1.0)
+        #CS = plot.contourf(d['X'], d['Y'], zi3, levels, cmap=colour_map)
+        #cbar = figure.colorbar(CS, ticks=CS.levels)
+        graph_dict = d['all_graph_dicts']['DesignSpace']
+        logging.info("Design Space prepared")        
+        MLOImageViewer.render_3_4d(figure, "design_space", d, graph_dict, "MU", data)
+    
+    
+    #### COST FUNCTION PLOTS
     @staticmethod
     def plot_cost_function(figure, d):
         graph_dict = d['all_graph_dicts']['Cost']
@@ -345,7 +568,7 @@ class MLOImageViewer(ImageViewer):
 
         try:            
             zReal = array([fitness.fitnessFunc(a, d['fitness_state'])[0][3][0] for a in d['z']])
-        except:
+        except Exception,e:
             zReal = array([fitness.fitnessFunc(a)[3][0] for a in d['z']]) ###no fitness state
             
         ziReal = griddata((d['x'], d['y']), zReal,
@@ -354,6 +577,7 @@ class MLOImageViewer(ImageViewer):
         surfReal = plot.plot_surface(d['X'], d['Y'], ziReal, rstride=1,
                                      cstride=1, linewidth=0.05,
                                      antialiased=True, cmap=colour_map)
+    #### UTILITIES
         
     @staticmethod
     def get_attributes(name):
@@ -379,27 +603,27 @@ class MLOImageViewer(ImageViewer):
     def get_default_attributes():
         # Default values for describing graph visualization
         graph_title = 'Title'
-        graph_names = ['Progression', 'Fitness', 'Mean', 'DesignSpace', "Cost"]
+        graph_names = ['Progression', 'Fitness', 'Mean', 'DesignSpace', "Cost", 'EI', 'S2',]
 
         graph_dict1 = {'subtitle': 'Currently Best Found Solution',
                        'x-axis': 'Iteration',
                        'y-axis': 'Fitness',
                        'font size': '10',
-                       'position': '231'}
+                       'position': '241'}
         graph_dict2 = {'subtitle': 'Fitness Function',
                        'x-axis': 'X',
                        'y-axis': 'Y',
                        'z-axis': 'Fitness',
                        'font size': '10',
                        'colour map': 'PuBu',
-                       'position': '232'}
+                       'position': '242'}
         graph_dict3 = {'subtitle': 'Regression Mean',
                        'x-axis': 'X',
                        'y-axis': 'Y',
                        'z-axis': 'Fitness',
                        'font size': '10',
                        'colour map': 'PuBuGn',
-                       'position': '233'}
+                       'position': '243'}
         graph_dict4 = {'subtitle': 'Design Space',
                        'x-axis': 'X',
                        'y-axis': 'Y',
@@ -407,7 +631,7 @@ class MLOImageViewer(ImageViewer):
                        'colour map': 'PuBu',
                        'x-colour': 'black',
                        'o-colour': 'black',
-                       'position': '234'}
+                       'position': '244'}
         graph_dict5 = {'subtitle': 'Cost Function',
                        'x-axis': 'X',
                        'y-axis': 'Y',
@@ -416,14 +640,29 @@ class MLOImageViewer(ImageViewer):
                        'colour map': 'PuBu',
                        'x-colour': 'black',
                        'o-colour': 'black',
-                       'position': '235'}
+                       'position': '245'}
+        graph_dict6 = {'subtitle': 'Regression EI',
+                       'x-axis': 'X',
+                       'y-axis': 'Y',
+                       'z-axis': 'Fitness',
+                       'font size': '10',
+                       'colour map': 'PuBuGn',
+                       'position': '246'}
+        graph_dict7 = {'subtitle': 'Regression S2',
+                       'x-axis': 'X',
+                       'y-axis': 'Y',
+                       'z-axis': 'Fitness',
+                       'font size': '10',
+                       'colour map': 'PuBuGn',
+                       'position': '247'}
         all_graph_dicts = {'Progression': graph_dict1,
                            'Fitness': graph_dict2,
                            'Mean': graph_dict3,
                            'DesignSpace': graph_dict4,
-                           'Cost': graph_dict5
+                           'Cost': graph_dict5,
+                           'EI': graph_dict6,
+                           'S2': graph_dict7
                            }
-                           
         
             
         graph_dictionary = {
@@ -437,10 +676,98 @@ class MLOImageViewer(ImageViewer):
             graph_dictionary['all_graph_dicts'][name]['generate'] = True
                           
         return graph_dictionary
+    #### EI PLOTS
         
-## This class returns a pdf containing a summary of the runs
-## 
+    @staticmethod
+    def plot_EI(figure, d):
+        logging.debug("Plotting Expectation Improvement...")
+        graph_dict = d['all_graph_dicts']['EI']
+        plot = figure.add_subplot(int(graph_dict['position']),
+                                  projection='3d', elev=20)
 
+        ### User settings
+        font_size = int(graph_dict['font size'])
+        plot.set_title(graph_dict['subtitle'],
+                       fontsize=MLOImageViewer.TITLE_FONT_SIZE)
+        plot.set_ylabel('\n' + graph_dict['y-axis'], linespacing=3,
+                        fontsize=font_size)
+        plot.set_xlabel('\n' + graph_dict['x-axis'], linespacing=3,
+                        fontsize=font_size)
+        plot.set_zlabel('\n' + graph_dict['z-axis'], linespacing=3,
+                        fontsize=font_size)
+        colour_map = mpl.pyplot.get_cmap(graph_dict['colour map'])
+
+        ### Other settings
+        fitness = d['fitness']
+        plot.w_xaxis.set_major_locator(MaxNLocator(5))
+        plot.w_zaxis.set_major_locator(MaxNLocator(5))
+        plot.w_yaxis.set_major_locator(MaxNLocator(5))
+
+        ### Data
+        if not (d['regressor'] is None):        
+            plot.set_title(d['regressor'].get_parameter_string(), fontsize=MLOImageViewer.TITLE_FONT_SIZE)
+            logging.debug("Regressor passed...")
+            MU, S2, EI, P = d['regressor'].predict(d['z'])
+            logging.debug("Prediction done passed...")
+            EI = array([item[0] for item in EI])
+            try:
+                zi = griddata((d['x'], d['y']), EI,
+                              (d['xi'][None, :], d['yi'][:, None]), method='nearest')
+
+                norm = mpl.pyplot.matplotlib.colors.Normalize(EI)
+                surf = plot.plot_surface(d['X'], d['Y'], zi, rstride=1, cstride=1,
+                                         linewidth=0.05, antialiased=True,
+                                         cmap=colour_map)
+            except TypeError,e:
+                logging.error('Could not create EI plot for the GPR plot: ' + str(e) + " " + str(EI))
+                
+#### S2 PLOTS
+                
+    @staticmethod
+    def plot_S2(figure, d):
+        logging.debug("Plotting S2...")
+        graph_dict = d['all_graph_dicts']['S2']
+        plot = figure.add_subplot(int(graph_dict['position']),
+                                  projection='3d', elev=20)
+
+        ### User settings
+        font_size = int(graph_dict['font size'])
+        plot.set_title(graph_dict['subtitle'],
+                       fontsize=MLOImageViewer.TITLE_FONT_SIZE)
+        plot.set_ylabel('\n' + graph_dict['y-axis'], linespacing=3,
+                        fontsize=font_size)
+        plot.set_xlabel('\n' + graph_dict['x-axis'], linespacing=3,
+                        fontsize=font_size)
+        plot.set_zlabel('\n' + graph_dict['z-axis'], linespacing=3,
+                        fontsize=font_size)
+        colour_map = mpl.pyplot.get_cmap(graph_dict['colour map'])
+
+        ### Other settings
+        fitness = d['fitness']
+        plot.w_xaxis.set_major_locator(MaxNLocator(5))
+        plot.w_zaxis.set_major_locator(MaxNLocator(5))
+        plot.w_yaxis.set_major_locator(MaxNLocator(5))
+
+        ### Data
+        if not (d['regressor'] is None):        
+            plot.set_title(d['regressor'].get_parameter_string(), fontsize=MLOImageViewer.TITLE_FONT_SIZE)
+            logging.debug("Regressor passed...")
+            MU, S2, EI, P = d['regressor'].predict(d['z'])
+            logging.debug("Prediction done passed...")
+            S2 = array([item[0] for item in S2])
+            try:
+                zi = griddata((d['x'], d['y']), S2,
+                              (d['xi'][None, :], d['yi'][:, None]), method='nearest')
+
+                norm = mpl.pyplot.matplotlib.colors.Normalize(S2)
+                surf = plot.plot_surface(d['X'], d['Y'], zi, rstride=1, cstride=1,
+                                         linewidth=0.05, antialiased=True,
+                                         cmap=colour_map)
+            except TypeError,e:
+                logging.error('Could not create S2 plot for the GPR plot: ' + str(e) + " " + str(S2))
+
+
+## This class returns a pdf containing a summary of the runs
 class MOMLOImageViewer(ImageViewer):
 
     DPI = 400
@@ -1765,4 +2092,562 @@ class MLOTimeAware_ImageViewer(MLOImageViewer):
             graph_dictionary['all_graph_dicts'][name]['generate'] = True
                           
         return graph_dictionary
+ 
+ ## This class containts 
+class MonteCarlo_ImageViewer(ImageViewer):
+
+    DPI = 400
+    LABEL_FONT_SIZE = 10
+    TITLE_FONT_SIZE = 10
+
+    @staticmethod
+    def render(input_dictionary):
+        logging.info("Starting Render")
+        if input_dictionary["generate"]:
+            dictionary = MonteCarlo_ImageViewer.get_default_attributes() ##this way the default view will be used if different one was not supplied
+            dictionary.update(input_dictionary)
+            figure = mpl.pyplot.figure()
+            figure.subplots_adjust(wspace=0.35, hspace=0.35)
+            figure.suptitle(dictionary['graph_title'])
+
+            rerender = True ## pointless... remove
+            designSpace = dictionary['fitness'].designSpace
+            npts = 100
+
+            ### Initialize some graph points
+            x = linspace(designSpace[0]['min'], designSpace[0]['max'], npts)
+            y = linspace(designSpace[1]['min'], designSpace[1]['max'], npts)
+            x, y = meshgrid(x, y)
+            
+            dictionary['x'] = reshape(x, -1)
+            
+            dictionary['y'] = reshape(y, -1)
+            
+            dictionary['z'] = array([[a, b] for (a, b) in zip(dictionary['x'],
+                                                              dictionary['y'])])
+            ### Define grid
+            dictionary['xi'] = linspace(designSpace[0]['min'] - 0.01,
+                                        designSpace[0]['max'] + 0.01, npts)
+            dictionary['yi'] = linspace(designSpace[1]['min'] - 0.01,
+                                        designSpace[1]['max'] + 0.01, npts)
+            dictionary['X'], dictionary['Y'] = meshgrid(dictionary['xi'],
+                                                        dictionary['yi'])
+
+            ### Generate the graphs according to the user's selection
+            if dictionary['all_graph_dicts']['Mean']['generate']:
+                MonteCarlo_ImageViewer.plot_MU(figure, dictionary)
+            if dictionary['all_graph_dicts']['EI']['generate']:
+                MonteCarlo_ImageViewer.plot_EI(figure, dictionary)
+            if dictionary['all_graph_dicts']['S2']['generate']:
+                MonteCarlo_ImageViewer.plot_S2(figure, dictionary)
+            if dictionary['all_graph_dicts']['Fitness']['generate']:
+                MonteCarlo_ImageViewer.plot_fitness_function(figure, dictionary)
+            if dictionary['all_graph_dicts']['Progression']['generate']:
+                MonteCarlo_ImageViewer.plot_fitness_progression(figure, dictionary)
+            if dictionary['all_graph_dicts']['DesignSpace']['generate']:
+                MonteCarlo_ImageViewer.plot_design_space(figure, dictionary)
+            if dictionary['all_graph_dicts']['Cost']['generate']:
+                MonteCarlo_ImageViewer.plot_cost_function(figure, dictionary)
+            if dictionary['all_graph_dicts']['Cost_model']['generate']:
+                MonteCarlo_ImageViewer.plot_cost_space_model(figure, dictionary)    
+            ### Save and exit
+            filename = str(dictionary['images_folder']) + '/plot' + str(dictionary['counter']) + '.png'
+            if rerender and os.path.isfile(filename):
+                os.remove(filename)
+            try:
+                #P = Process(target=Plot_View.save_fig, args=(figure, filename,
+                #                                             Plot_View.DPI))
+                MonteCarlo_ImageViewer.save_fig(figure, filename, MonteCarlo_ImageViewer.DPI)
+            except:
+                logging.error(
+                    'MonteCarlo_ImageViewer could not render a plot for ' + str(name),
+                    exc_info=sys.exc_info())
+            mpl.pyplot.close(figure)
+            #sys.exit(0) ## I let it as a reminder... do NOT uncomment this! will get the applciation to get stuck
+        else: ## do not regenerate
+            pass
+            
+    @staticmethod    
+    def plot_cost_space_model(figure, d):
+        graph_dict = d['all_graph_dicts']['Cost_model']
+        plot = figure.add_subplot(int(graph_dict['position']),
+                                  projection='3d', elev=20)
+
+        ### User settings
+        font_size = int(graph_dict['font size'])
+        plot.set_title(graph_dict['subtitle'],
+                       fontsize=MonteCarlo_ImageViewer.TITLE_FONT_SIZE)
+        plot.set_ylabel('\n' + graph_dict['y-axis'], linespacing=3,
+                        fontsize=font_size)
+        plot.set_xlabel('\n' + graph_dict['x-axis'], linespacing=3,
+                        fontsize=font_size)
+        plot.set_zlabel('\n' + graph_dict['z-axis'], linespacing=3,
+                        fontsize=font_size)
+        colour_map = mpl.pyplot.get_cmap(graph_dict['colour map'])
+
+        ### Other settings
+        fitness = d['fitness']
+        plot.w_xaxis.set_major_locator(MaxNLocator(5))
+        plot.w_zaxis.set_major_locator(MaxNLocator(5))
+        plot.w_yaxis.set_major_locator(MaxNLocator(5))
+        plot.set_zlim3d(fitness.cost_minVal, fitness.cost_maxVal)
+
+        ### Data
+        if not (d['cost_model'] is None):
+            MU = [d['cost_model'].predict(point) for point in d["z"]]
+            MU_z = MU
+            MU = array([item[0] for item in MU])
+            zi = griddata((d['x'], d['y']), MU,
+                          (d['xi'][None, :], d['yi'][:, None]), method='nearest')
+                
+            norm = mpl.pyplot.matplotlib.colors.Normalize(MU_z)
+            try:
+                surf = plot.plot_surface(d['X'], d['Y'], zi, rstride=1, cstride=1,
+                                         linewidth=0.05, antialiased=True,
+                                         cmap=colour_map)
+            except ValueError,e:
+                logging.info(str(zi))
+                logging.error('Could not create MU plot for the GPR plot')
+        
+    @staticmethod
+    def get_attributes(name):
+    
+        attribute_dictionary = {
+            'All':         ['subtitle', 'x-axis', 'y-axis', 'z-axis',
+                            'font size', 'colour map', 'x-colour', 'o-colour',
+                            'position'],
+            'DesignSpace': ['subtitle', 'x-axis', 'y-axis', 'font size',
+                            'colour map', 'x-colour', 'o-colour', 'position'],
+            'Mean':        ['subtitle', 'x-axis', 'y-axis', 'z-axis',
+                            'font size', 'colour map', 'position'],            
+            'EI':          ['subtitle', 'x-axis', 'y-axis', 'z-axis',
+                            'font size', 'colour map', 'position'],            
+            'S2':          ['subtitle', 'x-axis', 'y-axis', 'z-axis',
+                            'font size', 'colour map', 'position'],
+            'Cost_model':  ['subtitle', 'x-axis', 'y-axis', 'z-axis',
+                            'font size', 'colour map', 'position'],
+            'Cost':        ['subtitle', 'x-axis', 'y-axis', 'z-axis',
+                            'font size', 'colour map', 'position'],
+            'Progression': ['subtitle', 'x-axis', 'y-axis', 'font size',
+                            'position'],
+            'Fitness':     ['subtitle', 'x-axis', 'y-axis', 'z-axis',
+                            'font size', 'colour map', 'position']
+        }
+        return attribute_dictionary.get(name, None)
+        
+    @staticmethod
+    def get_default_attributes():
+        # Default values for describing graph visualization
+        graph_title = 'Title'
+        graph_names = ['Progression', 'Fitness', 'Mean', 'EI', 'S2', 'DesignSpace', 'Cost_model', 'Cost']
+
+        graph_dict1 = {'subtitle': 'Currently Best Found Solution',
+                       'x-axis': 'Iteration',
+                       'y-axis': 'Fitness',
+                       'font size': '10',
+                       'position': '241'}
+        graph_dict2 = {'subtitle': 'Fitness Function',
+                       'x-axis': 'X',
+                       'y-axis': 'Y',
+                       'z-axis': 'Fitness',
+                       'font size': '10',
+                       'colour map': 'PuBu',
+                       'position': '242'}
+        graph_dict3 = {'subtitle': 'Regression Mean',
+                       'x-axis': 'X',
+                       'y-axis': 'Y',
+                       'z-axis': 'Fitness',
+                       'font size': '10',
+                       'colour map': 'PuBuGn',
+                       'position': '243'}
+        graph_dict4 = {'subtitle': 'Regression EI',
+                       'x-axis': 'X',
+                       'y-axis': 'Y',
+                       'z-axis': 'Fitness',
+                       'font size': '10',
+                       'colour map': 'PuBuGn',
+                       'position': '244'}
+        graph_dict5 = {'subtitle': 'Regression S2',
+                       'x-axis': 'X',
+                       'y-axis': 'Y',
+                       'z-axis': 'Fitness',
+                       'font size': '10',
+                       'colour map': 'PuBuGn',
+                       'position': '245'}
+        graph_dict6 = {'subtitle': 'Design Space',
+                       'x-axis': 'X',
+                       'y-axis': 'Y',
+                       'font size': '10',
+                       'colour map': 'PuBu',
+                       'x-colour': 'black',
+                       'o-colour': 'black',
+                       'position': '246'}
+        graph_dict7 = {'subtitle': 'Cost Model',
+                       'x-axis': 'X',
+                       'y-axis': 'Y',
+                       'z-axis': 'Cost',
+                       'font size': '10',
+                       'colour map': 'PuBuGn',
+                       'position': '247'}
+        graph_dict8 = {'subtitle': 'Cost Function',
+                       'x-axis': 'X',
+                       'y-axis': 'Y',
+                       'z-axis': 'Cost',
+                       'font size': '10',
+                       'colour map': 'PuBu',
+                       'x-colour': 'black',
+                       'o-colour': 'black',
+                       'position': '248'}
+        all_graph_dicts = {'Progression': graph_dict1,
+                           'Fitness': graph_dict2,
+                           'Mean': graph_dict3,
+                           'EI': graph_dict4,
+                           'S2': graph_dict5,
+                           'DesignSpace': graph_dict6,
+                           'Cost_model': graph_dict7,
+                           'Cost': graph_dict8,
+                           }
+                           
+        
+            
+        graph_dictionary = {
+            'rerendering': False,
+            'graph_title': graph_title,
+            'graph_names': graph_names,
+            'all_graph_dicts': all_graph_dicts
+        }
+        
+        for name in graph_names:
+            graph_dictionary['all_graph_dicts'][name]['generate'] = True
+                          
+        return graph_dictionary
+ 
+    @staticmethod
+    def save_fig(figure, filename, DPI):
+        logging.info('Save fig ' + str(filename))
+        figure.savefig(filename, dpi=DPI)
+
+    @staticmethod
+    def plot_MU(figure, d):
+        logging.debug("Plotting Mean...")
+        graph_dict = d['all_graph_dicts']['Mean']
+        plot = figure.add_subplot(int(graph_dict['position']),
+                                  projection='3d', elev=20)
+
+        ### User settings
+        font_size = int(graph_dict['font size'])
+        plot.set_title(graph_dict['subtitle'],
+                       fontsize=MonteCarlo_ImageViewer.TITLE_FONT_SIZE)
+        plot.set_ylabel('\n' + graph_dict['y-axis'], linespacing=3,
+                        fontsize=font_size)
+        plot.set_xlabel('\n' + graph_dict['x-axis'], linespacing=3,
+                        fontsize=font_size)
+        plot.set_zlabel('\n' + graph_dict['z-axis'], linespacing=3,
+                        fontsize=font_size)
+        colour_map = mpl.pyplot.get_cmap(graph_dict['colour map'])
+
+        ### Other settings
+        fitness = d['fitness']
+        plot.w_xaxis.set_major_locator(MaxNLocator(5))
+        plot.w_zaxis.set_major_locator(MaxNLocator(5))
+        plot.w_yaxis.set_major_locator(MaxNLocator(5))
+        plot.set_zlim3d(fitness.minVal, fitness.maxVal)
+
+        ### Data
+        if not (d['regressor'] is None):        
+            plot.set_title(d['regressor'].get_parameter_string(), fontsize=MonteCarlo_ImageViewer.TITLE_FONT_SIZE)
+            logging.debug("Regressor passed...")
+            MU, S2, EI, P = d['regressor'].predict(d['z'])
+            logging.debug("Prediction done passed...")
+            MU_z = MU
+            MU_z = array([item[0] for item in MU_z])
+            try:
+                zi = griddata((d['x'], d['y']), MU_z,
+                              (d['xi'][None, :], d['yi'][:, None]), method='nearest')
+
+                norm = mpl.pyplot.matplotlib.colors.Normalize(MU_z)
+                surf = plot.plot_surface(d['X'], d['Y'], zi, rstride=1, cstride=1,
+                                         linewidth=0.05, antialiased=True,
+                                         cmap=colour_map)
+            except TypeError,e:
+                logging.error('Could not create MU plot for the GPR plot: ' + str(e) + " " + str(MU_z))
+                
+    @staticmethod
+    def plot_EI(figure, d):
+        logging.debug("Plotting Expectation Improvement...")
+        graph_dict = d['all_graph_dicts']['EI']
+        plot = figure.add_subplot(int(graph_dict['position']),
+                                  projection='3d', elev=20)
+
+        ### User settings
+        font_size = int(graph_dict['font size'])
+        plot.set_title(graph_dict['subtitle'],
+                       fontsize=MonteCarlo_ImageViewer.TITLE_FONT_SIZE)
+        plot.set_ylabel('\n' + graph_dict['y-axis'], linespacing=3,
+                        fontsize=font_size)
+        plot.set_xlabel('\n' + graph_dict['x-axis'], linespacing=3,
+                        fontsize=font_size)
+        plot.set_zlabel('\n' + graph_dict['z-axis'], linespacing=3,
+                        fontsize=font_size)
+        colour_map = mpl.pyplot.get_cmap(graph_dict['colour map'])
+
+        ### Other settings
+        fitness = d['fitness']
+        plot.w_xaxis.set_major_locator(MaxNLocator(5))
+        plot.w_zaxis.set_major_locator(MaxNLocator(5))
+        plot.w_yaxis.set_major_locator(MaxNLocator(5))
+        plot.set_zlim3d(fitness.minVal, fitness.maxVal)
+
+        ### Data
+        if not (d['regressor'] is None):        
+            plot.set_title(d['regressor'].get_parameter_string(), fontsize=MonteCarlo_ImageViewer.TITLE_FONT_SIZE)
+            logging.debug("Regressor passed...")
+            MU, S2, EI, P = d['regressor'].predict(d['z'])
+            logging.debug("Prediction done passed...")
+            EI = array([item[0] for item in EI])
+            try:
+                zi = griddata((d['x'], d['y']), EI,
+                              (d['xi'][None, :], d['yi'][:, None]), method='nearest')
+
+                norm = mpl.pyplot.matplotlib.colors.Normalize(EI)
+                surf = plot.plot_surface(d['X'], d['Y'], zi, rstride=1, cstride=1,
+                                         linewidth=0.05, antialiased=True,
+                                         cmap=colour_map)
+            except TypeError,e:
+                logging.error('Could not create EI plot for the GPR plot: ' + str(e) + " " + str(EI))
+                
+    @staticmethod
+    def plot_S2(figure, d):
+        logging.debug("Plotting S2...")
+        graph_dict = d['all_graph_dicts']['S2']
+        plot = figure.add_subplot(int(graph_dict['position']),
+                                  projection='3d', elev=20)
+
+        ### User settings
+        font_size = int(graph_dict['font size'])
+        plot.set_title(graph_dict['subtitle'],
+                       fontsize=MonteCarlo_ImageViewer.TITLE_FONT_SIZE)
+        plot.set_ylabel('\n' + graph_dict['y-axis'], linespacing=3,
+                        fontsize=font_size)
+        plot.set_xlabel('\n' + graph_dict['x-axis'], linespacing=3,
+                        fontsize=font_size)
+        plot.set_zlabel('\n' + graph_dict['z-axis'], linespacing=3,
+                        fontsize=font_size)
+        colour_map = mpl.pyplot.get_cmap(graph_dict['colour map'])
+
+        ### Other settings
+        fitness = d['fitness']
+        plot.w_xaxis.set_major_locator(MaxNLocator(5))
+        plot.w_zaxis.set_major_locator(MaxNLocator(5))
+        plot.w_yaxis.set_major_locator(MaxNLocator(5))
+        plot.set_zlim3d(fitness.minVal, fitness.maxVal)
+
+        ### Data
+        if not (d['regressor'] is None):        
+            plot.set_title(d['regressor'].get_parameter_string(), fontsize=MonteCarlo_ImageViewer.TITLE_FONT_SIZE)
+            logging.debug("Regressor passed...")
+            MU, S2, EI, P = d['regressor'].predict(d['z'])
+            logging.debug("Prediction done passed...")
+            S2 = array([item[0] for item in S2])
+            try:
+                zi = griddata((d['x'], d['y']), S2,
+                              (d['xi'][None, :], d['yi'][:, None]), method='nearest')
+
+                norm = mpl.pyplot.matplotlib.colors.Normalize(S2)
+                surf = plot.plot_surface(d['X'], d['Y'], zi, rstride=1, cstride=1,
+                                         linewidth=0.05, antialiased=True,
+                                         cmap=colour_map)
+            except TypeError,e:
+                logging.error('Could not create S2 plot for the GPR plot: ' + str(e) + " " + str(S2))
+
+    @staticmethod
+    def plot_fitness_function(figure, d):
+        logging.info("Plotting Fitness...")
+        graph_dict = d['all_graph_dicts']['Fitness']
+        plot = figure.add_subplot(int(graph_dict['position']),
+                                  projection='3d', elev=20)
+
+        ### User settings
+        font_size = int(graph_dict['font size'])
+        plot.set_title(graph_dict['subtitle'],
+                       fontsize=MonteCarlo_ImageViewer.TITLE_FONT_SIZE)
+        plot.set_ylabel('\n' + graph_dict['y-axis'], linespacing=3,
+                        fontsize=font_size)
+        plot.set_xlabel('\n' + graph_dict['x-axis'], linespacing=3,
+                        fontsize=font_size)
+        plot.set_zlabel('\n' + graph_dict['z-axis'], linespacing=3,
+                        fontsize=font_size)
+        colour_map = mpl.pyplot.get_cmap(graph_dict['colour map'])
+
+        ### Other settings
+        fitness = d['fitness']
+        #plot.set_tick_params(labelsize="small")
+        plot.w_xaxis.set_major_locator(MaxNLocator(5))
+        plot.w_zaxis.set_major_locator(MaxNLocator(5))
+        plot.w_yaxis.set_major_locator(MaxNLocator(5))
+        plot.set_zlim3d(fitness.minVal, fitness.maxVal)
+
+        '''
+        if fitness.rotate:
+            plot1.view_init(azim=45)
+            plot1.w_yaxis.set_major_formatter(
+                FormatStrFormatter('%d          '))
+            plot1.w_zaxis.set_major_formatter(
+                FormatStrFormatter('%d          '))
+            plot1.set_zlabel('\n' + fitness.z_axis_name, linespacing=5.5,
+                             fontsize=Plot_View.LABEL_FONT_SIZE)
+        '''
+
+        ### Data
+        #plot = Axes3D(figure, azim=-29, elev=20)
+        try:            
+            zReal = array([fitness.fitnessFunc(a, d['fitness_state'])[0][0][0] for a in d['z']])
+        except:
+            zReal = array([fitness.fitnessFunc(a)[0][0] for a in d['z']]) ###no fitness state
+        ziReal = griddata((d['x'], d['y']), zReal,
+                          (d['xi'][None, :], d['yi'][:, None]),
+                          method='nearest')
+        surfReal = plot.plot_surface(d['X'], d['Y'], ziReal, rstride=1,
+                                     cstride=1, linewidth=0.05,
+                                     antialiased=True, cmap=colour_map)
+
+    @staticmethod
+    def plot_fitness_progression(figure, d):
+        logging.info("Plotting Fitness Progression...")
+        graph_dict = d['all_graph_dicts']['Progression']
+        plot = figure.add_subplot(int(graph_dict['position']))
+
+        ### User settings
+        font_size = int(graph_dict['font size'])
+        plot.set_title(graph_dict['subtitle'],
+                       fontsize=MonteCarlo_ImageViewer.TITLE_FONT_SIZE)
+        plot.set_xlabel(graph_dict['x-axis'], fontsize=font_size)
+        plot.set_ylabel(graph_dict['y-axis'], fontsize=font_size)
+
+        ### Other settings
+        try:
+            plot.set_xlim(1,   max(10, max(d['generations_array'])))
+        except ValueError, e:
+            ##passing here will automatically set the limits ( not great)
+            pass
+        try:
+            plot.set_ylim(0.0, max(d['best_fitness_array']) * 1.1)
+        except ValueError, e:
+            ##passing here will automatically set the limits ( not great)
+            pass 
+           
+        ### Data
+        plot.plot(d['generations_array'], d['best_fitness_array'],
+                  c='red', marker='x')
+
+    @staticmethod
+    def plot_design_space(figure, d):
+        logging.info("Plotting Design Space...")
+        graph_dict = d['all_graph_dicts']['DesignSpace']
+        plot = figure.add_subplot(int(graph_dict['position']))
+
+        ### User settings
+        font_size = int(graph_dict['font size'])
+        plot.set_title(graph_dict['subtitle'],
+                       fontsize=MonteCarlo_ImageViewer.TITLE_FONT_SIZE)
+        plot.set_xlabel(graph_dict['x-axis'], fontsize=font_size)
+        plot.set_ylabel(graph_dict['y-axis'], fontsize=font_size)
+        colour_map = mpl.cm.get_cmap(graph_dict['colour map'])
+        xcolour = graph_dict['x-colour']
+        ocolour = graph_dict['o-colour']
+
+        ### Other settings
+        #plot.w_xaxis.set_major_locator(MaxNLocator(5))
+        #plot.w_yaxis.set_major_locator(MaxNLocator(5))
+
+        ### Data
+        fitness = d['fitness']
+        if not (d['classifier'] is None):
+            plot.set_title(d['classifier'].get_parameter_string(), fontsize=MonteCarlo_ImageViewer.TITLE_FONT_SIZE)
+            zClass = d['classifier'].predict(d['z'])
+            zi3 = griddata((d['x'], d['y']), zClass,
+                           (d['xi'][None, :], d['yi'][:, None]), method='nearest')
+
+            levels = [k for k, v in fitness.error_labels.items()]
+            levels = [l-0.1 for l in levels]
+            levels.append(levels[-1]+1.0)
+            CS = plot.contourf(d['X'], d['Y'], zi3, levels, cmap=colour_map)
+
+            cbar = figure.colorbar(CS, ticks=CS.levels)
+            cbar.ax.set_yticklabels(["" * (int(len(v)/2) + 13) + v
+                                     for k, v in fitness.error_labels.items()],
+                                    rotation='vertical',
+                                    fontsize=MonteCarlo_ImageViewer.TITLE_FONT_SIZE)
+
+            #
+            plot_trainingset_x = [] 
+            plot_trainingset_y = []
+            training_set = d['classifier'].training_set
+            training_labels = d['classifier'].training_labels
+            
+            for i in range(0, len(training_set)):
+                p = training_set[i]
+                plot_trainingset_x.append(p[0])
+                plot_trainingset_y.append(p[1])
+
+            if len(plot_trainingset_x) > 0:
+                plot.scatter(x=plot_trainingset_x, y=plot_trainingset_y, c=ocolour, marker='x')
+        
+            ## plot the currently best evalauted design
+            #logging.info(str(d.keys()))
+            #logging.info(str(d['best']))
+            data = [d['best']["data"]] ## we could in theory have multiple crap here
+            plot.scatter(array([item[0] for item in data]),array([item[1] for item in data]), c="white",marker="o")
+        
+    @staticmethod
+    def plot_cost_function(figure, d):
+        graph_dict = d['all_graph_dicts']['Cost']
+        plot = figure.add_subplot(int(graph_dict['position']),
+                                  projection='3d', elev=20)
+
+        ### User settings
+        font_size = int(graph_dict['font size'])
+        plot.set_title(graph_dict['subtitle'],
+                       fontsize=MLOImageViewer.TITLE_FONT_SIZE)
+        plot.set_ylabel('\n' + graph_dict['y-axis'], linespacing=3,
+                        fontsize=font_size)
+        plot.set_xlabel('\n' + graph_dict['x-axis'], linespacing=3,
+                        fontsize=font_size)
+        plot.set_zlabel('\n' + graph_dict['z-axis'], linespacing=3,
+                        fontsize=font_size)
+        colour_map = mpl.pyplot.get_cmap(graph_dict['colour map'])
+
+        ### Other settings
+        fitness = d['fitness']
+        #plot.set_tick_params(labelsize="small")
+        plot.w_xaxis.set_major_locator(MaxNLocator(5))
+        plot.w_zaxis.set_major_locator(MaxNLocator(5))
+        plot.w_yaxis.set_major_locator(MaxNLocator(5))
+        plot.set_zlim3d(fitness.cost_minVal, fitness.cost_maxVal)
+
+        '''
+        if fitness.rotate:
+            plot1.view_init(azim=45)
+            plot1.w_yaxis.set_major_formatter(
+                FormatStrFormatter('%d          '))
+            plot1.w_zaxis.set_major_formatter(
+                FormatStrFormatter('%d          '))
+            plot1.set_zlabel('\n' + fitness.z_axis_name, linespacing=5.5,
+                             fontsize=Plot_View.LABEL_FONT_SIZE)
+        '''
+
+        ### Data
+        #plot = Axes3D(figure, azim=-29, elev=20)
+
+        try:            
+            zReal = array([fitness.fitnessFunc(a, d['fitness_state'])[0][3][0] for a in d['z']])
+        except:
+            zReal = array([fitness.fitnessFunc(a)[3][0] for a in d['z']]) ###no fitness state
+            
+        ziReal = griddata((d['x'], d['y']), zReal,
+                          (d['xi'][None, :], d['yi'][:, None]),
+                          method='nearest')
+        surfReal = plot.plot_surface(d['X'], d['Y'], ziReal, rstride=1,
+                                     cstride=1, linewidth=0.05,
+                                     antialiased=True, cmap=colour_map)
  

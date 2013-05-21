@@ -1,0 +1,658 @@
+2.4-9 (01 April 2013)
+-----
+
+Changed printed tables to 15 digits to comply with new
+read.table checks
+
+removed zzz.R and moved LICENSE to License
+
+global exp2d and data call made fancy to pass checks
+
+
+2.4-8 (13 Oct 2012)
+-----
+
+fixed bimprov/improv bug overlooked in NULL issue 
+updates
+
+removeed bessel_k.c and assocated functions; now using
+built-in bessel_k_ex function which didn't exist before
+
+
+2.4-7 (18 April 2012)
+-----
+
+fixed NULL issue in lh_sample
+
+
+2.4-6 (14 April 2012)
+-----
+
+Added check that E divides T-B
+
+Corrected bug in slice grid causing overflow
+
+Corrected NULL problems pointed out by BR
+
+
+2.4-5 (30 January 2012)
+-----
+
+fixes to vigneetes after NAMESPACE change, and removing 
+direct references to stdout and stderr
+
+
+2.4-4 (23 January 2012)
+-----
+
+Added NAMESPACE file
+
+
+2.4-3 (18 December 2011)
+-----
+
+Checked for assert problems with NDEBUG and updated R
+version (2.14) and email addresses
+
+
+2.4-2 (30 March 2011)
+-----
+
+added dp.sim to tgp.default.params so that MVN proposal
+covariance matrix can be specified by the user in GP-SIM
+models
+
+
+2.4-1 (23 Feb 2011)
+-----
+
+Changed my_r_process_events to always ProcessEvents and
+check for interrupts (every second)
+
+Made new sobol_indices function to clean up tgp::Sens, and
+using shape to drive categorical calculations rather than
+bmax
+
+minor edit to tgp2 doc to correct fried.bool description, and
+edit to fried.bool to fix fried.bool(1) problem
+
+
+2.4 (20 Sept 2010)
+---
+
+added sim (single index model) rank 1 correlation structure
+
+overlooked fixing nugget in treed split proposals; now
+fixed
+
+
+2.3-4 (19 July 2010)
+-----
+
+allowed the entire $tree component from tgp.default.params
+to be written over by the tree argument to b* functions
+
+fixed a bug in the linear initialization of correlation
+functions (for non-LLM models)
+
+
+2.3-3 (23 April 2010)
+-----
+
+fixed another bug pointed out by Ripley
+
+
+2.3-2 (21 April 2010)
+-----
+
+replace isinf by R_FINITE as suggested by Brian Ripley
+
+
+2.3-1 (8 Feb 2010)
+-----
+
+Added reference to second JSS paper
+
+
+2.3 (23 Dec 2009)
+---
+
+final version of the tgp2 vignette, accepted at JSS
+
+removed mrtgp documentation
+
+
+2.2-4 (20 Nov 2009)
+-----
+
+added a check for a full rank design matrix in the
+pre-processing of inputs
+
+corrected some syntax errors in .Rd files caught by 
+new checks on CRAN
+
+changed sens warning to check for nn > 0 instead of null
+XX which was causing a warning to be printed every time
+regardless of whether or not there was a violation
+
+
+2.2-3 (22 Jul 2009)
+-----
+
+added nug.p=0 option to cause the nugget to stay fixed
+at the params$gd[1] value.  bcart, btlm, and blm now
+automatically use nug.p=0 since the nugget is not
+identified in these models 
+
+
+2.2-2 (27 May 2009)
+-----
+
+caught a signifigant typo/bug in Xsplit pre-processing
+in R which was causing the bounding rectangle to be
+computed improperly
+
+removed combinat dependency
+
+
+2.2-1 (20 Feb 2009)
+-----
+
+added Tree::Clear() to rejected prunes in Tree::Prune()
+
+tgp.default.params and tgp.check.params now allow the min
+partition size to depend on basemax rather than d
+
+the bounding rectangle and the valid tree-split locations
+are now governed by an Xsplit automatically generated in
+the tgp R function, and gathered from the tgp object in
+predict.tgp
+	
+
+2.2 (16 Jan 2009)
+---
+
+added lower bound for s2_g0, and added DEFAULT CPP macros
+to help prevent assertions which would have backed out of
+bad parameterizations anyways.  This more liberal approach
+essentially prevents assertions in the no-noise regression
+case
+
+now allow basemax != d for constant mean functions
+
+added categorical LHS for sensitivity analyses
+
+finished draft of second vignette, to be submitted to JSS
+	
+
+2.1-6 (25 Nov 2008)
+-----
+
+caught important bug in b0-prior pre-processing in R that
+was causing the emperical Bayes prior to be used when the
+b0 hierarchical one is requested
+
+
+2.1-5 (24 Oct 2008)
+-----
+
+added check for >= d+1 unique rows of X in Tree::Singular
+
+changed how d an nug are printed in the progress meter for
+mrtgp
+
+added par(mfrow=c(1,1)) to default 1-d mrtgp plots
+
+
+2.1-4 (17 Oct 2008)
+-----
+
+made it possible to cap the number of input locations which
+are ranked by the expected improvement statistic by 
+allowing the improv argument to b* functions to take a
+2-vector input.  Also no longer ranks points with an 
+improvement statistic of zero
+
+
+2.1-3 (7 Oct 2008)
+-----
+
+added check for >1 unique Z in Tree::Singular
+
+allow (undocumented) specification of minpart through the
+ellipses (...) argument to the b* functions
+
+m0r1=TRUE is now the default for all b* functions, the Rnw
+documentation has been updated (but the pdfs have not been
+regenerated in the current version)
+
+
+2.1-2 (17 April 2008)
+-----
+
+introduced params$Wi and made it so that params${b,Wi} set
+both the starting an prior values for the corresponding
+parameters.
+
+added bprior="bmznot" so that tau2 can be fixed at its
+starting value
+
+
+2.1-1 (4 April 2008)
+-----
+
+separaing tcounts and cum_tcounts and resetting tcounts to
+the average of cum_tcounts at beginning of each round
+
+fixed bug in returning of tcounts back to R by encuring that
+its->UpdateProbs() is always called after the last of R 
+rounds whenever its->Numit() > 1
+
+return ess information at each inverse temperature back to
+R for storage in the tgp-class object
+
+
+2.1 (22 March 2008)
+---
+
+moved CHANGES to ChangeLog for the new CRAN packages
+page
+
+cleaned up tgp vignette into one .Rnw file including
+several .iRnw files
+
+added linear=FALSE to akima interp commands
+
+stopped printing both separate ess and essN in IT method
+
+added new itemps.barplot function for visualizing the number
+of visits to each inverse temperature in the ST-MCMC chain
+
+now tcounts (observation counts) for IT are accumulated
+across repeats (R>=2) -- not sure if this is a good idea
+
+now recording tree acceptance rates (Grow, Prune Change
+and Swap accepts over total)
+
+propogated splitmin to up to the R interface, and added
+a basemax paramter also specifiable in the R inferface --
+the parameters allow control of which X colums can
+be partitioned upon (by the tree) and which appear in the
+base (GP) model
+
+added heights="map" argument to tgp.trees for plotting only
+the tree corresponding to the maximum a' posteriori tree
+
+wrote two sections in the new vignette (tgp2): one on
+splitmin and basemax (i.e., categorical inputs) and one
+on importance tempering
+
+ 
+2.0-4 (23 Jan 2008)
+-----
+
+made a change suggested by Andrea Spano to make the
+partition function more robust when new X values 
+(on a different range from the original data) are 
+provided
+
+
+2.0-3 (27 Dec 2007)
+-----
+
+commented the moving average code (for sens) and made
+it more efficient
+
+
+2.0-2 (12 Dec 2007)
+-----
+
+allow mode in the sens function to be be within the 
+bounds of rect -- i.e., stop checking for positive mode
+
+fixed dyslexic error in man page for sens describing
+total effect indices
+
+fixed missing braces in some .Rd files
+
+shortened to LGPL in DESCRIPTION
+
+
+2.0-1 (1 Oct 2007)
+-----
+
+Memory savings: preds->ZZ and preds->Zp only allocated when 
+pred.n=TRUE, preds->w and preds->itemp only allocated when
+ST or IT or IS
+
+corrected default.itemps() example barplot and changed 
+k.min to 0.1 to agree with IT paper
+
+fixed zcov bug in tgp.postprocess
+
+
+2.0 (21 Sept 2007) 
+---
+
+consolidated R functions from individual files into those
+grouped by task
+
+made gridlen argument a 2-vector so the grid size can be
+specified in both x and y
+
+new economy argument to tree and Base duplicators so that 
+the entire set of covariance matrices is not copied unless
+necessary
+
+Matt Taddy officially joins the list of authors, adding
+multi-resolution tgp and sensitivity analysis
+
+importance tempering, with importance sampling and 
+simulated tempering support
+
+Latin hypercube sampling with respect to a Beta 
+distribution
+
+moved most of the reading of parameters out of the Tgp
+constructor and into Tgp::Init so that tgp_cleanup() can 
+safely delete the Tgp module even it it wasn't successfully 
+initialized
+
+ordered multiple improv statistics
+
+predictive covariances now calculated instead of variances
+
+
+1.2-7 (19 Aug 2007)
+-----
+
+tgp.partition 1-d data handling made more robust
+
+removed assertion on w that tends to fail for unknown
+reasons
+
+
+1.2-6 (17 June 2007)
+-----
+
+added number of leaves to traces
+
+fixed CART bug in Gp::predict that was already handled in 
+v1.3, thanks to Taddy, but was bad in the CRAN version
+
+
+1.2-5 (29 May 2007)
+-----
+
+allowing btgp to do a linburn
+
+$parts is a now a matrix, and $linburn now {TRUE,FALSE}
+
+$tree and $hier removed from tgp-class output, and
+$trace correctly removed when input trace=FALSE
+
+got rid of some hanging code fragments in documentation
+of btgp and dopt.gp
+
+
+1.2-4 (07 May 2007)
+-----
+
+fixed a leak when krige=FALSE appearing in Tree::Predict
+
+fixed sub-vignette cutting for preds and traces
+
+corrected documentation of nug.p in tgp.default.params()
+
+added verbosity and iter arguments to dopt and thus
+dopt.gp and tgp.design
+
+
+1.2-3 (09 Apr 2007)
+-----
+
+updates to the vignette for the JSS publication
+
+check.matrix modified to allow one-column matrix Z
+arguments which have column-name information
+
+tgp.trees calculation of rows and columns corrected for
+situations when there is a height 1 tree
+
+
+1.2-2 (19 Dec 2006)
+-----
+
+slice.interp bugs fixed (is.null(NULL) and plotting of
+axis labels) and tick marks added
+
+added R argument to predict.tgp and changed the krige
+argument to be called MAP
+
+added new krige argument to b* and predict.tgp to allow
+the user to control whether Z*k* kriging samples are to
+be obtained (possibly saving on memory)
+
+bug involving the order of trees read from files in the
+tgp.get.trees function is fixed; as a result the $trees
+output field in "tgp"-class objects is listed by height
+and so may contain NULL entries
+
+documented plot.tgp and predict.tgp with the method
+markup
+
+
+1.2-1 (03 Dec 2006)
+-----
+
+Added "cart-" option to bprior in order to allow a 
+CART style mean rather than a LM mean
+
+
+1.2 (21 Nov 2006)
+---
+
+Now allowing BTE[2]-BTE[1] % BTE[3] != 0
+
+Added predict.tgp and necessary functionality to save 
+and load in MAP tgp model for later prediction
+
+Corrected par calculation in tgp.trees for non-default
+which argument when there is an unprinted height 1 tree
+
+Traces not recorded for linarea, parts, and ego, when 
+they are off or fixed to unchanging settings
+
+Fixed EGO calculations; now calling them "improv", made
+them thread-safe, and added improv samples to traces
+
+Also now renamed ds2x to Ds2x, and made Ds2x (i.e., ALC) 
+calculations thread-safe
+
+Ellipses to b* function allow other params arguments to 
+be passed to replace defaults in tgp.default.params()
+
+Added traces of hierarchical parameters, and all 
+predictive summaries (including kriging means and vars)
+
+Initial implementation of Importance Tempering idea
+
+Calculating variances of predictive distribution, and
+saving kriging means and variances
+
+Fixed numPrunable (P+1) calculation in grow attempts
+
+EGO calculations made thread-safe
+
+
+1.1-11 (20 Sept 2006)
+------
+
+Bad compilation flags caused bad bug in log_HierPrior
+to go unnoticed until assertion failure on Windows
+
+
+1.1-10 (19 Sept 2006)
+------
+
+Fixed big compute_ego() bug
+
+Tweaks to RNG seeds so that they give same sequence
+across platforms (tested on OSX/PB & Linux/Xeons)
+
+Allow X=NULL in dopt.gp()
+
+Removal of constants LOG_2_PI covered by R internal
+M_LOG_SQRT_2PI
+
+Added mvnpdf_log_dup and wishpdf_log functions
+
+Corrected full log-pdf function for tree prior, and
+added log-pdf of W and B0
+
+
+1.1-9 (03 Sept 2006)
+-----
+
+Many comments added in predict[_linear].c and exp_sep.cc
+
+Fixed ds2x (predict_linear) memory leak
+
+Fixed Matern bug -- now using correct pwr=1 distance
+computation; added comments to gen_covar.c
+
+Compilation warnings addressed in update of compat-
+ibility with C/C++ adaptive sampling (as) code
+
+Now getting BestPartitions from Tgp instead of at the
+end of Model::Rounds
+
+
+1.1-8 (29 Aug 2006)
+-----
+
+Added trace capability for Matern corr family
+
+Fixed bug that num_consumed is not updated on final
+NULL read from tlist
+
+Using new log_bessel_k() function to bypass allocs of 
+floor(nu)+1 double each time bessel_k() was called
+
+
+1.1-7 (23 Aug 2006)
+-----
+
+Added the ability to get traces of all parameters,
+except the hierarchical ones
+
+Fixed bug to undo.m0r1 so that quantile differences
+don't have the mean subtracted out twice
+
+Changes to allow "..." arguments to mapT, and plotting
+of 2-d slices of input locations
+
+Minor fix to do params->Print() within model->Print().
+
+Begin addition of mr_tgp, by Matt Taddy.  When these
+changes are complete, we should be moving to version
+2.0
+
+
+1.1-6 (26 Jun 2006)
+-----
+
+Added Latin Hypercube design function
+
+Added "mapT" function for stand-alone plotting of MAP
+partitions via projection and slice.  Fixed bug in
+"tgp.plot.slice" in the process
+
+Also now calling "tgp.get.partitions" by the shorter
+name "partition"
+
+
+1.1-5 (27 May 2006)
+-----
+
+Fixed memory leak with RNG state in predict_consumer
+
+Solved -DPARALLEL adaptive sampling mystery
+
+exp2d.rand now returns more information about responses
+including ZZ, Ztrue, and ZZtrue
+
+
+1.1-4 (22 May 2006)
+-----
+
+Instructions for compiling with Pthreads.
+
+Got rid of duplicate printing of d[a,b] in tgp header.
+
+Added verb arguments to specify how verbose the 
+R-console printing should be be.
+
+
+1.1-3: (16 Apr 2006)
+------
+
+Necessary changes in order to get read_ctrlfile to work
+for the command-line (non-R) interface to tgp, and other
+minor changes.
+
+Noticed bug for bcart and b0tau options due to bad T-
+matrix initialization -- fixed.
+
+
+1.1-2: (04 Mar 2006)
+------
+
+1. Beta version of Matern correlation function working
+(abiet a bit shakily)
+
+2. Tgp class and cleanup function now implemented in 
+order to let tgp be interrupted, and then clean up to
+avoid memory leaks "on.exit()"
+
+
+1.1-1: (26 Feb 2006)
+------
+
+Minor edits to documentation.
+
+
+1.1: (22 Feb 2006)
+----
+
+1. Modularization overhall of C/C++ code for passing 
+to Matt Taddy, who will be responsible for such future
+additions as Matern correlation functions, and multi-
+resolution GP implementations.
+
+2. Plotting enhancements, including 1-d projections
+and (now default) loess interpolation for 2-d surfaces
+and projections, plotting of ALC & EGO statistics,
+and ability to control plot layout to show mean surface,
+error surface, or both.
+
+3. URL/Email now to UCSC/AMS address.
+
+
+1.0-2: (Dec 2005)
+------
+
+1. Wrote generic random deviate function which can use
+unif_rand(), randomkit, and erand48.
+
+2. Fixed up some documentation bugs and typos.
+
+3. system command in model.cc no longer calls "rm" which
+doesn't work on Windows.
+
+
+1.0-1: (Dec 2005)
+------
+
+1. No longer using erand48; using unif_rand() from R for
+Windows compatibility.

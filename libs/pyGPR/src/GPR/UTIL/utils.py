@@ -41,23 +41,40 @@ def plotter(xs,ym,ys2,x,y,axisvals=None,file=None):
     xss  = np.reshape(xs,(xs.shape[0],))
     ymm  = np.reshape(ym,(ym.shape[0],))
     ys22 = np.reshape(ys2,(ys2.shape[0],))
-    plt.plot(xs, ym, 'g-', x, y, 'r+', linewidth = 3.0, markersize = 10.0)
-    plt.fill_between(xss,ymm + 2.*np.sqrt(ys22), ymm - 2.*np.sqrt(ys22), facecolor=[0.,1.0,0.0,0.8],linewidths=0.0)
+    plt.plot(xs, ym, 'k-', x, y, 'kx', linewidth = 3.0, markersize = 10.0)
+    plt.fill_between(xss,ymm + 2.*np.sqrt(ys22), ymm - 2.*np.sqrt(ys22), facecolor="gray",linewidths=0.0, alpha=0.5)
     plt.grid()
     if axisvals:
         plt.axis(axisvals)
-    plt.xlabel('input x')
-    plt.ylabel('output y')
+    plt.title('Non-Stationary', fontsize = 27)
+    plt.xlabel('Parameter Space', fontsize = 27)
+    plt.ylabel('Design Quality', fontsize = 27)
 
     if file and isinstance(file,str):
         plt.savefig(file)
     plt.show()
 
+def plotter_dotted(xs,ym,ys2,x,y,axisvals=None,file=None):
+    xss  = np.reshape(xs,(xs.shape[0],))
+    ymm  = np.reshape(ym,(ym.shape[0],))
+    ys22 = np.reshape(ys2,(ys2.shape[0],))
+    plt.plot(xs, ym, 'k-', x, y, 'kx', linewidth = 3.0, markersize = 10.0)
+    plt.fill_between(xss,ymm + 2.*np.sqrt(ys22), ymm - 2.*np.sqrt(ys22), facecolor="gray",linewidths=0.0)
+    plt.grid()
+    if axisvals:
+        plt.axis(axisvals)
+    plt.xlabel('Parameter Space')
+    plt.ylabel('Fitness')
+
+    if file and isinstance(file,str):
+        plt.savefig(file)
+    plt.show()
+    
 def FITCplotter(u,xs,ym,ys2,x,y,axisvals=None,file=None):
     xss  = np.reshape(xs,(xs.shape[0],))
     ymm  = np.reshape(ym,(ym.shape[0],))
     ys22 = np.reshape(ys2,(ys2.shape[0],))
-    plt.plot(xs, ym, 'g-', x, y, 'r+', linewidth = 3.0, markersize = 10.0)
+    plt.plot(xs, ym, 'g-', x, y, 'green+', linewidth = 3.0, markersize = 10.0)
     plt.fill_between(xss,ymm + 2.*np.sqrt(ys22), ymm - 2.*np.sqrt(ys22), facecolor=[0.,1.0,0.0,0.8],linewidths=0.0)
     plt.grid()
     if axisvals:

@@ -1,11 +1,12 @@
+results_folder_path = '/homes/mk306/log'
 import os
-results_folder_path = '/data/log'
 configuration_folder_path = os.path.split(os.path.realpath(__file__))[0]+"/"
 ##set to wherever you want the images to be stored
 #images_folder_path = 
 enable_traceback = True
 eval_correct = False
 
+goal = "min"
 
 ### Basic setup
 
@@ -20,11 +21,11 @@ max_stdv = 0.05
 surrogate_type = 'proper'  # Can be proper or dummy
 F = 10  # The size of the initial training set
 M = 10  # How often to perturb the population, used in discrete problems
-
+max_eval=1
 
 ### Trial-specific variables
 
-trials_type = 'PSOTrial'
+trials_type = 'MonteCarloTrial'
 
 phi1 = 2.0
 phi2 = 2.0
@@ -49,7 +50,7 @@ counter = 'g'  # The counter that visualization uses as a 'step'
 max_counter = max_iter  # Maximum value of counter
 
 ### Regressor and classifier type
-regressor = 'KMeansGaussianProcessRegressor'
+regressor = 'GaussianProcess3'
 classifier = 'SupportVectorMachine'
 
 ### GPR Regression settings
@@ -60,4 +61,7 @@ theta0 = 0.01
 thetaL = 0.0001
 thetaU = 3.0
 nugget = 3
-random_start = 100
+
+random_start = 20
+run_name = "radio_" + corr + "_" + regressor
+

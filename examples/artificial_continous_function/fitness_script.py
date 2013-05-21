@@ -2,7 +2,7 @@ from math import e, pow
 from deap import benchmarks
 from numpy import array
 
-dimensions = 2  # Dimensionality of solution space
+dimensions = 4  # Dimensionality of solution space
 objectives = 1
 # Min and max fitness values
 minVal = 0.0

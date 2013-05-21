@@ -13,7 +13,6 @@ from numpy.random import uniform, seed,rand
 cost_maxVal = 1.0
 cost_minVal = 0.0
 
-objectives = 1
 initMin = -1
 initMax = 1
 
@@ -33,18 +32,6 @@ designSpace = [ #[min,max,stepSize]#
               ]
               
               
-##minimization
-def is_better(a, b):
-    return a < b
-    
-    
-# Defines the problem to be maximization or minimization
-def dominate(a, b):
-    bo = bool(1)
-    for (ai,bi) in zip(a,b):
-    	if ai>bi: # < if maximization, > if minimization 
-    		bo = bool(0)
-    return bo
 minVal = 0.0
 if reconfiguration_time_set == 0:
     maxvalue = 10.0

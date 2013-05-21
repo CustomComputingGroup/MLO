@@ -1,0 +1,167 @@
+\documentclass[12pt]{article}
+\usepackage{Sweave}
+%\SweaveOpts{eps=TRUE}
+%\usepackage[footnotesize]{caption}
+\usepackage{caption}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amscd}
+\usepackage{epsfig}
+\usepackage{fullpage}
+
+%\renewcommand{\baselinestretch}{1.5}
+
+\newcommand{\bm}[1]{\mbox{\boldmath $#1$}}
+\newcommand{\mb}[1]{\mathbf{#1}}
+
+
+\newcommand{\mc}[1]{\mathcal{#1}}
+\newcommand{\mr}[1]{\mathrm{#1}}
+\newcommand{\mbb}[1]{\mathbb{#1}}
+
+
+%\VignetteIndexEntry{new features in tgp version 2.x}
+%\VignetteKeywords{tgp}
+%\VignetteDepends{tgp,maptree}
+%\VignettePackage{tgp}
+
+\begin{document}
+
+
+\setkeys{Gin}{width=0.85\textwidth}
+
+<<echo=false,results=hide>>=
+library(tgp)
+options(width=65)
+@ 
+
+\title{Categorical inputs, sensitivity analysis,\\ 
+  optimization and importance tempering\\ 
+  with {\tt tgp} version 2, an {\sf R} package for\\ 
+  treed Gaussian process models}
+\author{
+   Robert B. Gramacy\\
+  Booth School of Business\\
+  The University of Chicago\\
+  rbgramacy@chicagobooth.edu  \and
+  Matthew Taddy\\
+  Booth School of Business\\
+  The University of Chicago\\
+  taddy@chicagobooth.edu 
+}
+\maketitle
+
+\begin{abstract}
+  This document describes the new features in version 2.x of the {\tt
+    tgp} package for {\sf R}, implementing treed Gaussian process (GP)
+  models.  The topics covered include methods for dealing with
+  categorical inputs and excluding inputs from the tree or GP part of
+  the model; fully Bayesian sensitivity analysis for
+  inputs/covariates; %multiresolution (treed) Gaussian process modeling; 
+  sequential optimization of black-box functions; and a new
+  Monte Carlo method for inference in multi-modal posterior
+  distributions that combines simulated tempering and importance
+  sampling.  These additions extend the functionality of {\tt tgp}
+  across all models in the hierarchy: from Bayesian linear models, to
+  CART, to treed Gaussian processes with jumps to the limiting linear
+  model. %, except in the case of multiresolution models which apply only
+  %to the (treed) GP.  
+  It is assumed that the reader is familiar with the baseline
+  functionality of the package, outlined in the first vignette
+  \cite{gramacy:2007}.
+  \end{abstract}
+
+\subsection*{Intended audience}
+\label{sec:discaimer}
+
+
+The {\tt tgp} package contains implementations of seven related
+Bayesian regression frameworks which combine treed partition models,
+linear models (LM), and stationary Gaussian process (GP) models. GPs
+are flexible (phenomenological) priors over functions which, when used
+for regression, are usually relegated to smaller applications for
+reasons of computational expense. Trees, by contrast, are a crude but
+efficient divide-and-conquer approach to non-stationary regression.
+When combined they are quite powerful, and provide a highly flexible
+nonparametric and non-stationary family of regression tools.  These
+treed GP models have been successfully used in a variety of contexts,
+in particular in the sequential design and analysis of computer
+experiments.
+
+The models, and the (base) features of the package, are described the
+vignette for version 1.x of the package \cite{gramacy:2007}.  This
+document is intended as a follow-on, describing four new features that
+have been added to the package in version 2.x.  As such, it is divided
+into four essentially disjoint sections: on categorical inputs
+(Section \ref{sec:cat}), sensitivity analysis (Section
+\ref{sec:sens}), statistical optimization (Section \ref{sec:optim}),
+and importance tempering (Section \ref{sec:it}).  The ability to deal
+with categorical inputs greatly expands the sorts of regression
+problems which {\tt tgp} can handle.  It also enables the partition
+component of the model to more parsimoniously describe relationships
+that were previously left to the GP part of the model, at a great
+computational expense and interpretational disadvantage.  The analysis
+of sensitivity to inputs via the predictive variance enables the user
+to inspect, and understand, the first-order and total effects of each
+of the inputs on the response.  The section on statistical
+optimization expands the sequential design feature set described in
+the first vignette.  We now provide a skeleton which automates the
+optimization of black-box functions by expected improvement, along
+with tools and suggestions for assessing convergence.  Finally, the
+addition of tempering-based MCMC methods leads to more reliable
+inference via a more thorough exploration of the highly multi-modal
+posterior distributions that typically result from tree based models,
+which previously could only be addressed by random restarts.  Taken
+all together, these four features have greatly expanded the
+capabilities of the package, and thus the variety of statistical
+problems which can be addressed with the {\tt tgp} family of methods.
+
+Each of the four sections to follow will begin with a short
+mathematical introduction to the new feature or methodology and
+commence with extensive examples in {\sf R} on synthetic and real
+data.  This document has been authored in {\tt Sweave} (try {\tt
+  help(Sweave)}).  This means that the code quoted throughout is
+certified by {\sf R}, and the {\tt Stangle} command can be used to
+extract it.  As with the first vignette, the {\sf R} code in each of
+the sections to follow is also available as a demo in the package.
+Note that this tutorial was not meant to serve as an instruction
+manual.  For more detailed documentation of the functions contained in
+the package, see the package help--manuals. At an {\sf R} prompt, type
+{\tt help(package=tgp)}. PDF documentation is also available on the
+world-wide-web.
+\begin{center}
+\tt http://www.cran.r-project.org/doc/packages/tgp.pdf
+\end{center}
+
+Each section starts by seeding the random number generator with
+\verb!set.seed(0)!.  This is done to make the results and analyses
+reproducible within this document (assuming identical architecture
+[64-bit Linux] and
+version of {\sf R} [2.10.1]), and in demo form.  We recommend you try these
+examples with different seeds and see what happens.  Usually the
+results will be similar, but sometimes (especially when the data ({\tt
+  X},{\tt Z}) is generated randomly) they may be quite different.
+
+\SweaveInput{cat.iRnw}
+\SweaveInput{sens.iRnw}
+\SweaveInput{optim.iRnw}
+\SweaveInput{it.iRnw}
+
+%\iffalse
+\subsection*{Acknowledgments}
+This work was partially supported by research subaward
+08008-002-011-000 from the Universities Space Research Association and
+NASA, NASA/University Affiliated Research Center grant SC 2003028
+NAS2-03144, Sandia National Laboratories grant 496420, National
+Science Foundation grants DMS 0233710 and 0504851, and Engineering and
+Physical Sciences Research Council Grant EP/D065704/1.  The authors
+would like to thank their Ph.D.~advisor, Herbie Lee, whose
+contributions and guidance in this project have been invaluable
+throughout.  Finally, we would like to thank two anonymous referees
+whose many helpful comments improved the paper.
+%\fi
+
+\bibliography{tgp}
+\bibliographystyle{plain}
+
+\end{document}

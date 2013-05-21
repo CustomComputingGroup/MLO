@@ -1,30 +1,9 @@
 import math
 import operator
-import csv
-
-from deap import base
-from deap import creator
-from deap import tools
 
 from numpy import *
-from copy import deepcopy 
 from numpy.random import uniform, seed,rand
 
-import traceback
-
-from matplotlib import pyplot
-from matplotlib import cm
-from mpl_toolkits.mplot3d import Axes3D
-from matplotlib.backends.backend_pdf import PdfPages
-
-import os
-import traceback
-import sys
-
-from time import gmtime, strftime
-from copy import deepcopy    
-from matplotlib.ticker import MaxNLocator
-    
 enableTracebacks = True
 from numpy import * 
 initMin = -1
@@ -47,6 +26,7 @@ def is_better(a, b):
 cost_maxVal = 15000.0
 cost_minVal = 0.0
     
+#always_valid= ## IMPORTANT TO ADD THIS!!!!
 
 designSpace = []
 maxError = 0.01
@@ -56,22 +36,30 @@ maxVal = 20.0
 worst_value = 20.0
 
 designSpace = []
+ratios = False
+if ratios:
+    designSpace.append({"min":1.0,"max":10.0,"step":1.0,"type":"discrete", "set":"h"}) #alpha
+    designSpace.append({"min":1.0,"max":10.0,"step":1.0,"type":"discrete", "set":"h"}) #beta
+width = False
+if width:    
+    designSpace.append({"min":4.0,"max":24.0,"step":1.0,"type":"discrete", "set":"h"}) #B
+    designSpace.append({"min":1.0,"max":3.0,"step":1.0,"type":"discrete", "set":"h"}) #T
+P = True
+if P:
+    designSpace.append({"min":1.0,"max":10.0,"step":1.0,"type":"discrete", "set":"h"}) #Pknl
+    designSpace.append({"min":1.0,"max":10.0,"step":1.0,"type":"discrete", "set":"h"}) #Ptl
+    designSpace.append({"min":1.0,"max":32.0,"step":1.0,"type":"discrete", "set":"h"}) #Pdp
 
-designSpace.append({"min":1.0,"max":20.0,"step":1.0,"type":"discrete", "set":"h"}) #alpha
-designSpace.append({"min":1.0,"max":20.0,"step":1.0,"type":"discrete", "set":"h"}) #beta
-designSpace.append({"min":4.0,"max":24.0,"step":1.0,"type":"discrete", "set":"h"}) #B
-designSpace.append({"min":0.05,"max":1.0,"step":1.0,"type":"continuous", "set":"h"}) #T
-
-designSpace.append({"min":1.0,"max":10.0,"step":1.0,"type":"discrete", "set":"h"}) #Pknl
-designSpace.append({"min":1.0,"max":10.0,"step":1.0,"type":"discrete", "set":"h"}) #Ptl
-designSpace.append({"min":1.0,"max":32.0,"step":1.0,"type":"discrete", "set":"h"}) #Pdp
 
 maxvalue = worst_value
 error_labels = {0:'Valid',1:'Overmap',2:'Inaccuracy', 3:'Memory'}
 
 #[  6.,1.,5,1,2., 2.,32.04800588] around this point
+#(4.0, 5.0, 4.0, 0.050000000000000003, 9.0, 2.0, 31.0) 0.0559685819892
 def termCond(best):
     return best < 0.1
+    
+optimial_x = [1.0, 1.0, 4.0, 3.0, 1.0, 10.0, 6.0]
 '''
 n1*n2*n3:
 128*128*128
@@ -103,57 +91,69 @@ Ot*Ob= 1.16
 512*512*512: alpha:4.00, beta:2.00, T=3, B=10, Pknl=1, Pdp =12, Pt =2,
 Ot*Ob= 1.20
 '''
-    
+
 def fitnessFunc(particle, state):
 
     # Dimensions dynamically rescalled
     ############Dimensions
-    fknl = 50000000.0 ## 100 MHz
-    
-    alpha = (particle[0])
-    beta = (particle[1])
-    
-    B = (particle[2])
-    T = (particle[3])
-    
-    Pknl = (particle[4])
-    Pt = (particle[5])
-    Pdp = (particle[6])
+    fknl = 100000000.0 ## 100 MHz
+    index = 0 
+    if ratios:
+        alpha = (particle[index])
+        beta = (particle[index+1])
+        index = index + 2
+    else:
+        alpha = 1.
+        beta = 1.
         
+    if width: 
+        B = (particle[index])
+        T = (particle[index+1])
+        index = index + 2
+    else:
+        B = 4.
+        T = 1.
+        
+    if P:
+        Pknl = (particle[index])
+        Pt = (particle[index+1])
+        Pdp = (particle[index+2])
+    else:
+        Pknl = 1.
+        Pt = 1.
+        Pdp = 1.
 
     ######################
     Rcc = 1.0
     x = 256.0
-    y = 256.0
-    Nop = 700000.0
+    y = x
     Nc = 10.0
     S=4.0
     D=10.0**9
     
     Wdp = 32.0 # 8 bytes
     N = 1.0
-    Bw = 12.0
-    Wm = N * (Wdp*Bw*Pdp)
-    BWm = 32000000000.0 * 8 ## GB / s
     
     ## not sure
-    Bd = 0.45
-    Bl = 0.39
-    Bf = 0.434
+    Bw = 8.0 + B
+    Bd = 0.45 + (0.55 * (B-4.0)/20.)
+    Bl = 0.434 + (0.566 * (B-4.0)/20.)
+    Bf = 0.39 + (0.61 * (B-4.0)/20.)
     
-    #epislon = sqrt()
-    
-    theta = 300000000.0*8.0 # 300 MB /s
-    psi = 10000000000.0 *8 # 10 GB/s
-    gamma = 5.0 
-    Ad = 1000000.0
-    Af = 1000000.0
-    Al = 1000000.0
-    Ab = 8.0 * 220000000.0 ## 300 MB, need to change it...
-    
-    If = Af * 0.2
-    Il = Al * 0.1
+    Wm = N * (Wdp*Bw*Pdp)
+    BWm = 32000000000.0 * 8 ## GB/s
         
+    theta = 300000000.0*8.0 # 300 MB/s
+    psi = 100000000.0*8 # 1 GB/s
+    gamma = 80.0
+
+    Ad = 2016
+    Af  = 595200
+    Al  = 297600
+    Ab = 37.5 * 100000000*8 ## 
+     
+    If = Af * 0.1
+    Il = Al * 0.1
     ######################
     nx = (((x-2*S)/alpha) + 2*S)
     #print "nx " + str(nx)
@@ -166,19 +166,22 @@ def fitnessFunc(particle, state):
         Ot = 1.0
     else:
         Ot = ((nx+(Pt-1)*2*S)/(nx)) * ((ny+(Pt-1)*2*S)/(ny))
-                    
     ######################
     mdb = ((nx + (Pt-1)*2*S) / (Pdp)) * (ny + (Pt-1)*S)
     #print "2 " + str(Pknl*Pt*Pdp)
     Bs = (Pknl*Pt*Pdp*(S*(2+Nc)+1)*mdb) / (Ab/(Wdp*Bw))
     #Bs = (1.0*(S*(2+Nc)+1)*mdb) / (Ab/(Wdp*Bw))
-    
-    Ds = (Nop * T * Bd / Ad)
-    #print "DS " + str(Ds)
-    Ls = (Nop * (1.82-T) * Bl + Il)/ Al
-    #print "Ls " + str(Ls)
-    Fs = (Nop * (1.68-T) * Bf + If)/ Af
+    #print Bs
+    ## should be 81 for T
+    Ds = Bd * Pknl * Pknl * Pdp * (100 * ((T-1)/2)) / Ad
+    Ls = Bl * Pknl * Pknl * Pdp * (16665 * (1.68 - 0.82*(T-1)/2) + Il)/ Al
     #print "Fs " + str(Fs)
+    Fs = Bf * Pknl * Pknl * Pdp * (24492 * (1.68 - 0.68*(T-1)/2) + If)/ Af
+    #print "####"
+    #print Ds
+    #print Ls
+    #print Fs
+    #print "####"
     overmapped = (Ds >= 1) or (Ls >= 1) or (Fs >= 1) or (Bs >=1)
     cost, state = getCost(Bs, Ds, Ls, Fs , state) ## we need to cast to float
     #print "cost " + str(cost)
@@ -192,7 +195,7 @@ def fitnessFunc(particle, state):
     ######################
     ## mem bandwith exceeded
     #if BWm >= (Wdp*Bw*Pdp)*Pknl*fknl :
-    #    return ((executionTime, array([4]),array([0]), cost) , state)
+    #    return ((array([maxvalue]), array([4]),array([0]), cost) , state)
     
     ### accuracy error
     error = 0.0
@@ -208,75 +211,37 @@ def fitnessFunc(particle, state):
     
 ##add state saving, we use p and thread id 
 def getCost(Bs, Ds, Ls, Fs , bit_stream_repo):
-    return 4000 + (max(Bs,Ds,Ls,Fs) * 10000), {}
+    return array([4000 + (max(Bs,Ds,Ls,Fs) * 10000)]), {}
     
+if __name__ == '__main__':
 
-def calcMax():    
-    import scipy.optimize as optimize
-    def funcWrapper(x):
-        xx = fitnessFunc(x,None)
-        return xx[0][0][0]
-
-    def funcWrapper2(x):
-        xx = fitnessFunc(x,None)
-        return xx[0][1][0]
+    import itertools 
+    maxEI = maxVal
+    maxEIcord = None
+    space_def = []
+    counter = 0
     '''
-designSpace.append({"min":1.0,"max":20.0,"step":1.0,"type":"discrete", "set":"h"}) #alpha
-designSpace.append({"min":1.0,"max":20.0,"step":1.0,"type":"discrete", "set":"h"}) #beta
-designSpace.append({"min":4.0,"max":24.0,"step":1.0,"type":"discrete", "set":"h"}) #B
-designSpace.append({"min":0.05,"max":1.0,"step":1.0,"type":"continuous", "set":"h"}) #T
-
-designSpace.append({"min":1.0,"max":10.0,"step":1.0,"type":"discrete", "set":"h"}) #Pknl
-designSpace.append({"min":1.0,"max":10.0,"step":1.0,"type":"discrete", "set":"h"}) #Ptl
-designSpace.append({"min":1.0,"max":32.0,"step":1.0,"type":"discrete", "set":"h"}) #Pdp
+    xx = (2.0, 2.0, 4.0, 1.0, 1.0, 2.0, 2.0)
+    print fitnessFunc(xx,None)[0][0][0]
     '''
-    x0 = [6.0, 3.0, 5.0, 0.56117378588844269, 4.0, 3.0, 29.0]
-    for kk in range(0,15):
-        x0 = optimize.minimize(fun = funcWrapper, method = "COBYLA", x0 =  x0, tol=1e-15, bounds = [(d["min"],d["max"]) for d in designSpace])
-        x0 = x0.x
-    print str(fitnessFunc(x0,None))
-    print str(fitnessFunc(x0,None))
-    print str(fitnessFunc([6.0, 3.0, 5.0, 1.0, 4.0, 3.0, 32.0],None))
-    print str(fitnessFunc([6.0, 3.0, 5.0, 0.56117378588844269, 4.0, 3.0, 32.0],None))
-    print str(fitnessFunc([  20.,1.,15,1,4., 2.,32.04800588],None))
-    print str(x0)
-    print str([(d["min"],d["max"]) for d in designSpace])
-    '''
-    print str(fitnessFunc([  4.0,   2.0,   10.0,   0.1, 2,   2,  8],None))
-    print str(fitnessFunc([  4.0,   4.0,   10.0,   0.1, 2,   2,  5],None))
-    print str(fitnessFunc([  1.0,   1.0,   10.0,   0.1, 2,   2,  5],None))
-    print str(fitnessFunc([  4,   3,  10.0,   0.53298803, 4.0,   3.0 ,  10.0],None))
+    for d in designSpace:
+        space_def.append(arange(d["min"],d["max"]+1.0,d["step"]))
+    print space_def
     
+    for z in itertools.product(*space_def):
+        counter = counter + 1
+        EI = fitnessFunc(z,None)[0][0][0]
+        print EI 
+        print z
+        if counter % 10000 == 0:
+            print str(counter) + " " +  str(maxEIcord) + " " +  str(maxEI)
         
+        if maxEI > EI: ## no need for None checking
+            maxEI = EI
+            maxEIcord = z
+    ### 
+    print "DONE!"
+    print maxEIcord
+    print maxEI
     
-    npts = 15
-    D = len(designSpace)
-    n_bins =  npts*ones(D)
-    bounds = [(d["min"],d["max"]) for d in designSpace]
-    print "bounds" + str(bounds)
-    print "calculating mgrid"
-    result = mgrid[[slice(row[0], row[1], npts*1.0j) for row, n in zip(bounds, n_bins)]]
-    print "calculating mgrid done"
-    Z = result.reshape(D,-1).T
-    print "f(z)"
-    filteredminn = []
-    filteredZ=[]
-    print "f(z)"
-    for z in Z:
-        fz = fitnessFunc(z,None)
-        if fz[0][1][0]==0.0:
-            filteredminn.append(fz[0][0][0])
-            filteredZ.append(z)
-            
-    if filteredminn:
-        doFor=5
-        argsortedFiltered = argsort(filteredminn,axis=0)
-        print "[returnMaxS2] ====================================="
-        for kk in range(0,doFor):
-            minn = argsortedFiltered[kk]
-            maxx = argsortedFiltered[-(kk+1)]
-            print "[returnMaxS2] Real min :",minn," ",filteredZ[minn]," ",filteredminn[minn]
-            print "[returnMaxS2] Real max :",maxx," ",filteredZ[maxx]," ",filteredminn[maxx]
-
-        print "[returnMaxS2] ====================================="
-    '''
+    

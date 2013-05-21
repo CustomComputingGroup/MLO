@@ -1,15 +1,25 @@
 import logging
 from multiprocessing import Process, Pipe
 import traceback
+import os
+from random import randrange
+import shutil
+import time
 
-from numpy import unique, asarray, bincount, array, append, sqrt, log, sort
+from numpy import unique, asarray, bincount, array, append, sqrt, log, sort, exp, isinf, all, sum
 from sklearn import preprocessing
 from sklearn.gaussian_process import GaussianProcess
 from sklearn.grid_search import GridSearchCV
 from sklearn.cluster import KMeans
 from sklearn import mixture
+from sklearn.cross_validation import ShuffleSplit
 from scipy.spatial.distance import euclidean
+from scipy.stats import norm
 from numpy.random import uniform, shuffle, permutation
+#from rpy2.robjects.packages import importr
+#from rpy2.robjects import r
+#from rpy2.robjects.vectors import FloatVector
+import gc 
 
 from utils import numpy_array_index
 from copy import deepcopy
@@ -32,6 +42,12 @@ class Regressor(object):
         self.controller = controller
         self.conf = conf
 
+    def get_y_best(self):
+        if self.conf.goal == "min":
+            return min(self.training_fitness)
+        elif self.conf.goal == "max":
+            return max(self.training_fitness)
+            
     def train(self):
         return True
 
@@ -77,7 +93,27 @@ class Regressor(object):
                                            
     def get_training_set(self):
         return self.training_set
+
+    ## TODO - do it so it would be done in a numpy-ish way
+    def e_impr(self, s2, y_mean, y_best):
+        if self.conf.goal == "min":
+            y_diff_vector = y_best-y_mean
+        elif self.conf.goal == "max":
+            y_diff_vector = y_mean - y_best
+        y_diff_vector_over_s2 = y_diff_vector / s2
+        result =  (y_diff_vector) * norm.cdf(y_diff_vector_over_s2) + s2 * norm.pdf(y_diff_vector_over_s2)
+        result = array([[0.0] if isinf(x) else x for x in result])
+        return result
         
+    def prob(self, s2, y_mean, y_best):
+        if self.conf.goal == "min":
+            return norm.cdf(y_best, y_mean, s2)
+        elif self.conf.goal == "max":
+            return 1.0-norm.cdf(y_best, y_mean, s2)
+           
+    def sample(self, s2, y_mean, y_best):
+        return norm.rvs(y_mean, s2)
+            
     def get_training_fitness(self):
         return self.training_fitness
     # def __getstate__(self):
@@ -86,8 +122,14 @@ class Regressor(object):
         # del d['controller']
         # return d
         
+    def get_nlml(self):
+        return None
+        
     def training_set_empty(self):
         return (self.training_set is None)
+        
+    def get_parameter_string(self):
+        return "Not Implemented"
         
     ###############
     ### GET/SET ###
@@ -108,7 +150,6 @@ class GaussianProcessRegressor(Regressor):
         self.input_scaler = None
         self.output_scaler = None
         self.conf = conf
-
         self.gp = None
 
     def regressor_countructor(self):
@@ -176,16 +217,21 @@ class GaussianProcessRegressor(Regressor):
                 self.training_fitness) 
                 
             #logging.debug(z)
-            MU, S2 = self.regr.predict(self.input_scaler.transform(array(z)),
-                                       eval_MSE=True)
+            MU, S2 = self.regr.predict(self.input_scaler.transform(array(z)), eval_MSE=True)
             #logging.debug(MU)
-            MU = self.output_scaler.inverse_transform(MU)
-            MU = MU.reshape(-1, 1)
             S2 = sqrt(S2.reshape(-1, 1))
-            return MU, S2
+            MU = MU.reshape(-1, 1)
+            
+            y_best = self.output_scaler.transform(self.get_y_best())
+            EI = self.e_impr(S2, MU, y_best)
+            P = self.output_scaler.inverse_transform(self.sample(S2, MU, y_best))
+            
+            MU = self.output_scaler.inverse_transform(MU)
+            
+            return MU, S2, EI, P
         except Exception, e:
-            logging.error('Prediction failed.... ' + str(e) + "KURWA")
-            return None, None
+            logging.error('Prediction failed.... ' + str(e))
+            return None, None, None, None
 
     def fit_data(self, gp, scaled_training_set, adjusted_training_fitness,
                  child_end):
@@ -283,7 +329,7 @@ class GaussianProcessRegressor2(Regressor):
     def predict(self, z):
         if self.get_gp() is None:
             logging.error('Train GP before using it!!')
-            return None, None
+            return None, None, None
         try:
             # Scale inputs. it allows us to realod the regressor not retraining the model
             self.input_scaler = preprocessing.StandardScaler().fit(self.training_set)
@@ -296,16 +342,23 @@ class GaussianProcessRegressor2(Regressor):
                 
             ## do predictions
             results = gpr.gp_pred(self.get_gp(), self.covfunc, self.scaled_training_set, self.adjusted_training_fitness, self.input_scaler.transform(array(z))) # get predictions for unlabeled data ONLY
-            MU = self.output_scaler.inverse_transform(results[0])
             S2 = results[1]
+            y_best = self.output_scaler.transform(self.get_y_best())
+            EI = self.e_impr(S2, results[0], y_best)
+            P = self.output_scaler.inverse_transform(self.sample(S2, results[0], y_best))
+            
+            MU = self.output_scaler.inverse_transform(results[0])
+
             ##get rid of negative variance... refer to some papers (there is a lot of it out there)
             for s,s2 in enumerate(S2):
                 if s2 < 0.0:
                     S2[s] = 0.0
-            return MU, S2
+                    
+
+            return MU, S2, EI, P
         except Exception, e:
             logging.error('Prediction failed... ' + str(e))
-            return None, None
+            return None, None, None
     
     def set_gp(self, gp):
         self.gp = gp
@@ -341,12 +394,17 @@ class GaussianProcessRegressor3(Regressor):
         self.inffunc  = ['inf.infExact']
         self.likfunc  = ['lik.likGauss']
         self.covfunc = None
-    
+        self.nlml = 1000.0
+        self.press = 99999999999.0
+        self.transLog = False
     def train(self):
+        return self.train_cross()
+    
+    def train_nlml(self):
         ## not sure how importatn this crap is..
         ## SET (hyper)parameters
         hyp = hyperParameters()   
-        sn = 0.01; hyp.lik = array([log(sn)])        
+        sn = 0.001; hyp.lik = array([log(sn)])        
         conf = self.conf
         dimensions = len(self.training_set[0])
         hyp.mean = [0.5 for d in xrange(dimensions)]
@@ -355,17 +413,15 @@ class GaussianProcessRegressor3(Regressor):
         hyp.mean = array([])
          # Scale inputs and particles?
         self.input_scaler = preprocessing.StandardScaler().fit(self.training_set)
-        self.scaled_training_set = self.input_scaler.transform(
-            self.training_set)
+        self.scaled_training_set = self.input_scaler.transform(self.training_set)
 
         # Scale training data
-        self.output_scaler = preprocessing.StandardScaler(with_std=False).fit(
-            self.training_fitness)
-        self.adjusted_training_fitness = self.output_scaler.transform(
-            self.training_fitness)
+        self.output_scaler = preprocessing.StandardScaler(with_std=False).fit(log(self.training_fitness - self.shift_by()))
+        self.adjusted_training_fitness = self.output_scaler.transform(log(self.training_fitness - self.shift_by()))
         ## retrain a number of times and pick best likelihood
         nlml_best = None
-        for i in xrange(conf.random_start):
+        i = 0
+        while i < conf.random_start:
             if conf.corr == "isotropic":
                 self.covfunc = [['kernels.covSum'], [['kernels.covSEiso'],['kernels.covNoise']]]
                 hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(2)]
@@ -384,61 +440,240 @@ class GaussianProcessRegressor3(Regressor):
             elif conf.corr == "matern5":
                 self.covfunc = [['kernels.covSum'], [['kernels.covMatern'],['kernels.covNoise']]]
                 hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(2)]
-                hyp.cov.append(log(5))            
+                hyp.cov.append(log(5))                
+            elif conf.corr == "rqard":
+                self.covfunc = [['kernels.covSum'], [['kernels.covRQard'],['kernels.covNoise']]]
+                hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions+2)]
             elif conf.corr == "special":
-                self.covfunc = [['kernels.covSum'], [['kernels.covSEiso'],['kernels.covSEiso'],['kernels.covSEiso'],['kernels.covMatern'],['kernels.covNoise']]]
-                hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(2+2+2+2)]
+                self.covfunc = [['kernels.covSum'], [['kernels.covSEiso'],['kernels.covMatern'],['kernels.covNoise']]]
+                hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(2)]
+                hyp.cov = hyp.cov + [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(2)]
                 hyp.cov.append(log(3))
             else:
                 logging.error("The specified kernel function is not supported")
                 return False
                 
-            hyp.cov.append(log(uniform(low=0.001, high=0.1)))
+            hyp.cov.append(log(uniform(low=0.1, high=1.0)))
             try:
-                vargout = min_wrapper(hyp,gp,'CG',self.inffunc,self.meanfunc,self.covfunc,self.likfunc,self.scaled_training_set ,self.adjusted_training_fitness,None,None,True)
+                vargout = min_wrapper(hyp,gp,'BFGS',self.inffunc,self.meanfunc,self.covfunc,self.likfunc,self.scaled_training_set ,self.adjusted_training_fitness,None,None,True)
                 hyp = vargout[0]
                 vargout = gp(hyp, self.inffunc,self.meanfunc,self.covfunc,self.likfunc,self.scaled_training_set ,self.adjusted_training_fitness, None,None,False)      
                 nlml = vargout[0]
-                if hyp.cov[-1] < -1.0 :
-                    #logging.info(str(nlml) + " " + str(hyp.cov))
+                
+                ### we add some sensible checking..
+                ## matern we dont want to overfit
+                ## we know that the function is not just noise hence < -1
+                ## we know for anisotorpic that at least one parameter has to have some meaning
+                ## 
+                if (hyp.cov[-1] < -1.) and not ((conf.corr == "matern3") and hyp.cov[0] < 0.0) and not ((conf.corr == "anisotropic") and all(hyp.cov[:-2] < 0.0)):
+                    logging.info(str(nlml) + " " + str(hyp.cov))
                     if (((not nlml_best) or (nlml < nlml_best))):
                         self.hyp = hyp
                         nlml_best = nlml
+                else:
+                    logging.info("hyper parameter out of spec: " + str(nlml) + " " + str(hyp.cov) + " " + str(hyp.cov[-1]))
+                    i = i - 1 
             except Exception, e:
-                pass
-                #logging.debug("Regressor training Failed ")
-            
-                
+                logging.debug("Regressor training Failed: " + str(e))
+                i = i - 1 
+            i = i + 1            
         if (not nlml_best):        
-            logging.debug("Regressor training Failed"+str(e))
+            logging.debug("Regressor training Failed")
             return False
         ## the gp with highest likelihood becomes the new hyperparameter set
+        self.nlml = nlml_best
         logging.info('Regressor training successful ' + str(self.hyp.cov) + " " + str(nlml_best))
         return True
             
+    def train_cross(self):
+        ## not sure how importatn this crap is..
+        ## SET (hyper)parameters
+        n_iters = len(self.training_set) * 5
+        hyp = hyperParameters()   
+        sn = 0.001; hyp.lik = array([log(sn)])        
+        conf = self.conf
+        dimensions = len(self.training_set[0])
+        hyp.mean = [0.5 for d in xrange(dimensions)]
+        hyp.mean.append(1.0)
+        hyp.mean = array(hyp.mean)
+        hyp.mean = array([])
+         # Scale inputs and particles?
+        self.input_scaler = preprocessing.StandardScaler().fit(self.training_set)
+        self.scaled_training_set = self.input_scaler.transform(self.training_set)
+
+        # Scale training data
+        if self.transLog:
+            self.output_scaler = preprocessing.StandardScaler(with_std=False).fit(log(self.training_fitness - self.shift_by()))
+            self.adjusted_training_fitness = self.output_scaler.transform(log(self.training_fitness - self.shift_by()))
+        else:
+            self.output_scaler = preprocessing.StandardScaler(with_std=False).fit(self.training_fitness)
+            self.adjusted_training_fitness = self.output_scaler.transform(self.training_fitness)
+        ## retrain a number of times and pick best likelihood
+        press_best = None
+        best_hyp = None
+        i = 0
+        index_array = ShuffleSplit(len(self.scaled_training_set), n_iter=n_iters, train_size=0.8, test_size=0.2) ##we use 10% of example to evaluate our 
+        while i < conf.random_start:
+            if conf.corr == "isotropic":
+                self.covfunc = [['kernels.covSum'], [['kernels.covSEiso'],['kernels.covNoise']]]
+                hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(2)]
+            elif conf.corr == "anisotropic":
+                self.covfunc = [['kernels.covSum'], [['kernels.covSEard'],['kernels.covNoise']]]
+                hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions+1)]           
+            elif conf.corr == "anirat": ## todo
+                self.covfunc = [['kernels.covSum'], [['kernels.covRQard'],['kernels.covNoise']]]
+                hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions)]
+                hyp.cov.append(log(uniform(low=conf.thetaL, high=conf.thetaU)))
+                hyp.cov.append(log(uniform(low=conf.thetaL, high=conf.thetaU)))
+            elif conf.corr == "matern3":
+                self.covfunc = [['kernels.covSum'], [['kernels.covMatern'],['kernels.covNoise']]]
+                hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(2)]
+                hyp.cov.append(log(3))                        
+            elif conf.corr == "matern5":
+                self.covfunc = [['kernels.covSum'], [['kernels.covMatern'],['kernels.covNoise']]]
+                hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(2)]
+                hyp.cov.append(log(5))                
+            elif conf.corr == "rqard":
+                self.covfunc = [['kernels.covSum'], [['kernels.covRQard'],['kernels.covNoise']]]
+                hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(dimensions+2)]
+            elif conf.corr == "special":
+                self.covfunc = [['kernels.covSum'], [['kernels.covSEiso'],['kernels.covMatern'],['kernels.covNoise']]]
+                hyp.cov = [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(2)]
+                hyp.cov = hyp.cov + [log(uniform(low=conf.thetaL, high=conf.thetaU)) for d in xrange(2)]
+                hyp.cov.append(log(3))
+            else:
+                logging.error("The specified kernel function is not supported")
+                return False
+            
+            hyp.cov.append(log(uniform(low=0.01, high=0.5)))
+            ## 50% propability to usen the previous best hyper-parameters:
+            if self.hyp:
+                random_number = uniform(0.,1.)
+                if random_number < 0.5:
+                    hyp = self.hyp
+                
+            try:
+                vargout = min_wrapper(hyp,gp,'BFGS',self.inffunc,self.meanfunc,self.covfunc,self.likfunc,self.scaled_training_set ,self.adjusted_training_fitness,None,None,True)
+                hyp = vargout[0]
+                ### we add some sensible checking..
+                ## matern we dont want to overfit
+                ## we know that the function is not just noise hence < -1
+                ## we know for anisotorpic that at least one parameter has to have some meaning
+                ## 
+                press = 0.0
+                for train_indexes, test_indexes in index_array:
+                    test_set = self.scaled_training_set[test_indexes]
+                    training_set = self.scaled_training_set[train_indexes]
+                    test_fitness = self.adjusted_training_fitness[test_indexes]
+                    training_fitness = self.adjusted_training_fitness[train_indexes]
+                    vargout = gp(hyp, self.inffunc,self.meanfunc,self.covfunc, self.likfunc, training_set, training_fitness, test_set)      
+                    predicted_fitness = vargout[2]
+                    press = press + self.calc_press(predicted_fitness, test_fitness)
+                    
+                #if (hyp.cov[-1] < -1.) and not ((conf.corr == "matern3") and hyp.cov[0] < 0.0) and not ((conf.corr == "anisotropic") and all(hyp.cov[:-2] < 0.0)):
+                logging.info("Press " + str(press) + " " + str(hyp.cov))
+                if (((not press_best) or (press < press_best))):
+                    best_hyp = hyp
+                    press_best = press
+            except Exception, e:
+                logging.debug("Regressor training Failed: " + str(e))
+            i = i + 1            
+        if (not press_best):        
+            logging.debug("Regressor training Failed")
+            return False
+        else:
+            if best_hyp:
+                self.hyp = best_hyp
+        ## the gp with highest likelihood becomes the new hyperparameter set
+        self.press = press_best
+        logging.info('Regressor training successful ' + str(self.hyp.cov) + " " + str(press_best))
+        return True
+            
+    def calc_press(self, y, yhat):
+        return sum((y - yhat)*(y - yhat))
+            
+    def calc__press(self, y, yhat):
+        return sum((y - yhat)*(y - yhat))
+            
+    def get_parameter_string(self):
+        try:
+            return str(self.nlml) + "_".join([str(round(i,3)) for i in self.hyp.cov])
+        except Exception, e:
+            try:
+                return str(self.press) + "_".join([str(round(i,3)) for i in self.hyp.cov])
+            except Exception, e:
+                logging.debug(str(e))
+                return "Not Trained"
+            
+    def shift_by(self): ## we need to due this due to log transformation of the training data
+        nugget = 0.000000001
+        if min(self.training_fitness) <= 0.0:
+            return min(self.training_fitness) - nugget
+        else:
+            return 0.0
+        
     def predict(self, z):
         if self.hyp is None:
             logging.error('Train GP before using it!!')
-            return None, None
+            return None, None, None, None
     # try:
+        z = array(z) ## to ensure same input format
+        if z.shape[0] == 1: ## for some reason cand do proper predictions for one element...
+            shape_was_one = True
+            z = array([z[0],z[0]])
+        else:
+            shape_was_one = False
         # Scale inputs. it allows us to realod the regressor not retraining the model
         self.input_scaler = preprocessing.StandardScaler().fit(self.training_set)
-        self.output_scaler = preprocessing.StandardScaler(with_std=False).fit(
-            self.training_fitness) 
-        self.adjusted_training_fitness = self.output_scaler.transform(
-            self.training_fitness)
-        self.scaled_training_set = self.input_scaler.transform(
-            self.training_set)
-            
+        
+        if self.transLog:
+            self.output_scaler = preprocessing.StandardScaler(with_std=False).fit(log(self.training_fitness - self.shift_by())) 
+            self.adjusted_training_fitness = self.output_scaler.transform(log(self.training_fitness - self.shift_by()))
+        else:
+            self.output_scaler = preprocessing.StandardScaler(with_std=False).fit(self.training_fitness)
+            self.adjusted_training_fitness = self.output_scaler.transform(self.training_fitness)
+
+        self.scaled_training_set = self.input_scaler.transform(self.training_set)
         ## do predictions
-        vargout = gp(self.hyp, self.inffunc,self.meanfunc,self.covfunc,self.likfunc,self.scaled_training_set ,self.adjusted_training_fitness, self.input_scaler.transform(array(z)))      
-        MU = self.output_scaler.inverse_transform(vargout[2])
+        try:
+            vargout = gp(self.hyp, self.inffunc,self.meanfunc,self.covfunc,self.likfunc,self.scaled_training_set ,self.adjusted_training_fitness, self.input_scaler.transform(z))      
+        except Exception,e:
+            logging.error(str(e))
+            return None, None, None, None
+        if self.transLog:
+            MU = exp(self.output_scaler.inverse_transform(vargout[2]) + self.shift_by()) 
+        else:
+            MU = self.output_scaler.inverse_transform(vargout[2])
         S2 = vargout[3]
         ##get rid of negative variance... refer to some papers (there is a lot of it out there)
         for s,s2 in enumerate(S2):
             if s2 < 0.0:
                 S2[s] = 0.0
-        return MU, S2
+        
+        ## we are using unadjusted
+        if self.conf.goal == "min":
+            y_best = min(self.adjusted_training_fitness)       
+        if self.conf.goal == "max":
+            y_best = max(self.adjusted_training_fitness)
+        EI = self.e_impr(S2, vargout[2], y_best)
+        P = self.output_scaler.inverse_transform(self.sample(S2, vargout[2], y_best))
+    
+        for i,zz in enumerate(z):
+            if self.contains_training_instance(zz):
+                #logging.info(str(zz))
+                S2[i]=0.0
+                MU[i]=self.get_training_instance(zz)
+                EI[i]=0.0
+                P[i]=1.0
+        
+        
+        if shape_was_one: ## for some reason cand do proper predictions for one element...
+            MU = array([MU[0]])
+            S2 = array([S2[0]])
+            EI = array([EI[0]])
+            P = array([P[0]])
+            
+        return MU, S2, EI, P
         #except Exception, e:
         #    logging.error('Prediction failed... ' + str(e))
         #    return None, None
@@ -447,6 +682,8 @@ class GaussianProcessRegressor3(Regressor):
         dict = {'training_set' : self.training_set,
                 'training_fitness': self.training_fitness,
                 'covfunc': self.covfunc,
+                'nlml': self.nlml,
+                'press': self.press,
                 'hyp': self.hyp}
         return deepcopy(dict)
     
@@ -455,8 +692,125 @@ class GaussianProcessRegressor3(Regressor):
         self.training_fitness = dict['training_fitness']
         self.hyp = deepcopy(dict['hyp'])
         self.covfunc = deepcopy(dict['covfunc'])
+        self.nlml = deepcopy(dict['nlml'])
+        self.press = deepcopy(dict['press'])
         
-
+        
+#=================Below should not be used... unstable and poorly tested
+## RPy breaks quite a bit... although potentially could deal with non-stationary problems.
+        
+## Different implementation of GPR regression, based on rpy
+## working with r is hard... lack of concurrent access
+## have to copy wiorking trees as tgp is saving trace in the working directory NIGHTMARE
+## 
+class GaussianProcessRegressorRpy(Regressor):
+        
+    def __init__(self, controller, conf):
+        super(GaussianProcessRegressorRpy, self).__init__(controller, conf)
+        self.input_scaler = None
+        self.output_scaler = None
+        self.scaled_training_set = None
+        self.adjusted_training_fitness = None
+        self.gp = None
+        #try:
+        self.folder_counter = 0
+        self.my_dir = "/tmp/dummy/"
+        
+    def train(self):#
+        time.sleep(1)
+        try:
+            self.my_dir = "/tmp/r_sess_" + str(os.getpid()) + "_" + str(self.folder_counter)
+            os.mkdir(self.my_dir)
+        except:
+            self.folder_counter = self.folder_counter + 1
+            self.my_dir = "/tmp/r_sess_" + str(os.getpid()) + "_" + str(self.folder_counter)
+            os.mkdir(self.my_dir)
+            
+        #gc.collect()
+        logging.info('Regressor training started..')
+        
+        ## not sure how importatn this crap is..
+        ## SET (hyper)parameters
+         # Scale inputs and particles?
+        self.input_scaler = preprocessing.StandardScaler().fit(self.training_set)
+        #self.scaled_training_set = r.matrix(FloatVector(self.input_scaler.transform(self.training_set).T.ravel().tolist()),nrow=self.training_fitness.shape[0])
+        self.scaled_training_set = r.matrix(FloatVector(self.training_set.T.ravel().tolist()),nrow=self.training_fitness.shape[0])
+        #logging.info())
+        #logging.info(str( self.scaled_training_set))
+        # Scale training data
+        self.output_scaler = preprocessing.StandardScaler(with_std=False).fit(self.training_fitness)
+        #self.adjusted_training_fitness = FloatVector(self.output_scaler.transform(self.training_fitness).ravel().tolist())
+        self.adjusted_training_fitness = FloatVector(self.training_fitness.ravel().tolist())
+        #logging.info(str( self.output_scaler.transform(self.training_fitness).ravel().tolist()))
+        #logging.info(str( self.adjusted_training_fitness))
+        #logging.info(str( self.training_fitness.shape))
+        #logging.info(str( self.output_scaler.transform(self.training_fitness).ravel().tolist()))
+        old_dir = os.getcwd()
+        os.chdir(self.my_dir)
+        self.tgp = importr("tgp")
+        self.gp = self.tgp.btgp(self.scaled_training_set, self.adjusted_training_fitness)
+        os.chdir(old_dir)        
+        #self.tgp.plot_tgp(self.gp)
+        ## the gp with highest likelihood becomes the new hyperparameter set
+        logging.info('Regressor training successful')
+        return True
+            
+    def predict(self, z):
+        #gc.collect()
+        time.sleep(1)
+        if self.gp is None:
+            logging.error('Train GP before using it!!')
+            return None, None
+        # Scale inputs. it allows us to realod the regressor not retraining the model
+        self.input_scaler = preprocessing.StandardScaler().fit(self.training_set)
+        self.output_scaler = preprocessing.StandardScaler(with_std=False).fit(self.training_fitness)
+        trans_z = r.matrix(FloatVector(self.input_scaler.transform(array(z)).T.ravel().tolist()),ncol=self.training_set.shape[1])
+        old_dir = os.getcwd()
+        os.chdir(self.my_dir)
+        self.tgp = importr("tgp")
+        output = self.tgp.predict_tgp(self.gp,trans_z)        
+        os.chdir(old_dir) 
+        MU =output[15]
+        MU = self.output_scaler.inverse_transform([[mu] for mu in MU])
+        #logging.info(str(MU))
+        S2 = array([[s2] for s2 in  output[23]])
+        #logging.info(str(S2))
+        ## do predictions
+        ##get rid of negative variance... refer to some papers (there is a lot of it out there)
+        for s,s2 in enumerate(S2):
+            if s2 < 0.0:
+                S2[s] = [0.0]
+        
+        return MU, S2
+        #except Exception, e:
+        #    logging.error('Prediction failed... ' + str(e))
+        #    return None, None
+        
+    def get_state_dictionary(self):
+        dict = {'gp' : self.gp, 
+                'training_set' : self.training_set,
+                'training_fitness': self.training_fitness,
+                'my_dir': self.my_dir,
+                'folder_counter' : self.folder_counter
+                }
+            
+        return deepcopy(dict)
+    
+    def set_state_dictionary(self, dict):
+        self.gp = dict['gp']
+        self.training_set = dict['training_set']
+        self.training_fitness = dict['training_fitness']
+        self.folder_counter = dict['folder_counter']
+        self.my_dir = dict['my_dir']
+        self.rand = randrange(0,10000000,1)
+        try:
+            new_my_dir = "/tmp/r_sess_" + str(os.getpid()) + "_" + str(self.folder_counter) + "_" + str(self.rand)
+            shutil.copytree(self.my_dir, new_my_dir)
+            self.my_dir = new_my_dir
+        except Exception, e:
+            logging.debug("Fuck..." + str(e))
+        return deepcopy(dict)
+        
 ## Different implementation of GPR regression
 class KMeansGaussianProcessRegressor(Regressor):
 
@@ -508,7 +862,7 @@ class KMeansGaussianProcessRegressor(Regressor):
         return KMeans(init='k-means++', n_clusters=num_of_clusters, n_init=10)
             
     def regressor_countructor(self):
-        return GaussianProcessRegressor2(self.controller, self.conf)
+        return GaussianProcessRegressor3(self.controller, self.conf)
             
     def predict(self, z):
         try:

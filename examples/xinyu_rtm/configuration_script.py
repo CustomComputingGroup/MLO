@@ -1,24 +1,26 @@
+results_folder_path = '/homes/mk306/log'
 import os
-results_folder_path = '/mnt/data/cccad3/mk306/logxin'
 configuration_folder_path = os.path.split(os.path.realpath(__file__))[0]+"/"
 ##set to wherever you want the images to be stored
 #images_folder_path = 
 enable_traceback = True
 eval_correct = False
 
+goal = "min"
+
 max_eval = 1
 ### Basic setup
 
-trials_count = 10
-population_size = 50
+trials_count = 1
+population_size = 30
 
 max_fitness = 200.0
 max_iter = 5000
-max_speed = 0.1
-max_stdv = 0.05
-min_stdv = 0.001
+max_speed = 0.2
+max_stdv = 0.1
+min_stdv = 0.1
 
-surrogate_type = 'local'  # Can be proper or dummy
+surrogate_type = 'proper'  # Can be proper or dummy
 F = 30  # The size of the initial training set
 M = 10  # How often to perturb the population, used in discrete problems
 
@@ -46,7 +48,7 @@ KK = 0.73
 a="a1"
 ### Visualisation
 
-vis_every_X_steps = 1000000 # How often to visualize
+vis_every_X_steps = 1 # How often to visualize
 counter = 'g'  # The counter that visualization uses as a 'step'
 max_counter = max_iter  # Maximum value of counter
 
@@ -58,10 +60,10 @@ classifier = 'SupportVectorMachine'
 ### GPR Regression settings
 regr = 'linear'
 corr2 = 'squared_exponential'
-corr = 'special'
+corr = 'matern3'
 theta0 = 0.01
 thetaL = 0.0001
 thetaU = 3.0
 nugget = 3
-random_start = 100
-run_name= corr + "_" + surrogate_type
+random_start = 10
+run_name= corr + "_" + surrogate_type + "_" + trials_type

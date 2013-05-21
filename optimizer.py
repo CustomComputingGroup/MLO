@@ -6,11 +6,9 @@ import os
 from views.modes import GUIView, TerminalView
 from controller.controller import Controller
 
-from utils import load_script
+from utils import load_script, LOG_FORMAT, LOG_LEVEL
 
 # Configure logging
-LOG_FORMAT = '[%(process)d_%(thread)d] - [%(module)s][%(funcName)s][%(lineno)d] %(levelname)s: %(message)s'
-LOG_LEVEL = logging.DEBUG
 logging.basicConfig(format=LOG_FORMAT, level=LOG_LEVEL)
 
 

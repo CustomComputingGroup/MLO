@@ -123,6 +123,7 @@
 import Tools
 import numpy as np
 import math
+from scipy.spatial.distance import cdist
 
 def covFITC(covfunc, xu=None, hyp=None, x=None, z=None, der=None):
     ''' Covariance function to be used together with the FITC approximation.
@@ -1056,12 +1057,14 @@ def sq_dist(a, b=None):
     D = a.shape[1]
     m = n    
 
+    '''
     if b == None:
         b = a.transpose()
     else:
         m = b.shape[0]
         b = b.transpose()
-
+    
+    
     C = np.zeros((n,m))
 
     for d in range(0,D):
@@ -1070,4 +1073,22 @@ def sq_dist(a, b=None):
         tem = np.kron(np.ones((1,m)), tt)
         tem = tem - np.kron(np.ones((n,1)), b[d,:])
         C = C + tem * tem  
+    '''
+    if b == None:
+        b = a
+    C = cdist(a, b, 'sqeuclidean')
+
+    '''
+    print "a"
+    print a.shape
+    print "b"
+    print b.shape
+    
+    
+    print (C==D)
+    print C
+    print "   "
+    print D
+    exit(0)
+    '''
     return C
