@@ -1,5 +1,5 @@
 import os
-results_folder_path = os.getcwd()+'/data/log'
+results_folder_path = '/homes/mk306/log'
 configuration_folder_path = os.path.split(os.path.realpath(__file__))[0]+"/"
 ##set to wherever you want the images to be stored
 #images_folder_path = 
@@ -10,7 +10,7 @@ goal = "min"
 ### Basic setup
 
 trials_count = 1
-population_size = 50
+population_size = 40
 
 max_fitness = 100.0
 max_iter = 5000
